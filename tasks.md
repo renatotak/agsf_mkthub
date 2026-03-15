@@ -70,10 +70,10 @@
 - [x] Create Supabase client config in Next.js (`src/lib/supabase.ts`)
 - [x] Replace static imports with Supabase queries
 - [x] Add loading states and error handling
-- [ ] Connect GitHub to Vercel
-- [ ] Configure environment variables
-- [ ] Deploy to Vercel
-- [ ] Verify live deployment
+- [x] Connect GitHub to Vercel
+- [x] Configure environment variables
+- [x] Deploy to Vercel
+- [x] Verify live deployment
 
 ## Phase 6 — Live Data & AI Features
 - [ ] Integrate CEPEA API (commodity prices)
@@ -87,12 +87,12 @@
 - [ ] Set up RSS/news feeds for competitor monitoring
 - [ ] Implement public hiring signal detection
 
-## Phase 6 — Security & Authentication (In Progress)
+## Phase 6 — Security & Authentication
 - [x] Set up Supabase Auth
 - [x] Create Login screen (Email/Password or Magic Link)
 - [x] Implement Next.js Middleware for route protection
 - [x] Update RLS policies to restrict read access to authenticated users
-- [ ] Test authentication flow
+- [x] Test authentication flow
 
 ## Phase 7 — Polish & Scale
 - [ ] Add data visualization charts

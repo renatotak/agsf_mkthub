@@ -140,27 +140,24 @@ A continuously-running, bilingual (PT-BR/EN) public market intelligence platform
 
 ---
 
-## Phase 6 — Live Data & AI Features 🔲
+## Phase 6 — Live Data & AI Features (Infrastructure Scaffold)
 
-**Objective:** Connect real-time public data feeds and implement AI content generation.
+**Objective:** Set up the API route infrastructure and cron job configuration so that the data processing logic can be seamlessly injected later.
 
-### 6.1 Public Data APIs
-- [ ] CEPEA API integration (commodity prices)
-- [ ] BCB API (USD/BRL exchange rate, SELIC)
-- [ ] CONAB data feeds (crop forecasts)
-- [ ] MDIC/ComexStat (export data)
-- [ ] Set up scheduled data refresh (cron jobs via Vercel)
+### 6.1 Public Data APIs (Infrastructure)
+- [x] Create secure `/api/cron/sync-market-data` Next.js route
+- [x] Configure `vercel.json` for daily cron execution
+- [x] Implement Supabase write pipelines (mock updates to test infrastructure)
+- [ ] Implement actual CEPEA/BCB data fetching (To be done in Claude)
 
-### 6.2 AI Content Generation
-- [ ] Integrate LLM API for content idea generation
-- [ ] Auto-generate blog post outlines based on market trends
-- [ ] Social media copy suggestions
-- [ ] Trend-to-content matching algorithm
+### 6.2 AI Content Generation (Infrastructure)
+- [x] Create `/api/ai/generate-ideas` API route shell
+- [x] Implement Supabase write pipeline for generated ideas
+- [ ] Connect OpenAI API for actual generation (To be done in Claude)
 
 ### 6.3 Competitor Monitoring
-- [ ] Set up RSS/news feed ingestion for competitor mentions
-- [ ] Public hiring signal detection
-- [ ] Product launch tracking via public announcements
+- [ ] Set up RSS/news feed ingestion for competitor mentions (Deferred)
+- [ ] Public hiring signal detection (Deferred)
 
 ---
 
