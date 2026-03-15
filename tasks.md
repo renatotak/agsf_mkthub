@@ -1,6 +1,6 @@
 # AgriSafe Market Hub — Task Tracker
 
-> **Last updated:** 2026-03-15  
+> **Last updated:** 2026-03-15 10:30  
 > Legend: `[x]` Done · `[/]` In progress · `[ ]` To do
 
 ---
@@ -56,20 +56,20 @@
 - [x] Create project documentation (README, implementation plan, tasks)
 
 ## Phase 5 — Supabase + Vercel Deployment
-- [ ] Create Supabase project (free tier)
-- [ ] Design PostgreSQL schema
-  - [ ] `commodities` table
-  - [ ] `market_indicators` table
-  - [ ] `campaigns` table
-  - [ ] `content_ideas` table
-  - [ ] `competitors` table
-  - [ ] `competitor_signals` table
-  - [ ] `events` table
-- [ ] Set up Row Level Security (RLS) policies
-- [ ] Seed database with current static data
-- [ ] Create Supabase client config in Next.js
-- [ ] Replace static imports with Supabase queries
-- [ ] Add loading states and error handling
+- [x] Create Supabase project (using existing project `uclxmhjzutiaksfhqszn`)
+- [x] Design PostgreSQL schema
+  - [x] `commodity_prices` table
+  - [x] `market_indicators` table
+  - [x] `campaigns` table
+  - [x] `content_ideas` table
+  - [x] `competitors` table
+  - [x] `competitor_signals` table
+  - [x] `events` table
+- [x] Set up Row Level Security (RLS) policies
+- [x] Seed database with current static data
+- [x] Create Supabase client config in Next.js (`src/lib/supabase.ts`)
+- [x] Replace static imports with Supabase queries
+- [x] Add loading states and error handling
 - [ ] Connect GitHub to Vercel
 - [ ] Configure environment variables
 - [ ] Deploy to Vercel
