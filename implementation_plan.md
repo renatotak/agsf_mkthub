@@ -1,175 +1,249 @@
 # AgriSafe Market Hub — Implementation Plan
 
-> **Last updated:** 2026-03-15  
-> **Status:** Phase 5 and Auth complete. Preparing for Phase 6 (Live Data & AI).
+> **Last updated:** 2026-03-31
+> **Status:** Phases 1-7 complete (11 modules live, BCB cron operational). Beginning Phase 8.
+> **MVP constraint:** No paid services (no OpenAI, no embedding APIs). AI/embedding handled manually via IDE.
 
 ---
 
-## Vision
+## Completed (Phases 1-7)
 
-A continuously-running, bilingual (PT-BR/EN) public market intelligence platform for AgriSafe Tecnologia. The platform aggregates exclusively public data to support marketing campaigns, content creation, competitive analysis, and event planning for the Brazilian agribusiness sector.
-
-### Hard Constraints
-- ❌ **No proprietary data** — Never store, ingest, or reference confidential client data, financial records, HR data, or credentials
-- ❌ **No OneNote data migration** — OneNote was audited read-only; no content is copied into the platform
-- ✅ **Public data only** — All data flows sourced from public APIs, government databases, and open feeds
-
----
-
-## Phase 1 — Research AgriSafe ✅
-
-**Objective:** Map AgriSafe's full service/product offering, target market, and brand voice.
-
-**Findings:**
-- **Company:** AgriSafe Tecnologia LTDA (São Paulo, Brazil)
-- **Core pillars:** Sales optimization, credit risk management, crop monitoring
-- **Platform:** Analyzes 160+ attributes via agro-specific scoring algorithm
-- **Clients:** Agricultural resellers (irrigation, fertilizers, inputs) and financial institutions
-- **Products:** SaaS platform, mobile app, AgriAcordo partnership, blog
-- **Website:** agrisafe.agr.br
+| Phase | What | Status |
+|-------|------|--------|
+| 1 | Research AgriSafe | Done |
+| 2 | Read-only OneNote audit | Done |
+| 3 | Architecture (11 modules, 3 groups, bilingual) | Done |
+| 4 | Build v1 (components, data, i18n) | Done |
+| 5 | Supabase + Vercel (RLS, Auth, deploy) | Done |
+| 6 | Data ingestion (BCB, RSS, sync-all cron) | Done |
+| 7 | Mobile-first UI + responsive | Done |
 
 ---
 
-## Phase 2 — Read-Only OneNote Audit ✅
+## Phase 8 — Design System Migration
 
-**Objective:** Understand existing knowledge structure without making any changes.
+**Goal:** Replace current dark sidebar/Tailwind with AgriSafe brand design from `agsf_admin_page`.
 
-**OneNote structure (AgriSafe notebook — 8 sections, ~80+ pages):**
+**Reference:** `agsf_admin_page/dashboard/src/styles.css` — olive green primary, warm beige neutrals, Inter font, Material Icons.
 
-| Section | Content Type | Data Sensitivity |
-|---------|-------------|------------------|
-| General | Strategy, to-dos, Fiagro, market analysis, competitors, advisory board, LGPD | Mixed |
-| SGT | Committee meetings, cedentes, NPL, StoneX migration | High |
-| TI - Infra | System access, AWS, CERC, databases, platform configs | Critical |
-| Comercial | Client relationship notes (ABC Banco, BTG, BB, BrasilAgro, Cosan...) | High |
-| Marketing | Agencies, SEO, PR, website, competitors, B2C flows | Moderate |
-| Investors | VC/partner notes, pitch materials, fundraising | Critical |
-| HR | Candidate/employee profiles | Critical |
-| Events | Conference notes (Google Cloud, Embrapa, NVIDIA, Agro ao Cubo...) | Low |
+### 8.1 Design Tokens & Globals
+- **Agent:** Styling | **Files:** `globals.css`, `layout.tsx`
+- Adopt: `--color-brand-primary: #5B7A2F`, `--neutral-100: #F7F4EF` (page bg), `--sidebar-bg: #F5F5F0`, Inter font (300-800), 8px grid, shadows from admin panel
+- Add Material Icons Outlined via Google Fonts CDN
+- **Done when:** warm cream background, Inter font everywhere, no emerald/slate-900 remnants
 
-**Key insight:** The platform must run entirely parallel to OneNote, drawing zero proprietary data.
+### 8.2 Header Component
+- **Agent:** UI | **Files:** new `Header.tsx`, update `page.tsx`
+- Fixed 64px, white bg, border-bottom. Left: dynamic title per module. Right: lang toggle, notification bell with badge, avatar, logout
+- **Done when:** header renders per-module titles, all actions work
 
----
+### 8.3 Sidebar Component
+- **Agent:** UI | **Files:** new `Sidebar.tsx`, update `page.tsx`
+- Light beige bg, olive green active state, 3 collapsible sections, Material Icons, collapse toggle, mobile drawer
+- Sections: INTELIGENCIA (5), VENDAS & CRM (3), DADOS & JURIDICO (3)
+- **Done when:** matches admin panel look, collapse works, mobile drawer works
 
-## Phase 3 — Architecture Design ✅
+### 8.4 UI Primitives
+- **Agent:** UI | **Files:** new `ui/Card.tsx`, `Badge.tsx`, `DataTable.tsx`, `Button.tsx`, `KpiCard.tsx`
+- Card: white, 8px radius, shadow-sm, 24px pad. Badge: pill, semantic colors. DataTable: uppercase headers, hover rows. Button: primary olive, secondary transparent. KpiCard: icon + label + value + trend
+- **Done when:** all modules can refactor to use these
 
-**5-module architecture approved:**
-
-### Module 1: Agro Market Pulse
-- Brazilian commodity prices (soy, corn, sugar, coffee, citrus, cotton)
-- USD/BRL exchange rate, CEPEA indices
-- CONAB/Embrapa crop forecasts
-- BNDES rural credit rates, export data
-
-### Module 2: Campaign Command Center
-- Content calendar + campaign planner
-- Pipeline tracking with status management (Draft → Planned → Active → Completed)
-- Channel strategy (blog, social, email, webinar)
-- Synced with market trends for timing
-
-### Module 3: Article & Content Engine
-- AI-powered idea bank
-- Blog posts, social media, newsletters, press releases
-- Aligned with AgriSafe's 3 pillars: credit risk, sales optimization, crop monitoring
-- Trend-scored ideas based on real-time market data
-
-### Module 4: Competitor & Industry Radar
-- Public tracking of competitors: TerraMagna, Traive, Agrotools, Bart Digital, Agrosafety
-- News monitoring, product launches, hiring signals
-- All from public sources only
-
-### Module 5: Event & Conference Tracker
-- Forward-looking agro event calendar
-- Febrabantech, Congresso Andav, Radar Agtech, ENCA, Agro ao Cubo, etc.
-- Content opportunity identification per event
-
-### Cross-cutting
-- Bilingual toggle (PT-BR / EN) across all modules
-- Persistent "Public Data Only" privacy badge
+**Parallelism:** 8.1-8.4 all run simultaneously.
 
 ---
 
-## Phase 4 — Build v1 Locally ✅
+## Phase 9 — Visualization & Charts
 
-**Completed deliverables:**
+**Goal:** Replace tables-only display with charts, sparklines, and richer indicators using `recharts` (MIT, free).
 
-| Item | Status | Details |
-|------|--------|---------|
-| Next.js 16 project setup | ✅ | App Router, TypeScript 5.9 |
-| Tailwind CSS 4 styling | ✅ | PostCSS integration, custom design tokens |
-| Dashboard overview | ✅ | Stats row + module cards with navigation |
-| Sidebar navigation | ✅ | Dark theme with all 5 module links |
-| Market Pulse module | ✅ | Commodity table, key indicators, trend arrows |
-| Campaign Center module | ✅ | Pipeline view, detail panel, status filters |
-| Content Engine module | ✅ | Idea cards, pillar filtering, trend scores |
-| Competitor Radar module | ✅ | Competitor profiles, signal tracking |
-| Event Tracker module | ✅ | Timeline view, content opportunity callouts |
-| i18n system | ✅ | Full PT-BR/EN translation coverage |
-| Privacy badge | ✅ | Persistent "Public Data Only" indicator |
-| Static data layer | ✅ | 4 TypeScript data files (market, campaigns, competitors, events) |
-| Build passes | ✅ | Zero compilation errors |
-| GitHub sync | ✅ | renatotak/agsf_mkthub — force pushed, fully synced |
+### 9.1 Install Recharts
+- `npm install recharts`
 
-**Current data layer:** Static TypeScript files with sample data. Ready for API/database migration.
+### 9.2 Market Pulse Visualizations
+- **Files:** `MarketPulse.tsx`
+- KPI cards with sparklines for USD/BRL and Selic
+- Commodity price cards with mini area chart (last 7 days — requires 9.6)
+- Price comparison line chart (all commodities, normalized to % change)
+- Table retained as toggle "detailed view"
 
----
+### 9.3 CRM Pipeline Visualization
+- **Files:** `CRM.tsx`
+- Funnel chart (horizontal stacked bars with conversion %)
+- Stage distribution donut chart
+- Pipeline value bar chart by stage
 
-## Phase 5 — Supabase + Vercel Deployment ✅
+### 9.4 Competitor Signal Visualization
+- **Files:** `CompetitorRadar.tsx`
+- Signal type distribution (horizontal bars or donut)
+- Signal timeline scatter plot (date X, type Y, competitor color)
 
-**Objective:** Migrate from static data to Supabase and deploy live to Vercel.
+### 9.5 News Analytics
+- **Files:** `AgroNews.tsx`
+- Category distribution donut, volume by source bars, daily article count area chart (30 days)
 
-### 5.1 Supabase Setup
-- [x] Create Supabase project (free tier)
-- [x] Design PostgreSQL schema for all 5 modules
-- [x] Create tables: `commodities`, `market_indicators`, `campaigns`, `content_ideas`, `competitors`, `competitor_signals`, `events`
-- [x] Set up Row Level Security (RLS) policies
-- [x] Seed database with current static data
-- [x] Create Supabase client config in Next.js
+### 9.6 Price History Storage
+- **Files:** new migration `002_price_history.sql`, update `sync-market-data/route.ts`
+- New table `commodity_price_history` (commodity_id, price, change_24h, recorded_at)
+- Cron INSERTS daily row per commodity (keeps history) while still upserting `commodity_prices` for latest view
 
-### 5.2 API Integration
-- [x] Replace static data imports with Supabase queries
-- [x] Implement server-side data fetching (React Server Components)
-- [x] Add error handling and loading states
-- [x] Implement data refresh mechanism
-
-### 5.3 Vercel Deployment
-- [x] Connect GitHub repo to Vercel
-- [x] Configure environment variables (Supabase URL, anon key)
-- [x] Deploy and verify all modules on live URL
-- [ ] Set up custom domain (optional)
+**Parallelism:** 9.2-9.5 all parallel after 9.1. 9.6 independent.
 
 ---
 
-## Phase 6 — Live Data & AI Features (Infrastructure Scaffold)
+## Phase 10 — Alert System
 
-**Objective:** Set up the API route infrastructure and cron job configuration so that the data processing logic can be seamlessly injected later.
+**Goal:** Context-aware alerts based on persona journeys ([PLAYBOOK.md](PLAYBOOK.md) Part I). Banners in each module highlighting what needs attention.
 
-### 6.1 Public Data APIs (Infrastructure)
-- [x] Create secure `/api/cron/sync-market-data` Next.js route
-- [x] Configure `vercel.json` for daily cron execution
-- [x] Implement Supabase write pipelines (mock updates to test infrastructure)
-- [ ] Implement actual CEPEA/BCB data fetching (To be done in Claude)
+### 10.1 Alert Engine
+- **Files:** new `src/lib/alerts.ts`
+- Returns `{ type, module, message_pt, message_en, priority }[]`
+- **Market alerts:** price change >5%, stale data >3 days, USD/BRL threshold
+- **News alerts:** volume drop >50% vs 7-day avg, CRM company mentioned, judicial spike
+- **CRM alerts:** deals stalled >14 days, no new leads in 7 days
+- **Competitor alerts:** new signal detected
+- **System alerts:** cron job failed
 
-### 6.2 AI Content Generation (Infrastructure)
-- [x] Create `/api/ai/generate-ideas` API route shell
-- [x] Implement Supabase write pipeline for generated ideas
-- [ ] Connect OpenAI API for actual generation (To be done in Claude)
+### 10.2 Alert Banner Component
+- **Files:** new `ui/AlertBanner.tsx`
+- Admin panel pattern: icon + message + action link. Warning/error/success/info variants. Dismissible. Bilingual.
 
-### 6.3 Competitor Monitoring
-- [ ] Set up RSS/news feed ingestion for competitor mentions (Deferred)
-- [ ] Public hiring signal detection (Deferred)
+### 10.3 Dashboard Alert Summary
+- **Files:** update `page.tsx` DashboardOverview
+- "Alertas" section at top of dashboard, grouped by priority. Click navigates to module.
 
 ---
 
-## Phase 7 — Polish & Scale 🔲
+## Phase 11 — Data Admin Dashboard
 
-**Objective:** Production hardening, analytics, and user experience refinement.
+**Goal:** New module showing database health, source freshness, table stats. For Head Inteligencia and Data Analyst.
 
-- [ ] Add data visualization charts (recharts or chart.js)
-- [ ] Implement responsive design for mobile/tablet
-- [ ] Add user authentication (optional, for team access)
-- [ ] Performance optimization (ISR, caching)
-- [ ] SEO optimization for public pages
-- [ ] Error monitoring (Sentry)
-- [ ] Analytics integration
-- [ ] Accessibility audit (WCAG 2.1)
+### 11.1 Data Admin Component
+- **Files:** new `DataAdmin.tsx`, new `data/admin.ts`
+- **Tables overview:** all Supabase tables with row count, last insert, schema version
+- **Source status:** each source (BCB 6 series, 4 news RSS, 2 legal RSS) with last sync, status badge (green <24h, yellow 1-3d, red >3d)
+- **Sync history:** last 7 days of cron results (timestamp, duration, records, errors)
+- **Quick actions:** manual sync trigger buttons per pipeline
+
+### 11.2 Register in Sidebar
+- Add `"admin"` to Module type, sidebar section "ADMINISTRACAO", icon `admin_panel_settings`
+- Translations: "Painel de Dados" / "Data Admin"
+
+### 11.3 Status API
+- **Files:** new `src/app/api/admin/status/route.ts`
+- GET (auth required): table row counts, last update timestamps, source health
+
+---
+
+## Phase 12 — Live Data Feeding
+
+**Goal:** Verify all pipelines work with actual Supabase data. Seed missing data.
+
+### 12.1 Verify BCB Market Data — trigger sync, confirm 6 commodities + 2 indicators write
+### 12.2 Verify RSS News — trigger sync, confirm 4 sources land articles with categories
+### 12.3 Verify Judicial Recovery — trigger sync, confirm dual-filter catches cases
+### 12.4 Seed CRM — migration `003_seed_crm.sql`: create tables, seed 25 contacts, 15 companies, 50 interactions (no real PII)
+### 12.5 Seed Events — migration `004_seed_events.sql`: 10-15 real 2026 agro events
+### 12.6 Verify Retailers — check population, run import if empty
+### 12.7 Create Missing Tables — migration `005_missing_tables.sql`: `commodity_prices`, `market_indicators`, `content_ideas` with RLS
+
+**Parallelism:** 12.1-12.7 all independent.
+
+---
+
+## Phase 13 — Per-Module Settings Modals
+
+**Goal:** Gear icon in each module opens a config modal. MVP: read-only config display + manual sync buttons. Config changes via IDE code edits.
+
+### 13.1 Settings Modal Component
+- **Files:** new `ui/SettingsModal.tsx`
+- Admin panel modal: overlay, centered card, header/body/footer, ESC/click-outside close
+
+### 13.2 Market Pulse Settings
+- Current commodities list with BCB series codes. "Add Commodity" instructions (BCB URL, file to edit, SQL to run). Manual sync button. Indicator status with last-update timestamps.
+
+### 13.3 Agro News Settings
+- RSS sources with feed URLs and last-article date. "Add Source" instructions. Highlighted producers table with keywords. Category keyword reference. Sync trigger.
+
+### 13.4 Recuperacao Judicial Settings
+- Legal sources list. Filter regex display (RJ_PATTERN, AGRO_PATTERN). State coverage. Sync trigger.
+
+### 13.5 CRM Settings
+- Pipeline stages with colors. Alert thresholds. CSV export button.
+
+### 13.6 Competitor Radar Settings
+- Tracked competitors list. "Add Signal Manually" form (competitor, type, title, source, date).
+
+### 13.7 Remaining Modules
+- Campaign Center: statuses, channels, pipeline definitions
+- Content Engine: pillars, types, score thresholds
+- Event Tracker: types, "Add Event" form, content tags
+- Distribution Channels: categories, tiers, last-import date
+- Retailers: import status, state coverage
+- Data Admin: cron schedule, env var status (masked), sync history
+
+**Parallelism:** 13.2-13.7 all parallel after 13.1.
+
+---
+
+## Phase 14 — UX Refinements
+
+### 14.1 Toast System — bottom-center, success/error/warning/info, auto-dismiss 3s, spring animation
+### 14.2 Pagination — reusable component matching admin panel, replace inline pagination
+### 14.3 Filter Chips — pill toggles (inactive white, active olive), use across modules
+### 14.4 Empty States & Skeletons — friendly illustrations for no-data, animated gray blocks for loading
+
+---
+
+## Phase 15 — Stitch & Advanced UX
+
+### 15.1 Stitch Auth — `/mcp` > "claude.ai Stitch" > OAuth in browser
+### 15.2 Apply Insights — review Stitch project feedback, implement UX improvements
+
+---
+
+## Future Phases
+
+| Phase | Goal |
+|-------|------|
+| 16 | Knowledge Architecture & Vector DB (pgvector, manual embeddings via IDE) |
+| 17 | Proprietary Data Module (strict RLS, Internal Insights Vault) |
+| 18 | Polish & Scale (ISR, caching, Sentry, analytics, WCAG 2.1) |
+| 19 | Paid Services (OpenAI content gen, paid embeddings, ML lead scoring) |
+
+---
+
+## Suggested Additional Tasks
+
+These were not in the original request but are important for a production-quality platform:
+
+| Task | Why | Phase |
+|------|-----|-------|
+| **Deduplicate vercel.json crons** | Both `sync-market-data` and `sync-all` run at 08:00 — remove the standalone one to avoid double-fetching | 12 |
+| **Error logging table** | `sync_logs` table to persist cron results for Data Admin dashboard history | 11 |
+| **CSV/PDF export per module** | Every module should be exportable for offline use (consultants need this for client decks) | 14 |
+| **Keyboard shortcuts** | `Ctrl+K` command palette for power users (Head Inteligencia, Data Analyst) | 14 |
+| **Dark mode toggle** | Admin panel has light theme; some users prefer dark — add toggle in header | 14 |
+| **Supabase Realtime subscriptions** | Live-update modules when cron writes new data (no manual refresh needed) | 18 |
+| **Bilingual settings modals** | Settings modal content should also be bilingual (pt/en) | 13 |
+
+---
+
+## Agent Assignment & Critical Path
+
+```
+Sprint 1 (Design Foundation):
+  8.1 tokens ──┐
+  8.2 header ──┼──▶ 8.4 primitives
+  8.3 sidebar ─┘    9.1 recharts install
+
+Sprint 2 (Charts + Alerts + Data):
+  9.2-9.5 module charts (parallel) ──┐
+  9.6 price history                  │
+  10.1-10.3 alert system             ├──▶ Integration testing
+  12.1-12.7 live data (all parallel) ┘
+
+Sprint 3 (Admin + Settings + Polish):
+  11.1-11.3 data admin dashboard ──┐
+  13.1-13.7 settings modals        ├──▶ Final QA
+  14.1-14.4 UX refinements         ┘
+```

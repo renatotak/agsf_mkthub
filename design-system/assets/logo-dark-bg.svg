@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" fill="none">
+  <!-- Icon -->
+  <circle cx="20" cy="20" r="15" fill="#5B7A2F"/>
+  <path d="M20 10c-2 4-6 6-6 12a6 6 0 0012 0c0-6-4-8-6-12z" fill="#fff" opacity="0.9"/>
+  <path d="M20 14c-1.5 3-4 4.5-4 9a4 4 0 008 0c0-4.5-2.5-6-4-9z" fill="#7FA02B"/>
+  <!-- Text for dark backgrounds -->
+  <text x="42" y="23" font-family="Inter, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">AgriSafe</text>
+  <text x="42" y="34" font-family="Inter, sans-serif" font-size="9" fill="#6B7A5A">Plataforma Agrícola</text>
+</svg>

@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     const results: Record<string, unknown> = {}
     const errors: string[] = []
 
-    // Sync commodity prices
+    // Sync commodity prices from BCB SGS API
     for (const [id, config] of Object.entries(COMMODITY_SERIES)) {
       try {
         const data = await fetchBCB(config.series, 2)
