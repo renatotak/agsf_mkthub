@@ -118,155 +118,60 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
   return (
     <div className="space-y-6">
 
-      {/* Row 1: Market & Competitors (Head Comercial & SEO) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Market Pulse */}
-        <button onClick={() => setActiveModule("market")} className="rounded-lg p-5 bg-white border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] text-left hover:border-brand-primary transition-colors group">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase flex items-center justify-between">
-            {lang === "pt" ? "Pulso do Mercado" : "Market Pulse"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-primary" />
+      {/* Compact KPI Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+        <button onClick={() => setActiveModule("market")} className="rounded-lg px-3 py-2.5 bg-white border border-neutral-200 text-left hover:border-brand-primary transition-colors group">
+          <p className="text-[9px] font-semibold text-neutral-400 uppercase">{lang === "pt" ? "Mercado" : "Market"}</p>
+          <p className="text-[14px] font-bold text-neutral-900 leading-tight mt-0.5">{lang === "pt" ? biggestMover.name_pt : biggestMover.name_en}</p>
+          <p className={`text-[11px] font-bold ${biggestMover.change_24h >= 0 ? "text-success-dark" : "text-error"}`}>
+            {biggestMover.change_24h >= 0 ? <TrendingUp size={11} className="inline mr-0.5" /> : <TrendingDown size={11} className="inline mr-0.5" />}
+            {biggestMover.change_24h > 0 ? "+" : ""}{biggestMover.change_24h}%
           </p>
-          <div className="mt-3 flex items-end gap-3">
-            <div>
-              <p className="text-[20px] font-bold text-neutral-900 leading-none">{lang === "pt" ? biggestMover.name_pt : biggestMover.name_en}</p>
-              <p className={`text-[13px] font-bold mt-1.5 ${biggestMover.change_24h >= 0 ? "text-success-dark" : "text-error"}`}>
-                {biggestMover.change_24h >= 0 ? <TrendingUp size={14} className="inline mr-1" /> : <TrendingDown size={14} className="inline mr-1" />}
-                {biggestMover.change_24h > 0 ? "+" : ""}{biggestMover.change_24h}%
-              </p>
-            </div>
-          </div>
         </button>
 
-        {/* Competitor Radar */}
-        <button onClick={() => setActiveModule("competitors")} className="rounded-lg p-5 bg-white border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] text-left hover:border-brand-primary transition-colors group">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase flex items-center justify-between">
-            {lang === "pt" ? "Sinais Competitivos" : "Competitive Signals"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-primary" />
-          </p>
-          <p className="text-[28px] font-bold text-neutral-900 mt-2 mb-1 leading-none">{totalSignals}</p>
-          <p className="text-[12px] text-neutral-500">{mockCompetitors.length} {lang === "pt" ? "concorrentes mapeados" : "mapped competitors"}</p>
+        <button onClick={() => setActiveModule("competitors")} className="rounded-lg px-3 py-2.5 bg-white border border-neutral-200 text-left hover:border-brand-primary transition-colors">
+          <p className="text-[9px] font-semibold text-neutral-400 uppercase">{lang === "pt" ? "Sinais" : "Signals"}</p>
+          <p className="text-[20px] font-bold text-neutral-900 leading-tight mt-0.5">{totalSignals}</p>
+          <p className="text-[10px] text-neutral-400">{mockCompetitors.length} {lang === "pt" ? "concorrentes" : "competitors"}</p>
         </button>
 
-        {/* Ag Input Intelligence */}
-        <button onClick={() => setActiveModule("inputs")} className="rounded-lg p-5 bg-white border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] text-left hover:border-brand-primary transition-colors group">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase flex items-center justify-between">
-            {lang === "pt" ? "Inteligência de Insumos" : "Input Intelligence"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-primary" />
-          </p>
-          <p className="text-[14px] font-semibold text-brand-primary mt-2 flex items-center gap-1"><PenTool size={14} /> Relatório NPK</p>
-          <p className="text-[12px] text-neutral-500 mt-1 line-clamp-2">Atrasos de fertilizantes nos portos do sul.</p>
+        <button onClick={() => setActiveModule("news")} className="rounded-lg px-3 py-2.5 bg-white border border-neutral-200 text-left hover:border-brand-primary transition-colors">
+          <p className="text-[9px] font-semibold text-neutral-400 uppercase">{lang === "pt" ? "Notícias" : "News"}</p>
+          <p className="text-[20px] font-bold text-neutral-900 leading-tight mt-0.5">{mockNews.length}</p>
+          <p className="text-[10px] text-neutral-400">{lang === "pt" ? "ativas" : "active"}</p>
         </button>
 
-        {/* Retailers Directory */}
-        <button onClick={() => setActiveModule("retailers")} className="rounded-lg p-5 bg-white border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] text-left hover:border-brand-primary transition-colors group">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase flex items-center justify-between">
-            {lang === "pt" ? "Diretório de Revendas" : "Retailers Directory"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-primary" />
-          </p>
-          <p className="text-[28px] font-bold text-neutral-900 mt-2 mb-1 leading-none">23k+</p>
-          <p className="text-[12px] text-neutral-500">{numRetailers} {lang === "pt" ? "monitoradas agos/26" : "monitored in Aug/26"}</p>
-        </button>
-      </div>
-
-      {/* Row 2: Content, Events & News (Digital Marketing & Sales) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* News & Events */}
-        <div className="col-span-1 lg:col-span-2 bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
-           <div className="flex items-center justify-between mb-4">
-             <h3 className="text-[14px] font-semibold text-neutral-900">{lang === "pt" ? "Mídia & Eventos" : "Media & Events"}</h3>
-             <div className="flex gap-4">
-               <button onClick={() => setActiveModule("news")} className="text-[12px] font-medium text-brand-primary hover:underline">Ver Notícias</button>
-               <button onClick={() => setActiveModule("events")} className="text-[12px] font-medium text-brand-primary hover:underline">Ver Eventos</button>
-             </div>
-           </div>
-           <div className="flex gap-6">
-             <div className="flex-1">
-                <p className="text-[24px] font-bold text-neutral-900 leading-none">{mockNews.length}</p>
-                <p className="text-[11px] text-neutral-500 uppercase mt-1">{lang === "pt" ? "Notícias Ativas" : "Active News"}</p>
-             </div>
-             <div className="w-px bg-neutral-200"></div>
-             <div className="flex-1">
-                <p className="text-[24px] font-bold text-neutral-900 leading-none">{upcomingEvents}</p>
-                <p className="text-[11px] text-neutral-500 uppercase mt-1">{lang === "pt" ? "Eventos Próximos" : "Upcoming Events"}</p>
-             </div>
-           </div>
-        </div>
-
-        {/* Content Pipeline */}
-        <button onClick={() => setActiveModule("contentHub")} className="rounded-lg p-5 bg-brand-surface/20 border border-brand-light text-left hover:border-brand-primary transition-colors group">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase flex items-center justify-between">
-            {lang === "pt" ? "Pipeline de Conteúdo" : "Content Pipeline"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-primary" />
-          </p>
-          <div className="flex items-center gap-3 mt-3">
-             <div className="bg-white p-2 rounded border border-brand-light">
-               <BookOpen size={16} className="text-brand-primary" />
-             </div>
-             <div>
-               <p className="text-[18px] font-bold text-neutral-900 leading-none">{publishedThisMonth}</p>
-               <p className="text-[11px] text-neutral-600 font-medium mt-0.5">{lang === "pt" ? "Publicados no Mês" : "Published this Month"}</p>
-             </div>
-          </div>
-          <p className="text-[12px] text-neutral-600 mt-3"><span className="font-semibold text-brand-primary">{topicsInPipeline}</span> {lang === "pt" ? "pautas em aprovação" : "topics pending approval"}</p>
-        </button>
-      </div>
-
-      {/* Row 3: Regulatory, Operations & Data Health (Data Analysts & Legal) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Rec Judiciais */}
-        <button onClick={() => setActiveModule("recuperacao")} className="rounded-lg p-5 bg-error-light/30 border border-error-light text-left hover:border-error transition-colors group">
-          <p className="text-[11px] font-semibold text-error uppercase flex items-center justify-between">
-            {lang === "pt" ? "Recuperação Judicial" : "Judicial Recovery"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-error" />
-          </p>
-          <p className="text-[28px] font-bold text-error-dark mt-2 mb-1 leading-none">{rjAlerts}</p>
-          <p className="text-[12px] text-error font-medium">{lang === "pt" ? "processos recentes" : "recent active cases"}</p>
+        <button onClick={() => setActiveModule("events")} className="rounded-lg px-3 py-2.5 bg-white border border-neutral-200 text-left hover:border-brand-primary transition-colors">
+          <p className="text-[9px] font-semibold text-neutral-400 uppercase">{lang === "pt" ? "Eventos" : "Events"}</p>
+          <p className="text-[20px] font-bold text-neutral-900 leading-tight mt-0.5">{upcomingEvents}</p>
+          <p className="text-[10px] text-neutral-400">{lang === "pt" ? "próximos" : "upcoming"}</p>
         </button>
 
-        {/* Regulatory */}
-        <button onClick={() => setActiveModule("regulatory")} className="rounded-lg p-5 bg-white border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] text-left hover:border-brand-primary transition-colors group">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase flex items-center justify-between">
-            {lang === "pt" ? "Regulatório" : "Regulatory Watch"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-primary" />
-          </p>
-          {latestNorm ? (
-            <div className="mt-2">
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#1565C0] text-white">{latestNorm.body}</span>
-              <p className="text-[12px] font-semibold text-neutral-900 line-clamp-2 mt-1.5">{latestNorm.title}</p>
-            </div>
-          ) : (
-            <p className="text-[14px] text-neutral-500 mt-2 font-medium">Clear</p>
-          )}
+        <button onClick={() => setActiveModule("contentHub")} className="rounded-lg px-3 py-2.5 bg-brand-surface/20 border border-brand-light text-left hover:border-brand-primary transition-colors">
+          <p className="text-[9px] font-semibold text-neutral-400 uppercase">{lang === "pt" ? "Conteúdo" : "Content"}</p>
+          <p className="text-[20px] font-bold text-neutral-900 leading-tight mt-0.5">{publishedThisMonth}</p>
+          <p className="text-[10px] text-brand-primary font-medium">{topicsInPipeline} {lang === "pt" ? "pautas" : "topics"}</p>
         </button>
 
-        {/* Knowledge Base */}
-        <button onClick={() => setActiveModule("knowledgeBase")} className="rounded-lg p-5 bg-white border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] text-left hover:border-brand-primary transition-colors group">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase flex items-center justify-between">
-            {lang === "pt" ? "Base de Conhecimento" : "Knowledge Base"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-primary" />
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <Database size={18} className="text-brand-primary" />
-             <p className="text-[13px] font-medium text-neutral-900">8 Acervos Indexados</p>
-          </div>
-          <p className="text-[11px] text-neutral-500 mt-1 line-clamp-1">{lang === "pt" ? "Pronto para RAG / OpenAI" : "Ready for RAG / OpenAI"}</p>
+        <button onClick={() => setActiveModule("recuperacao")} className="rounded-lg px-3 py-2.5 bg-error-light/20 border border-error-light/50 text-left hover:border-error transition-colors">
+          <p className="text-[9px] font-semibold text-error/70 uppercase">{lang === "pt" ? "Rec. Judicial" : "Judicial Rec."}</p>
+          <p className="text-[20px] font-bold text-error-dark leading-tight mt-0.5">{rjAlerts}</p>
+          <p className="text-[10px] text-error/60">{lang === "pt" ? "processos" : "cases"}</p>
         </button>
 
-        {/* Data Health & Registry */}
-        <button onClick={() => setActiveModule("dataSources")} className="rounded-lg p-5 bg-neutral-900 text-left hover:bg-black transition-colors group flex flex-col justify-between">
-          <p className="text-[11px] font-semibold text-neutral-400 uppercase flex items-center justify-between">
-            {lang === "pt" ? "Saúde dos Dados" : "Data Health"}
-            <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-white" />
-          </p>
-          <div>
-            <div className="flex items-center gap-1.5 mb-2 mt-3 flex-wrap">
-              {mockDataSources.slice(0, 10).map((s) => (
-                <div key={s.id} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.status === "healthy" ? "#4CAF50" : s.status === "warning" ? "#FF9800" : s.status === "stale" ? "#F44336" : "#9E9E9E" }} />
-              ))}
-            </div>
-            <p className="text-[12px] text-neutral-300">
-               <span className="font-bold text-white leading-none text-[16px] mr-1">{healthyCt}/{totalSources}</span> {lang === "pt" ? "fontes operantes" : "sources operating"}
-            </p>
+        <button onClick={() => setActiveModule("retailers")} className="rounded-lg px-3 py-2.5 bg-white border border-neutral-200 text-left hover:border-brand-primary transition-colors">
+          <p className="text-[9px] font-semibold text-neutral-400 uppercase">{lang === "pt" ? "Revendas" : "Retailers"}</p>
+          <p className="text-[20px] font-bold text-neutral-900 leading-tight mt-0.5">23k+</p>
+          <p className="text-[10px] text-neutral-400">{numRetailers.toLocaleString()} {lang === "pt" ? "canais" : "channels"}</p>
+        </button>
+
+        <button onClick={() => setActiveModule("dataSources")} className="rounded-lg px-3 py-2.5 bg-neutral-900 text-left hover:bg-black transition-colors">
+          <p className="text-[9px] font-semibold text-neutral-500 uppercase">{lang === "pt" ? "Dados" : "Data"}</p>
+          <p className="text-[20px] font-bold text-white leading-tight mt-0.5">{healthyCt}/{totalSources}</p>
+          <div className="flex items-center gap-0.5 mt-0.5">
+            {mockDataSources.slice(0, 6).map((s) => (
+              <div key={s.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.status === "healthy" ? "#4CAF50" : s.status === "warning" ? "#FF9800" : "#F44336" }} />
+            ))}
           </div>
         </button>
       </div>
