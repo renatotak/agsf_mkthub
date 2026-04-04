@@ -38,4 +38,5 @@ export const NEWS_SOURCES = [
   { id: 'sucesso-no-campo', name: 'Sucesso no Campo', rss: 'https://sucessonocampo.com.br/feed/' },
   { id: 'portal-agronegocio', name: 'Portal do Agronegócio', rss: 'https://www.portaldoagronegocio.com.br/feed' },
   { id: 'sna', name: 'SNA', rss: 'https://www.sna.agr.br/feed/' },
+  { id: 'beefpoint', name: 'BeefPoint', rss: 'https://www.beefpoint.com.br/feed/' },
 ] as const;

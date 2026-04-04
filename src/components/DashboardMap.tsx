@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { APIProvider, Map as GMap, AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
-import { AlertTriangle, Calendar, Store, Layers, Eye, EyeOff, ExternalLink } from "lucide-react";
+import { AlertTriangle, Calendar, Store, Layers, Eye, EyeOff, ExternalLink, CloudRain, Thermometer } from "lucide-react";
 import type { Lang } from "@/lib/i18n";
 
 // ─── Brazilian city coordinates (expanded) ──────────────────────────────────
@@ -100,7 +100,7 @@ function resolveCoords(city?: string | null, state?: string | null): { lat: numb
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type MarkerType = "event" | "retailer" | "alert";
+type MarkerType = "event" | "retailer" | "alert" | "weather";
 
 type MapMarker = {
   id: string;
@@ -125,6 +125,7 @@ const LAYERS: LayerConfig[] = [
   { key: "event", label: "Eventos", labelEn: "Events", color: "#5B7A2F", icon: <Calendar size={14} /> },
   { key: "alert", label: "Alertas", labelEn: "Alerts", color: "#E53935", icon: <AlertTriangle size={14} /> },
   { key: "retailer", label: "Revendas", labelEn: "Retailers", color: "#E8722A", icon: <Store size={14} /> },
+  { key: "weather", label: "Clima", labelEn: "Weather", color: "#1565C0", icon: <CloudRain size={14} /> },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -139,10 +140,18 @@ interface DashboardMapProps {
 
 export function DashboardMap({ events = [], liveEvents = [], retailers = [], alerts = [], lang }: DashboardMapProps) {
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
-  const [visibleLayers, setVisibleLayers] = useState<Set<MarkerType>>(new Set(["event", "alert", "retailer"]));
+  const [visibleLayers, setVisibleLayers] = useState<Set<MarkerType>>(new Set(["event", "alert", "retailer", "weather"]));
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+  const [weatherData, setWeatherData] = useState<any[]>([]);
 
   const MAP_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+  useEffect(() => {
+    fetch("/api/agroapi/clima")
+      .then((r) => r.json())
+      .then((json) => { if (json.success && json.data) setWeatherData(json.data); })
+      .catch(() => {});
+  }, []);
 
   const toggleLayer = (key: MarkerType) => {
     setVisibleLayers((prev) => {
@@ -226,8 +235,33 @@ export function DashboardMap({ events = [], liveEvents = [], retailers = [], ale
       });
     }
 
+    // Weather
+    for (const w of weatherData) {
+      if (w.tempMax === null && w.precip === null) continue;
+      const precipLabel = w.precip !== null ? `${w.precip} mm` : "";
+      const tempLabel = w.tempMax !== null && w.tempMin !== null ? `${w.tempMin}°–${w.tempMax}°C` : "";
+      m.push({
+        id: `wx-${w.id}`,
+        type: "weather",
+        lat: w.lat,
+        lng: w.lng,
+        title: `${w.name}, ${w.state}`,
+        subtitle: [tempLabel, precipLabel].filter(Boolean).join(" | "),
+        extra: (
+          <div className="mt-1 flex items-center gap-3 text-[11px]">
+            {w.tempMax !== null && (
+              <span className="flex items-center gap-0.5 text-orange-600"><Thermometer size={11} /> {w.tempMin}°–{w.tempMax}°C</span>
+            )}
+            {w.precip !== null && w.precip > 0 && (
+              <span className="flex items-center gap-0.5 text-blue-600"><CloudRain size={11} /> {w.precip} mm</span>
+            )}
+          </div>
+        ),
+      });
+    }
+
     return m;
-  }, [events, liveEvents, retailers, alerts, lang]);
+  }, [events, liveEvents, retailers, alerts, weatherData, lang]);
 
   const visibleMarkers = markers.filter((m) => visibleLayers.has(m.type));
   const activeMarker = visibleMarkers.find((m) => m.id === activeMarkerId);
@@ -237,6 +271,7 @@ export function DashboardMap({ events = [], liveEvents = [], retailers = [], ale
     event: markers.filter((m) => m.type === "event").length,
     alert: markers.filter((m) => m.type === "alert").length,
     retailer: markers.filter((m) => m.type === "retailer").length,
+    weather: markers.filter((m) => m.type === "weather").length,
   };
 
   return (
@@ -263,6 +298,7 @@ export function DashboardMap({ events = [], liveEvents = [], retailers = [], ale
                   {m.type === "event" && <Calendar size={14} />}
                   {m.type === "retailer" && <Store size={14} />}
                   {m.type === "alert" && <AlertTriangle size={14} />}
+                  {m.type === "weather" && <CloudRain size={14} />}
                 </div>
               </AdvancedMarker>
             ))}
