@@ -36,6 +36,6 @@ export const NEWS_CATEGORIES = [
 export const NEWS_SOURCES = [
   { id: 'canal-rural', name: 'Canal Rural', rss: 'https://www.canalrural.com.br/feed/' },
   { id: 'sucesso-no-campo', name: 'Sucesso no Campo', rss: 'https://sucessonocampo.com.br/feed/' },
-  { id: 'agrolink', name: 'Agrolink', rss: 'https://www.agrolink.com.br/rss/noticias.xml' },
-  { id: 'cna-noticias', name: 'CNA Notícias', rss: 'https://cnabrasil.org.br/noticias/rss' },
+  { id: 'portal-agronegocio', name: 'Portal do Agronegócio', rss: 'https://www.portaldoagronegocio.com.br/feed' },
+  { id: 'sna', name: 'SNA', rss: 'https://www.sna.agr.br/feed/' },
 ] as const;

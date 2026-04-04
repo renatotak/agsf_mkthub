@@ -75,14 +75,18 @@ Market Hub Knowledge Engine
 
 ## Known Issues & Pending Tasks
 
-> **CRITICAL: Supabase migration 006 was never run.** Tables `events`, `commodity_prices`, `market_indicators`, `agro_news`, `competitors`, `campaigns`, `content_ideas`, `published_articles`, `content_topics`, `regulatory_norms`, `recuperacao_judicial`, `sync_logs`, `news_knowledge` do **not exist** in Supabase. Only `retailers` and `retailer_locations` are populated. All cron routes that write to Supabase will fail silently. Run `src/db/migrations/006_all_mkthub_tables.sql` in Supabase SQL Editor to fix.
+> Migration 006 executed 2026-04-03. All 13 mkthub tables confirmed via REST API. Cron pipelines tested OK: 6 commodity prices, 6 indicators, 49 news articles, 7 sync logs populated.
 
-### Pending from this conversation (priority order):
-1. **Run Supabase migration 006** — creates all missing tables. Required for cron pipelines and live data in MarketPulse, AgroNews, CompetitorRadar, RegulatoryFramework, RecuperacaoJudicial.
-2. **Retailers Directory: show all fields** — user requested all information from `retailers` + `retailer_locations` on screen. Component already has live Supabase queries but needs UX review.
-3. **New Embrapa AgroAPI chapter** — user requested a dedicated sidebar module to explore AGROFIT, Bioinsumos, AgroTermos, SmartSolos, ClimAPI APIs directly. Currently only AgInputIntelligence uses AGROFIT/Bioinsumos.
-4. **Improve Painel UI** — user requested leaner KPI indicators to give more vertical space to map and widgets. Cards should be more compact.
-5. **Remaining AgroAPI integrations** — AgroTermos (terminology for Knowledge Base/RAG), ClimAPI (weather layer for map), SmartSolosExpert (activate Soils tab in AgInputIntelligence).
+### Completed since last update:
+- [x] Run Supabase migration 006 — all tables created, crons operational
+- [x] Improve Painel UI — compact 8-KPI strip replacing 3 rows of cards
+- [x] Retailers Directory — already shows all fields from both tables (verified)
+- [x] Vercel env vars — AGROAPI keys + Google Maps key configured
+
+### Remaining tasks:
+1. **Remaining AgroAPI integrations** — AgroTermos (terminology for Knowledge Base/RAG), ClimAPI (weather layer for map), SmartSolosExpert (activate Soils tab in AgInputIntelligence).
+2. **Google Maps on production** — env var set but requires clean redeploy (no build cache) to bake NEXT_PUBLIC_ var into client bundle.
+3. **Fix broken RSS feeds** — Agrolink returns 406, CNA returns 404. Find alternatives or update URLs.
 
 ---
 
