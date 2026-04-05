@@ -14,6 +14,7 @@ export interface RecuperacaoJudicial {
   source_url: string | null;
   source_name: string | null;
   state: string | null;
+  debt_value: number | null;
   created_at: string;
 }
 

@@ -6,7 +6,7 @@ import { AgriSafeLogo } from "@/components/AgriSafeLogo";
 import {
   BarChart3, Radar, Newspaper, Calendar,
   PenTool, BookOpen, Scale, Store,
-  LayoutDashboard, ChevronDown, X, Database, Brain, TestTube
+  LayoutDashboard, ChevronDown, X, Database, Brain, TestTube, HelpCircle
 } from "lucide-react";
 
 export type Module =
@@ -15,7 +15,8 @@ export type Module =
   | "market" | "inputs" | "competitors" | "news" | "events"
   | "contentHub"
   | "regulatory" | "recuperacao" | "retailers"
-  | "knowledgeBase";
+  | "knowledgeBase"
+  | "settings";
 
 interface SidebarProps {
   lang: Lang;
@@ -116,6 +117,7 @@ export function Sidebar({ lang, activeModule, onModuleChange, mobileOpen, onClos
         </button>
 
         {/* Sections */}
+        {/* Sections */}
         {sections.map((section) => {
           const sectionKey = section.titleEn;
           const isCollapsed = collapsed[sectionKey];
@@ -160,6 +162,24 @@ export function Sidebar({ lang, activeModule, onModuleChange, mobileOpen, onClos
           );
         })}
       </nav>
+
+      {/* Settings — bottom */}
+      <div className="px-3 py-3 border-t border-neutral-200">
+        <button
+          onClick={() => handleModuleClick("settings")}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-[14px] font-medium transition-all duration-150 ${
+            activeModule === "settings"
+              ? "bg-brand-primary text-white"
+              : "text-neutral-500 hover:bg-[rgba(0,0,0,0.04)] hover:text-neutral-800"
+          }`}
+        >
+          <HelpCircle
+            size={20}
+            className={activeModule === "settings" ? "text-white" : "text-neutral-400"}
+          />
+          {tr.nav.settings}
+        </button>
+      </div>
     </div>
   );
 
@@ -193,7 +213,8 @@ export function Sidebar({ lang, activeModule, onModuleChange, mobileOpen, onClos
 export function getModuleTitle(module: Module, lang: Lang): string {
   const tr = t(lang);
   if (module === "dashboard") return tr.nav.dashboard;
-  const keyMap: Record<Exclude<Module, "dashboard">, keyof typeof tr.modules> = {
+  if (module === "settings") return tr.nav.settings;
+  const keyMap: Record<Exclude<Module, "dashboard" | "settings">, keyof typeof tr.modules> = {
     dataSources: "dataSources",
     market: "marketPulse",
     inputs: "inputs",

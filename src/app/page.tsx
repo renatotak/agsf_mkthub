@@ -13,12 +13,13 @@ import { AgInputIntelligence } from "@/components/AgInputIntelligence";
 import { RegulatoryFramework } from "@/components/RegulatoryFramework";
 import { RecuperacaoJudicial } from "@/components/RecuperacaoJudicial";
 import { RetailersDirectory } from "@/components/RetailersDirectory";
+import { Settings } from "@/components/Settings";
 import { Header } from "@/components/Header";
 import { Sidebar, getModuleTitle } from "@/components/Sidebar";
 import {
   Database, BarChart3, TrendingUp, TrendingDown, PenTool,
   BookOpen, AlertTriangle, Zap, ChevronRight, Newspaper, Radar, Calendar,
-  Circle, ExternalLink, Loader2, Settings, X, Check,
+  Circle, ExternalLink, Loader2, Settings as SettingsIcon, X, Check,
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
@@ -67,6 +68,7 @@ export default function Home() {
           {activeModule === "recuperacao"  && <RecuperacaoJudicial lang={lang} />}
           {activeModule === "retailers"    && <RetailersDirectory lang={lang} />}
           {activeModule === "knowledgeBase"&& <KnowledgeBase lang={lang} />}
+          {activeModule === "settings"     && <Settings lang={lang} />}
         </div>
       </main>
     </div>
@@ -347,7 +349,7 @@ function NACotacoesWidget({ lang }: { lang: Lang }) {
               className={`p-1.5 rounded-md transition-colors ${settingsOpen ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"}`}
               title={lang === "pt" ? "Configurar commodities visíveis" : "Configure visible commodities"}
             >
-              <Settings size={15} />
+              <SettingsIcon size={15} />
             </button>
             {settingsOpen && data.length > 0 && (
               <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-white rounded-lg border border-neutral-200 shadow-lg">
@@ -412,7 +414,7 @@ function NACotacoesWidget({ lang }: { lang: Lang }) {
         <NACotacoesFallback lang={lang} />
       ) : displayed.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
-          <Settings size={24} className="mb-2" />
+          <SettingsIcon size={24} className="mb-2" />
           <p className="text-[13px]">{lang === "pt" ? "Nenhuma commodity selecionada" : "No commodities selected"}</p>
           <button onClick={() => setSettingsOpen(true)} className="mt-2 text-[12px] font-medium text-brand-primary hover:underline">
             {lang === "pt" ? "Configurar" : "Configure"}
