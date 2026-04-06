@@ -76,18 +76,9 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
   const fetchAll = async () => {
     const { data } = await supabase
       .from("recuperacao_judicial")
-      .select("id, entity_type, status, state, filing_date, summary");
+      .select("id, entity_type, status, state, filing_date, debt_value");
     if (data && data.length > 0) {
-      // Extract capital_social from summary as debt_value proxy
-      const enriched = data.map((item: any) => {
-        let debt_value: number | null = null;
-        const match = item.summary?.match(/Capital social: R\$ ([\d.,]+)/);
-        if (match) {
-          debt_value = parseFloat(match[1].replace(/\./g, "").replace(",", "."));
-        }
-        return { ...item, debt_value };
-      });
-      setAllItems(enriched as RJType[]);
+      setAllItems(data as RJType[]);
     } else {
       setAllItems(mockRecuperacaoJudicial.map(adaptMock) as RJType[]);
     }

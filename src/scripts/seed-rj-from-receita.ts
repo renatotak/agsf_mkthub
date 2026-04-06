@@ -152,6 +152,7 @@ async function main() {
       source_url: null,
       source_name: "Receita Federal (CNPJ)",
       state: c.uf,
+      debt_value: c.cs > 0 ? c.cs : null,
     };
 
     const { error } = await supabase
