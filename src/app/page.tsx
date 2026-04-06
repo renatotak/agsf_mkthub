@@ -55,7 +55,7 @@ export default function Home() {
         onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
         moduleTitle={getModuleTitle(activeModule, lang)}
       />
-      <main className="md:ml-[var(--sidebar-width)] pt-[var(--header-height)] min-h-screen">
+      <main className="md:ml-[var(--sidebar-width)] pt-[var(--header-height)] min-h-screen transition-[margin-left] duration-200 ease-out">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
           {activeModule === "dashboard"    && <DashboardOverview lang={lang} setActiveModule={setActiveModule} />}
           {activeModule === "dataSources"  && <DataSources lang={lang} />}

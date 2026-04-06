@@ -14,7 +14,7 @@ interface HeaderProps {
 
 export function Header({ lang, onToggleLang, onLogout, onToggleMobileSidebar, moduleTitle, moduleSubtitle }: HeaderProps) {
   return (
-    <header className="fixed top-0 right-0 left-0 md:left-[var(--sidebar-width)] h-[var(--header-height)] bg-white border-b border-neutral-200 z-[90] flex items-center justify-between px-4 md:px-8">
+    <header className="fixed top-0 right-0 left-0 md:left-[var(--sidebar-width)] h-[var(--header-height)] bg-white border-b border-neutral-200 z-[90] flex items-center justify-between px-4 md:px-8 transition-[left] duration-200 ease-out">
       {/* Left */}
       <div className="flex items-center gap-3">
         <button
