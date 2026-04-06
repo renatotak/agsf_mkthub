@@ -27,12 +27,14 @@ interface IndustryLink {
 
 interface Props {
   cnpjRaiz: string;
+  /** Canonical legal-entity id (Phase 17E). Preferred over cnpjRaiz when set. */
+  entityUid?: string | null;
   retailerName: string;
   lang: Lang;
   onIndustryClick?: (industryId: string) => void;
 }
 
-export function RetailerExpandedPanel({ cnpjRaiz, retailerName, lang, onIndustryClick }: Props) {
+export function RetailerExpandedPanel({ cnpjRaiz, entityUid, retailerName, lang, onIndustryClick }: Props) {
   const [intel, setIntel] = useState<RetailerIntelligence | null>(null);
   const [industries, setIndustries] = useState<IndustryLink[]>([]);
   const [liveNews, setLiveNews] = useState<any[]>([]);
@@ -42,12 +44,17 @@ export function RetailerExpandedPanel({ cnpjRaiz, retailerName, lang, onIndustry
 
   useEffect(() => {
     fetchIntelligence();
-  }, [cnpjRaiz]);
+    // refetch when either key changes
+  }, [cnpjRaiz, entityUid]);
+
+  // Build query string preferring entity_uid (Phase 17E)
+  const buildQuery = () =>
+    entityUid ? `entity_uid=${entityUid}` : `cnpj_raiz=${cnpjRaiz}`;
 
   const fetchIntelligence = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/retailer-intelligence?cnpj_raiz=${cnpjRaiz}`);
+      const res = await fetch(`/api/retailer-intelligence?${buildQuery()}`);
       const data = await res.json();
       setIntel(data.intelligence || null);
       setIndustries(data.industries || []);
@@ -65,7 +72,7 @@ export function RetailerExpandedPanel({ cnpjRaiz, retailerName, lang, onIndustry
       const res = await fetch("/api/retailer-intelligence/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cnpj_raiz: cnpjRaiz }),
+        body: JSON.stringify({ cnpj_raiz: cnpjRaiz, entity_uid: entityUid }),
       });
       const data = await res.json();
       if (data.intelligence) {

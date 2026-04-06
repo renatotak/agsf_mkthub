@@ -91,6 +91,8 @@ const GRUPO_COLORS: Record<string, string> = {
 
 interface Retailer {
   id: number;
+  /** Canonical legal-entity id (Phase 17C). Present after migration 024. */
+  entity_uid: string | null;
   cnpj_raiz: string;
   consolidacao: string;
   razao_social: string;
@@ -823,6 +825,7 @@ function RetailerRow({ retailer: r, lang, expanded, onToggle, locations, onRetai
             {/* ── AI Intelligence Panel ── */}
             <RetailerExpandedPanel
               cnpjRaiz={r.cnpj_raiz}
+              entityUid={r.entity_uid}
               retailerName={r.nome_fantasia || r.consolidacao || r.razao_social}
               lang={lang}
             />
