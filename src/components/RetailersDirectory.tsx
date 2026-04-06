@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { RetailerExpandedPanel } from "@/components/RetailerExpandedPanel";
 import { IndustryProfile } from "@/components/IndustryProfile";
+import { RiskSignals } from "@/components/RiskSignals";
 import { APIProvider, Map as GMap, AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
 
 const PAGE_SIZE = 25;
@@ -282,6 +283,9 @@ export function RetailersDirectory({ lang }: { lang: Lang }) {
           <p className="text-[24px] font-bold text-neutral-900 mt-1">{stats.estados}</p>
         </div>
       </div>
+
+      {/* Risk Signals — cross-reference with Recuperação Judicial */}
+      <RiskSignals lang={lang} />
 
       {/* Search & Filters */}
       <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-4 mb-6">

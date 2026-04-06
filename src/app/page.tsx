@@ -14,6 +14,7 @@ import { RegulatoryFramework } from "@/components/RegulatoryFramework";
 import { RecuperacaoJudicial } from "@/components/RecuperacaoJudicial";
 import { RetailersDirectory } from "@/components/RetailersDirectory";
 import { Settings } from "@/components/Settings";
+import { RiskSignals } from "@/components/RiskSignals";
 import { Header } from "@/components/Header";
 import { Sidebar, getModuleTitle } from "@/components/Sidebar";
 import {
@@ -143,7 +144,7 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
     <div className="space-y-6">
 
       {/* Compact KPI Strip — all live data */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
         <button onClick={() => setActiveModule("market")} className="rounded-lg px-3 py-2.5 bg-white border border-neutral-200 text-left hover:border-brand-primary transition-colors group">
           <p className="text-[9px] font-semibold text-neutral-400 uppercase">{lang === "pt" ? "Mercado" : "Market"}</p>
           {kpis.topMover ? (
@@ -199,6 +200,9 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
           <p className="text-[14px] font-bold text-neutral-900 leading-tight mt-0.5">AgriSafe</p>
           <p className="text-[10px] text-brand-primary font-medium">{lang === "pt" ? "Central" : "Hub"}</p>
         </button>
+
+        {/* Risk Signals — cross-reference Diretório × Recuperação Judicial */}
+        <RiskSignals lang={lang} compact onDrilldown={() => setActiveModule("retailers")} />
       </div>
 
       {/* Intelligence Map — fully live data */}
