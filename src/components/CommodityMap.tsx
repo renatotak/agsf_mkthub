@@ -183,8 +183,10 @@ function MapContent({ slug, lang }: { slug: string; lang: string }) {
   );
 }
 
-export function CommodityMap({ lang }: { lang: string }) {
-  const [selectedSlug, setSelectedSlug] = useState("soja");
+export function CommodityMap({ lang, slug }: { lang: string; slug?: string }) {
+  const [internalSlug, setInternalSlug] = useState("soja");
+  const isControlled = slug !== undefined;
+  const activeSlug = isControlled ? slug : internalSlug;
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
@@ -194,24 +196,26 @@ export function CommodityMap({ lang }: { lang: string }) {
   }
 
   return (
-    <div className="flex flex-col h-[500px] border border-neutral-200 rounded-lg overflow-hidden bg-white shadow-sm">
-      {/* Commodity tabs */}
-      <div className="p-3 bg-neutral-50 border-b border-neutral-200 flex gap-2 overflow-x-auto shrink-0">
-        {COMMODITY_TABS.map(c => (
-          <button key={c.slug} onClick={() => setSelectedSlug(c.slug)}
-            className={`px-3 py-1.5 text-[12px] font-semibold rounded-md whitespace-nowrap transition-colors ${
-              selectedSlug === c.slug
-                ? "text-white shadow-sm"
-                : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100"
-            }`}
-            style={selectedSlug === c.slug ? { backgroundColor: c.color } : {}}>
-            {lang === "pt" ? c.label : c.en}
-          </button>
-        ))}
-      </div>
+    <div className={`flex flex-col ${isControlled ? "h-full" : "h-[500px] border border-neutral-200 rounded-lg overflow-hidden bg-white shadow-sm"}`}>
+      {/* Commodity tabs — only shown when component manages its own state */}
+      {!isControlled && (
+        <div className="p-3 bg-neutral-50 border-b border-neutral-200 flex gap-2 overflow-x-auto shrink-0">
+          {COMMODITY_TABS.map(c => (
+            <button key={c.slug} onClick={() => setInternalSlug(c.slug)}
+              className={`px-3 py-1.5 text-[12px] font-semibold rounded-md whitespace-nowrap transition-colors ${
+                activeSlug === c.slug
+                  ? "text-white shadow-sm"
+                  : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100"
+              }`}
+              style={activeSlug === c.slug ? { backgroundColor: c.color } : {}}>
+              {lang === "pt" ? c.label : c.en}
+            </button>
+          ))}
+        </div>
+      )}
 
       <APIProvider apiKey={apiKey}>
-        <MapContent slug={selectedSlug} lang={lang} />
+        <MapContent slug={activeSlug} lang={lang} />
       </APIProvider>
     </div>
   );

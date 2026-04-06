@@ -10,7 +10,7 @@ import {
 import { CommodityMap } from "@/components/CommodityMap";
 import { NACotacoesWidget } from "@/components/NACotacoesWidget";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Cell,
 } from "recharts";
 
@@ -516,31 +516,21 @@ function CultureAnalysis({
             {summary?.closingDate && <span className="text-[10px] text-neutral-400 ml-auto">{summary.closingDate}</span>}
           </div>
           <div className="h-[400px]">
-            <CommodityMap lang={lang} />
+            <CommodityMap lang={lang} slug={activeCulture} />
           </div>
         </div>
 
-        {/* International TradingView chart — uses free embed-widget */}
+        {/* International futures chart — fetched from Yahoo Finance via /api/intl-futures */}
         <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-          <div className="px-4 py-3 border-b border-neutral-200 bg-neutral-50 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Globe size={14} className="text-blue-600" />
-              <h4 className="text-[12px] font-bold text-neutral-700 uppercase tracking-wider">
-                {lang === "pt" ? "Comparação Internacional" : "International Comparison"}
-              </h4>
-              <span className="text-[10px] text-neutral-500">{culture.intlUnit}</span>
-            </div>
-            <a
-              href={`https://www.tradingview.com/symbols/${culture.tvSymbol.replace(":", "-")}/`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] font-bold flex items-center gap-0.5 text-blue-600 hover:underline"
-            >
-              {culture.tvSymbol} <ExternalLink size={9} />
-            </a>
+          <div className="px-4 py-3 border-b border-neutral-200 bg-neutral-50 flex items-center gap-2">
+            <Globe size={14} className="text-blue-600" />
+            <h4 className="text-[12px] font-bold text-neutral-700 uppercase tracking-wider">
+              {lang === "pt" ? "Mercado Internacional" : "International Market"}
+            </h4>
+            <span className="text-[10px] text-neutral-500 ml-auto">{culture.intlMarket}</span>
           </div>
           <div className="h-[400px]">
-            <TradingViewSymbolOverview symbol={culture.tvSymbol} lang={lang} />
+            <IntlFuturesChart slug={activeCulture} lang={lang} />
           </div>
         </div>
       </div>
@@ -557,45 +547,166 @@ function CultureAnalysis({
   );
 }
 
-// ─── TradingView free symbol-overview widget ─────────────────────────────────
+// ─── International futures chart — fetched from Yahoo Finance via proxy ─────
 
-function TradingViewSymbolOverview({ symbol, lang }: { symbol: string; lang: Lang }) {
-  const config = {
-    symbols: [["", symbol]],
-    chartOnly: false,
-    width: "100%",
-    height: "100%",
-    locale: lang === "pt" ? "br" : "en",
-    colorTheme: "light",
-    autosize: true,
-    showVolume: false,
-    showMA: false,
-    hideDateRanges: false,
-    hideMarketStatus: false,
-    hideSymbolLogo: true,
-    scalePosition: "right",
-    scaleMode: "Normal",
-    fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
-    fontSize: "10",
-    noTimeScale: false,
-    valuesTracking: "1",
-    changeMode: "price-and-percent",
-    chartType: "area",
-    lineWidth: 2,
-    lineType: 0,
-    dateRanges: ["1d|1", "1m|30", "3m|60", "12m|1D", "60m|1W", "all|1M"],
-  };
-  const url = `https://s.tradingview.com/embed-widget/symbol-overview/?locale=${lang === "pt" ? "br" : "en"}#${encodeURIComponent(JSON.stringify(config))}`;
+interface IntlFuturesData {
+  success: boolean;
+  slug: string;
+  symbol: string;
+  name: string;
+  exchange: string;
+  unit: string;
+  unitFull: string;
+  currency: string;
+  lastPrice: number;
+  prevClose: number;
+  change: number;
+  changePct: number;
+  regularMarketTime: number;
+  fiftyTwoWeekHigh: number;
+  fiftyTwoWeekLow: number;
+  points: { t: number; date: string; close: number; high: number | null; low: number | null }[];
+  tradingViewLink: string;
+  yahooLink: string;
+}
+
+function IntlFuturesChart({ slug, lang }: { slug: string; lang: Lang }) {
+  const [data, setData] = useState<IntlFuturesData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [range, setRange] = useState<"1mo" | "3mo" | "6mo" | "1y">("3mo");
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetch(`/api/intl-futures?slug=${slug}&range=${range}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) setData(d);
+        else setError(d.error || "Failed to load");
+      })
+      .catch((e) => setError(e.message || "Fetch failed"))
+      .finally(() => setLoading(false));
+  }, [slug, range]);
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-neutral-50">
+        <Loader2 size={20} className="animate-spin text-neutral-400" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-neutral-50 text-center p-4">
+        <Globe size={28} className="text-neutral-300 mb-2" />
+        <p className="text-[12px] text-neutral-500">{error || (lang === "pt" ? "Sem dados" : "No data")}</p>
+      </div>
+    );
+  }
+
+  const isUp = data.change > 0;
+  const chartColor = isUp ? "#10b981" : "#ef4444";
+
   return (
-    <iframe
-      key={symbol}
-      src={url}
-      className="w-full h-full border-0"
-      allowTransparency
-      sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-      loading="lazy"
-      scrolling="no"
-    />
+    <div className="h-full flex flex-col bg-white">
+      {/* Top: current price + change */}
+      <div className="px-4 py-3 border-b border-neutral-100 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold text-neutral-500">{data.name}</p>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <span className="text-[24px] font-bold text-neutral-900 font-mono tracking-tight">
+              {data.lastPrice.toLocaleString(lang === "pt" ? "pt-BR" : "en-US", { minimumFractionDigits: 2 })}
+            </span>
+            <span className="text-[11px] text-neutral-500">{data.unit}</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className={`text-[14px] font-bold ${isUp ? "text-emerald-600" : data.change < 0 ? "text-rose-600" : "text-neutral-500"}`}>
+            {isUp ? "▲ +" : data.change < 0 ? "▼ " : "— "}
+            {data.change.toFixed(2)}
+          </p>
+          <p className={`text-[11px] font-bold ${isUp ? "text-emerald-600" : data.change < 0 ? "text-rose-600" : "text-neutral-500"}`}>
+            ({data.changePct >= 0 ? "+" : ""}{data.changePct.toFixed(2)}%)
+          </p>
+        </div>
+      </div>
+
+      {/* Range selector */}
+      <div className="px-4 py-1.5 border-b border-neutral-100 flex items-center gap-1 bg-neutral-50/50">
+        {(["1mo", "3mo", "6mo", "1y"] as const).map((r) => (
+          <button
+            key={r}
+            onClick={() => setRange(r)}
+            className={`px-2 py-1 text-[10px] font-bold rounded transition-colors ${
+              range === r ? "bg-blue-100 text-blue-700" : "text-neutral-500 hover:bg-neutral-100"
+            }`}
+          >
+            {r === "1mo" ? "1M" : r === "3mo" ? "3M" : r === "6mo" ? "6M" : "1Y"}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-3 text-[10px] text-neutral-500">
+          <span>52W H: <span className="font-bold text-neutral-700">{data.fiftyTwoWeekHigh?.toFixed(2)}</span></span>
+          <span>L: <span className="font-bold text-neutral-700">{data.fiftyTwoWeekLow?.toFixed(2)}</span></span>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="flex-1 p-2">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data.points}>
+            <defs>
+              <linearGradient id={`int-grad-${slug}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={chartColor} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 10, fill: "#9ca3af" }}
+              tickFormatter={(d) => {
+                const date = new Date(d);
+                return date.toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", { day: "numeric", month: "short" });
+              }}
+              interval="preserveStartEnd"
+              minTickGap={40}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: "#9ca3af" }}
+              domain={["auto", "auto"]}
+              tickFormatter={(v) => v.toFixed(0)}
+            />
+            <Tooltip
+              contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e5e5e0" }}
+              labelFormatter={(d) => new Date(d).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", { day: "numeric", month: "short", year: "numeric" })}
+              formatter={(value: any) => [`${Number(value).toFixed(2)} ${data.unit}`, data.name]}
+            />
+            <Area
+              type="monotone"
+              dataKey="close"
+              stroke={chartColor}
+              strokeWidth={2}
+              fill={`url(#int-grad-${slug})`}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-2 border-t border-neutral-100 bg-neutral-50 flex items-center justify-between text-[10px] text-neutral-500">
+        <span>{data.exchange} · {data.symbol} · {data.unitFull}</span>
+        <a
+          href={data.tradingViewLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-bold text-blue-600 hover:underline flex items-center gap-0.5"
+        >
+          {lang === "pt" ? "Ver no TradingView" : "View on TradingView"} <ExternalLink size={9} />
+        </a>
+      </div>
+    </div>
   );
 }
 
