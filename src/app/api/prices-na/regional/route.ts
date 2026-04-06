@@ -162,17 +162,36 @@ function geocodePraca(city: string, uf: string): { lat: number; lng: number } | 
   return null;
 }
 
-function parsePrice(text: string): number | null {
-  const cleaned = text.replace(/[^\d,.-]/g, "").replace(",", ".");
-  const num = parseFloat(cleaned);
+/**
+ * Parse a Brazilian-formatted number string.
+ * Handles:
+ *   "1.820,00" → 1820.00  (BR full: dot=thousands, comma=decimal)
+ *   "351,50"   → 351.50   (BR decimal only)
+ *   "1820.00"  → 1820.00  (US format)
+ *   "70,92"    → 70.92    (BR decimal only)
+ */
+function parseBRNumber(text: string): number | null {
+  const cleaned = text.replace(/[^\d,.\-+]/g, "").trim();
+  if (!cleaned) return null;
+  let normalized = cleaned;
+  if (cleaned.includes(",") && cleaned.includes(".")) {
+    // Brazilian full format: "1.820,00" → "1820.00"
+    normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (cleaned.includes(",")) {
+    // Brazilian decimal only: "351,50" → "351.50"
+    normalized = cleaned.replace(",", ".");
+  }
+  const num = parseFloat(normalized);
   return isNaN(num) ? null : num;
 }
 
+function parsePrice(text: string): number | null {
+  return parseBRNumber(text);
+}
+
 function parseVariation(text: string): { value: number | null; direction: "up" | "down" | "stable" } {
-  const cleaned = text.replace(/[^\d,.\-+]/g, "").replace(",", ".").trim();
-  if (!cleaned) return { value: null, direction: "stable" };
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return { value: null, direction: "stable" };
+  const num = parseBRNumber(text);
+  if (num === null) return { value: null, direction: "stable" };
   return { value: num, direction: num > 0 ? "up" : num < 0 ? "down" : "stable" };
 }
 
@@ -217,8 +236,16 @@ export async function GET(req: NextRequest) {
       const { city, uf, cooperative } = commodity === "boi-gordo"
         ? parsePracaScot(praca)
         : parsePraca(praca);
-      const price = parsePrice(priceLabel);
-      const { value: variation, direction } = parseVariation(varLabel);
+      let price = parsePrice(priceLabel);
+      // Boi-gordo Scot Consultoria quirks:
+      // (a) Some southern praças are quoted in R$/kg ("Pelotas (kg)"); convert to R$/@ (× 15).
+      // (b) Column 3 is "à prazo" (term price), not a percent variation. Set variation to null.
+      if (commodity === "boi-gordo" && /\(kg\)/i.test(praca) && price !== null) {
+        price = price * 15;
+      }
+      const { value: variation, direction } = commodity === "boi-gordo"
+        ? { value: null, direction: "stable" as const }
+        : parseVariation(varLabel);
       const coords = geocodePraca(city, uf);
 
       prices.push({
