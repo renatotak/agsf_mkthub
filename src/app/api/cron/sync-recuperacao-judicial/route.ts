@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
+import { writeEntityMentions } from '@/lib/entity-matcher'
 import Parser from 'rss-parser'
 import { RJ_NEWS_SOURCES, RJ_KEYWORDS } from '@/data/recuperacao'
 
@@ -109,7 +110,33 @@ export async function GET(request: Request) {
             .from('recuperacao_judicial')
             .upsert(rjItem, { onConflict: 'id', ignoreDuplicates: true })
 
-          if (!error) totalNew++
+          if (!error) {
+            totalNew++
+            // If we have a CNPJ, link this RJ record to the corresponding
+            // legal_entity via entity_mentions (Phase 17D). RSS items from
+            // this cron rarely carry a CNPJ, but when they do we want the
+            // graph edge recorded immediately.
+            if (rjItem.entity_cnpj) {
+              const cnpjBasico = String(rjItem.entity_cnpj).replace(/\D/g, '').slice(0, 8)
+              if (cnpjBasico.length === 8) {
+                const { data: ent } = await supabase
+                  .from('legal_entities')
+                  .select('entity_uid')
+                  .eq('tax_id', cnpjBasico)
+                  .maybeSingle()
+                if (ent?.entity_uid) {
+                  await writeEntityMentions(supabase, {
+                    entityUids: [ent.entity_uid],
+                    sourceTable: 'recuperacao_judicial',
+                    sourceId: rjItem.id,
+                    mentionType: 'subject',
+                    sentiment: 'negative',
+                    extractedBy: 'cnpj_direct',
+                  })
+                }
+              }
+            }
+          }
         }
       } catch (e: any) {
         errors.push(`${source.name}: ${e.message}`)

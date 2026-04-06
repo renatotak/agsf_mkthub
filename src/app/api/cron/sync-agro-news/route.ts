@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
+import { loadMatchableEntities, matchEntitiesInText, writeEntityMentions } from '@/lib/entity-matcher'
 import Parser from 'rss-parser'
 import { NEWS_SOURCES } from '@/data/news'
 
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
     const supabase = createAdminClient()
     let totalNew = 0
     let totalSkipped = 0
+    let totalMentions = 0
     const errors: string[] = []
 
     // Fetch highlighted producers for matching
@@ -62,6 +64,10 @@ export async function GET(request: Request) {
     const producerKeywords = (producers || []).flatMap((p: any) =>
       p.keywords.map((kw: string) => ({ name: p.name, keyword: kw.toLowerCase() }))
     )
+
+    // Load all matchable legal_entities once for entity_mentions detection
+    // (Phase 17D — algorithm-first name matching, no LLM).
+    const matchableEntities = await loadMatchableEntities(supabase)
 
     for (const source of NEWS_SOURCES) {
       try {
@@ -103,6 +109,18 @@ export async function GET(request: Request) {
             totalSkipped++
           } else {
             totalNew++
+            // Algorithm-first entity mention detection: find known legal_entities
+            // whose names appear in the article text, write to entity_mentions.
+            const entityUids = matchEntitiesInText(`${title} ${summary}`, matchableEntities)
+            if (entityUids.length > 0) {
+              totalMentions += await writeEntityMentions(supabase, {
+                entityUids,
+                sourceTable: 'agro_news',
+                sourceId: newsItem.id,
+                mentionType: 'mentioned',
+                extractedBy: 'regex_v1',
+              })
+            }
           }
         }
       } catch (e: any) {
@@ -125,7 +143,7 @@ export async function GET(request: Request) {
       success: true,
       message: 'Agro news synchronized',
       timestamp: new Date().toISOString(),
-      stats: { new: totalNew, skipped: totalSkipped },
+      stats: { new: totalNew, skipped: totalSkipped, entity_mentions: totalMentions },
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error: any) {
