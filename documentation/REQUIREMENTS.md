@@ -324,7 +324,7 @@ Each external data source has a "contract" — an implicit agreement about forma
 | RR-09 | HTML scrapers SHALL handle Cloudflare challenge pages gracefully (detect and report) |
 | RR-10 | HTML scrapers SHALL batch concurrent requests to avoid rate limiting (max 3-5 concurrent) |
 | RR-11 | HTML scrapers SHALL have fallback strategies for missing data fields |
-| RR-12 | HTML scraper selectors SHALL be documented in `docs/SCRAPER_SPECIFICATIONS.md` |
+| RR-12 | HTML scraper selectors SHALL be documented in `documentation/SCRAPER_SPECIFICATIONS.md` |
 
 ### 8.3 Maintenance Schedule
 
@@ -344,7 +344,7 @@ When an HTML scraper breaks due to source page redesign:
 1. **Detect:** `sync_logs` shows 0 records or errors for the scraper
 2. **Capture:** Save the current HTML page locally (e.g., `na-eventos.html`)
 3. **Inspect:** Open in browser, use DevTools to identify new DOM structure
-4. **Document:** Update selectors in `docs/SCRAPER_SPECIFICATIONS.md`
+4. **Document:** Update selectors in `documentation/SCRAPER_SPECIFICATIONS.md`
 5. **Fix:** Update Cheerio selectors in the route file
 6. **Test:** Run scraper locally and verify record count + data quality
 7. **Deploy:** Push to production and verify `sync_logs` on next run
@@ -366,7 +366,7 @@ A scraper is considered **production-ready** when:
 - [ ] Target table exists with appropriate schema and RLS
 - [ ] Upsert/dedup strategy prevents duplicate records
 - [ ] Returns structured JSON response with success/count/errors
-- [ ] Selectors documented in `docs/SCRAPER_SPECIFICATIONS.md`
+- [ ] Selectors documented in `documentation/SCRAPER_SPECIFICATIONS.md`
 - [ ] Build passes with no TypeScript errors
 
 ### 9.2 Current Scraper Status vs Acceptance Criteria

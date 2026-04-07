@@ -1,6 +1,6 @@
 -- ============================================================
 -- Knowledge Base — 4-Tier Hierarchy
--- Implements the Knowledge Architecture from docs/KNOWLEDGE_ARCHITECTURE.md
+-- Implements the Knowledge Architecture from documentation/KNOWLEDGE_ARCHITECTURE.md
 -- ============================================================
 
 -- Unified knowledge items table (all 4 tiers in one table for simpler querying)

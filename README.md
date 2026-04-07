@@ -41,11 +41,11 @@ npm run dev
 | [CLAUDE.md](CLAUDE.md) | **AI agents** — Claude-specific context & tool-specific workflow |
 | [PLAYBOOK.md](PLAYBOOK.md) | **Operators** — data journeys, operational how-tos, persona routines |
 | [ROADMAP.md](ROADMAP.md) | **Team** — current status, pending tasks, phase history |
-| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | Functional & non-functional requirements (FR/NFR) |
-| [docs/KNOWLEDGE_ARCHITECTURE.md](docs/KNOWLEDGE_ARCHITECTURE.md) | 4-tier data hierarchy & tagging model |
-| [docs/SCRAPER_SPECIFICATIONS.md](docs/SCRAPER_SPECIFICATIONS.md) | Scraper selectors, contracts, resilience checklists |
-| [docs/CONTENT_HUB_SPEC.md](docs/CONTENT_HUB_SPEC.md) | Content Hub data model & production workflow |
-| [docs/AGSF_Datalake_PRODUCT.md](docs/AGSF_Datalake_PRODUCT.md) | Datalake product tiers, personas, unit economics |
+| [documentation/REQUIREMENTS.md](documentation/REQUIREMENTS.md) | Functional & non-functional requirements (FR/NFR) |
+| [documentation/KNOWLEDGE_ARCHITECTURE.md](documentation/KNOWLEDGE_ARCHITECTURE.md) | 4-tier data hierarchy & tagging model |
+| [documentation/SCRAPER_SPECIFICATIONS.md](documentation/SCRAPER_SPECIFICATIONS.md) | Scraper selectors, contracts, resilience checklists |
+| [documentation/CONTENT_HUB_SPEC.md](documentation/CONTENT_HUB_SPEC.md) | Content Hub data model & production workflow |
+| [documentation/AGSF_Datalake_PRODUCT.md](documentation/AGSF_Datalake_PRODUCT.md) | Datalake product tiers, personas, unit economics |
 
 ## Companion Platform
 

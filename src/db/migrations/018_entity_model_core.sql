@@ -1,6 +1,6 @@
 -- ============================================================
 -- Migration 018: 5 Core Node Tables (Phase 17A)
--- Foundation of the locked entity model — see docs/ENTITY_MODEL.md
+-- Foundation of the locked entity model — see documentation/ENTITY_MODEL.md
 -- ============================================================
 --
 -- This migration creates the 5 canonical nodes that every feature
@@ -56,7 +56,7 @@ CREATE POLICY "service_write_legal_entities" ON legal_entities
   FOR ALL USING (auth.role() = 'service_role');
 
 COMMENT ON TABLE legal_entities IS
-  'Universal actor — one row per CPF or CNPJ. The root of the 5-entity model. See docs/ENTITY_MODEL.md.';
+  'Universal actor — one row per CPF or CNPJ. The root of the 5-entity model. See documentation/ENTITY_MODEL.md.';
 COMMENT ON COLUMN legal_entities.cnpj_basico IS
   'Generated 8-digit CNPJ root for fast joins with legacy cnpj_raiz text columns.';
 

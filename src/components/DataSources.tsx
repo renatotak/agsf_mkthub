@@ -1247,8 +1247,8 @@ function ScraperHealthTab({ lang }: { lang: Lang }) {
 
       <div className="text-[10px] text-neutral-400 italic">
         {lang === "pt"
-          ? "Auto-correção é humana: quando um scraper fica quebrado, leia scraper_knowledge e corrija o código. Veja docs/SCRAPER_PROTOCOL.md."
-          : "Auto-correction is human-driven: when a scraper goes broken, read scraper_knowledge and fix the code. See docs/SCRAPER_PROTOCOL.md."}
+          ? "Auto-correção é humana: quando um scraper fica quebrado, leia scraper_knowledge e corrija o código. Veja documentation/SCRAPER_PROTOCOL.md."
+          : "Auto-correction is human-driven: when a scraper goes broken, read scraper_knowledge and fix the code. See documentation/SCRAPER_PROTOCOL.md."}
       </div>
     </div>
   );

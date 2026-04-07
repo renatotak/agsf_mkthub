@@ -5,7 +5,7 @@
 --
 -- Establishes the operational telemetry + auto-correction protocol
 -- that every new scraper from Phase 19 onward must use. See
--- docs/SCRAPER_PROTOCOL.md for the full design rationale.
+-- documentation/SCRAPER_PROTOCOL.md for the full design rationale.
 --
 -- Three tables:
 --   1. scraper_registry  — definitions + live health per scraper

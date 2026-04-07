@@ -34,7 +34,7 @@ When you're tempted to add an LLM call, first ask: "Could a Python script or a r
 
 ### 2. The 5-entity data model — everything links back to these nodes
 
-Every record stored in this database must be linkable, via foreign key or stable identifier, to one or more of these five nodes. **For the full schema, junctions, migration plan, and rationale, see `docs/ENTITY_MODEL.md`** (the canonical reference).
+Every record stored in this database must be linkable, via foreign key or stable identifier, to one or more of these five nodes. **For the full schema, junctions, migration plan, and rationale, see `documentation/ENTITY_MODEL.md`** (the canonical reference).
 
 | # | Node | Stable identifier | Notes |
 |---|---|---|---|
@@ -137,21 +137,21 @@ npm run build        # Verify TypeScript before PR
 - [ ] Call `logSync()` on success and failure
 - [ ] Add to `sync-all` orchestrator
 - [ ] Create Supabase migration for target table — **must include FK to one of the 5 entity anchors**
-- [ ] Document selectors in `docs/SCRAPER_SPECIFICATIONS.md`
+- [ ] Document selectors in `documentation/SCRAPER_SPECIFICATIONS.md`
 
 ## Reference Documents
 
 | Need | Document |
 |------|----------|
-| **Entity model (5 nodes + junctions) — canonical schema** | **`docs/ENTITY_MODEL.md`** |
-| Latest user-defined task list (2026-04-06) | `docs/TODO_2026-04-06.md` |
+| **Entity model (5 nodes + junctions) — canonical schema** | **`documentation/ENTITY_MODEL.md`** |
+| Latest user-defined task list (2026-04-06) | `documentation/TODO_2026-04-06.md` |
 | Data journeys & operational how-tos | `PLAYBOOK.md` |
 | Roadmap, completed phases, pending tasks | `ROADMAP.md` |
-| Functional & non-functional requirements | `docs/REQUIREMENTS.md` |
-| Scraper selectors & contracts | `docs/SCRAPER_SPECIFICATIONS.md` |
-| 4-tier knowledge architecture & tagging | `docs/KNOWLEDGE_ARCHITECTURE.md` |
-| Content Hub data model & workflow | `docs/CONTENT_HUB_SPEC.md` |
-| Datalake product tiers & personas | `docs/AGSF_Datalake_PRODUCT.md` |
+| Functional & non-functional requirements | `documentation/REQUIREMENTS.md` |
+| Scraper selectors & contracts | `documentation/SCRAPER_SPECIFICATIONS.md` |
+| 4-tier knowledge architecture & tagging | `documentation/KNOWLEDGE_ARCHITECTURE.md` |
+| Content Hub data model & workflow | `documentation/CONTENT_HUB_SPEC.md` |
+| Datalake product tiers & personas | `documentation/AGSF_Datalake_PRODUCT.md` |
 
 ## Design Tokens (from Admin Portal)
 

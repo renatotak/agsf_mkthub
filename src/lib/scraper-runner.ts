@@ -18,7 +18,7 @@
  *   7. Calls the legacy `logSync()` internally so the existing DataSources UI
  *      keeps working unchanged.
  *
- * The auto-correction loop is HUMAN-DRIVEN. See docs/SCRAPER_PROTOCOL.md for
+ * The auto-correction loop is HUMAN-DRIVEN. See documentation/SCRAPER_PROTOCOL.md for
  * the full design rationale.
  */
 

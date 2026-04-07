@@ -5,7 +5,7 @@
  * maize across World / Brazil / Argentina / USA / China from the FAOSTAT
  * v1 REST API and upserts into `macro_statistics`. First scraper built
  * on the Phase 19A `runScraper()` foundation — see
- * docs/SCRAPER_PROTOCOL.md.
+ * documentation/SCRAPER_PROTOCOL.md.
  *
  * Algorithmic mapping only. No LLMs anywhere — guardrail #1.
  */

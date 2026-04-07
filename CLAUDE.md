@@ -1,7 +1,7 @@
 # CLAUDE.md — AgriSafe Market Hub
 
 > Agent context file. For humans, see README.md. For the full roadmap, see ROADMAP.md.
-> For the latest user-defined task list, see `docs/TODO_2026-04-06.md`.
+> For the latest user-defined task list, see `documentation/TODO_2026-04-06.md`.
 
 ## Project in One Line
 
@@ -40,7 +40,7 @@ When you're tempted to add an LLM call, first ask: "Could a Python script or a r
 
 Every record stored in this database must be linkable, via foreign key or stable identifier, to one or more of these five nodes. **Building a feature without thinking about which of these it ties to is a bug.**
 
-For the full schema, junctions, migration plan, and rationale, see **`docs/ENTITY_MODEL.md`** (the canonical reference).
+For the full schema, junctions, migration plan, and rationale, see **`documentation/ENTITY_MODEL.md`** (the canonical reference).
 
 | # | Node | Stable identifier | What it represents |
 |---|---|---|---|
@@ -96,7 +96,7 @@ Never store client PII, financial records, or proprietary data in the public-dom
 - **Bilingual always** — Every UI string must exist in PT-BR + EN via `src/lib/i18n.ts`
 - **MockBadge required** — Any non-live section must display the MOCKED DATA watermark
 - **Single cron** — Vercel Hobby plan limit; `sync-all` consolidates all jobs
-- **Knowledge hierarchy** — Follow the 4-tier model in `docs/KNOWLEDGE_ARCHITECTURE.md`
+- **Knowledge hierarchy** — Follow the 4-tier model in `documentation/KNOWLEDGE_ARCHITECTURE.md`
 - **Google API free tier** — Verify Google APIs stay within free tier (Maps, Custom Search 100/day)
 
 ---
@@ -129,7 +129,7 @@ node --env-file=.env.local src/scripts/geocode-retailers.js  # Geocode retailer 
 |----------|---------------|
 | Ingestão de Dados | `DataSources.tsx`, `SourceRegistry.tsx` (166 sources, CRUD planned) |
 | Inteligência de Mercado | `MarketPulse.tsx` (Highlights + Culture/Region tabs + Logistics spread + Yahoo Finance intl chart), `CompetitorRadar.tsx` (CRUD planned), `AgroNews.tsx` (CRUD planned), `EventTracker.tsx`, `AgInputIntelligence.tsx` (oracle planned) |
-| Marketing & Conteúdo | `ContentHub.tsx` — see `docs/CONTENT_HUB_SPEC.md` |
+| Marketing & Conteúdo | `ContentHub.tsx` — see `documentation/CONTENT_HUB_SPEC.md` |
 | Diretório (CRM-grade) | `RetailersDirectory.tsx` (channels), **planned:** `IndustriesDirectory.tsx` (industries split-out), `RiskSignals.tsx` (Diretório × RJ cross-ref) |
 | Regulatório & Compliance | `RegulatoryFramework.tsx`, `RecuperacaoJudicial.tsx` |
 | Base de Conhecimento | `KnowledgeBase.tsx` (search + AgroTermos), `KnowledgeMindMap.tsx` (table-graph viz) |
@@ -232,13 +232,13 @@ Page bg `#F7F4EF` · Text `#3D382F` · Font: Inter 300–800
 
 | Topic | File |
 |-------|------|
-| **Entity model (5 nodes + junctions)** — canonical schema reference | **`docs/ENTITY_MODEL.md`** |
+| **Entity model (5 nodes + junctions)** — canonical schema reference | **`documentation/ENTITY_MODEL.md`** |
 | Operations & data journeys | `PLAYBOOK.md` |
 | Roadmap & phase history | `ROADMAP.md` |
-| Latest task list (2026-04-06) | `docs/TODO_2026-04-06.md` |
-| System requirements (FR/NFR) | `docs/REQUIREMENTS.md` |
-| Scraper specs & selectors | `docs/SCRAPER_SPECIFICATIONS.md` |
-| Knowledge architecture (4-tier) | `docs/KNOWLEDGE_ARCHITECTURE.md` |
-| Content Hub spec | `docs/CONTENT_HUB_SPEC.md` |
-| Datalake product strategy | `docs/AGSF_Datalake_PRODUCT.md` |
+| Latest task list (2026-04-06) | `documentation/TODO_2026-04-06.md` |
+| System requirements (FR/NFR) | `documentation/REQUIREMENTS.md` |
+| Scraper specs & selectors | `documentation/SCRAPER_SPECIFICATIONS.md` |
+| Knowledge architecture (4-tier) | `documentation/KNOWLEDGE_ARCHITECTURE.md` |
+| Content Hub spec | `documentation/CONTENT_HUB_SPEC.md` |
+| Datalake product strategy | `documentation/AGSF_Datalake_PRODUCT.md` |
 | CNPJ data layout (RF) | `imports/cnpj-metadados.pdf` |

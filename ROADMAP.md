@@ -2,7 +2,7 @@
 
 > **Last updated:** 2026-04-07
 > **Status:** Phase 17 complete (5-entity foundation). Phase 19A complete (scraper resilience foundation: `scraper_registry`, `scraper_runs`, `scraper_knowledge`, `runScraper()` wrapper, `/api/scraper-health` endpoint, DataSources Scraper Health tab, Dashboard KPI surfacing). Phase 19B partial (FAOSTAT live in Pulso do Mercado → Contexto Macro for soja/milho/café/trigo/algodão). Phase 20A complete (federal AGROFIT bulk + Inteligência de Insumos Oracle UX). Phase 21 complete (Radar Competitivo CRUD + Harvey Ball matrix + web enrichment). Phase 22 complete (Notícias Agro CRUD + news_sources table + reading-room ingest endpoint). 4-vertical architecture, 13+ modules, 38 Supabase tables, 32 SQL migrations.
-> **For the latest user-defined task list, see** `docs/TODO_2026-04-06.md`.
+> **For the latest user-defined task list, see** `documentation/TODO_2026-04-06.md`.
 
 ---
 
@@ -28,7 +28,7 @@
 
 ## Architectural North Star (locked 2026-04-06)
 
-The platform exists to support analyses around **5 core nodes**. Every feature, every table, every scraper must contribute data that resolves to one or more of them. **Canonical reference: `docs/ENTITY_MODEL.md`.**
+The platform exists to support analyses around **5 core nodes**. Every feature, every table, every scraper must contribute data that resolves to one or more of them. **Canonical reference: `documentation/ENTITY_MODEL.md`.**
 
 | # | Node | Identity | Multi-stakeholder model |
 |---|---|---|---|
@@ -78,7 +78,7 @@ The platform exists to support analyses around **5 core nodes**. Every feature, 
 
 ## Phase 17 — Five Core Nodes Foundation ✅ COMPLETE (2026-04-06)
 
-The foundational schema phase that everything else hangs off. Database is now reorganized around the 5 core nodes from `docs/ENTITY_MODEL.md`. Shipped in **6 commits across 6 sub-phases**, all pushed to `origin/main`.
+The foundational schema phase that everything else hangs off. Database is now reorganized around the 5 core nodes from `documentation/ENTITY_MODEL.md`. Shipped in **6 commits across 6 sub-phases**, all pushed to `origin/main`.
 
 | Sub-phase | Commit | Migration(s) | What |
 |-----------|--------|--------------|------|
@@ -111,7 +111,7 @@ The foundational schema phase that everything else hangs off. Database is now re
 
 ## Phase 18 — Painel (Dashboard) Improvements
 
-From `docs/TODO_2026-04-06.md`:
+From `documentation/TODO_2026-04-06.md`:
 
 - [x] First-row KPI buttons open a **modal** highlighting what's important in each chapter, with a CTA button linking to the chapter ✅
 - [x] **Mapa de Inteligência Integrada** — natively parse location for every news, event, and weather record so they can all be plotted on the map ✅
@@ -132,7 +132,7 @@ The pre-Phase-19 cron pipeline only used `logSync()` (a flat per-run pass/fail r
 
 - [x] **Migration 027** — `scraper_registry`, `scraper_runs`, `scraper_knowledge` (3 tables, RLS enabled, deterministic schema_check JSONB)
 - [x] **`src/lib/scraper-runner.ts`** — `runScraper()` wrapper. Validates output rows against the registered schema (required keys + types + numeric ranges + enum values + row count), updates the registry's health (cadence-aware grace period: degraded after 1 failure beyond grace, broken after 3 consecutive), writes a `scraper_knowledge` row of kind=`failure` on every failure, and calls `logSync()` internally for backward compat with the DataSources UI. **Validation is 100% deterministic — no LLM in the loop (guardrail #1).**
-- [x] **`docs/SCRAPER_PROTOCOL.md`** — documents the 4-phase auto-correction loop (detection → diagnosis → fix → validation), explicitly **human-driven** (LLMs may propose fixes in chat sessions, but the actual fix must be reviewed and committed by a human)
+- [x] **`documentation/SCRAPER_PROTOCOL.md`** — documents the 4-phase auto-correction loop (detection → diagnosis → fix → validation), explicitly **human-driven** (LLMs may propose fixes in chat sessions, but the actual fix must be reviewed and committed by a human)
 - [x] **`/api/cron/sync-scraper-healthcheck`** — no-op smoke test that pings `api.github.com/zen` to validate the wiring end-to-end. Wired into `sync-all`. Safe to delete after Phase 19B has been green for 2+ weeks.
 - [x] **`/api/scraper-health` endpoint** — public read aggregator that joins `scraper_registry` × latest `scraper_runs` × open `scraper_knowledge` failures. Returns per-scraper health rows + 24h failure counts + summary `{healthy, degraded, broken, disabled}`.
 - [x] **DataSources → "Saúde dos Scrapers" tab** — surfaces the resilience layer in the existing Ingestão de Dados UI. Status badges, expandable rows showing definition + last run + validation errors, refresh button, sorted with broken/degraded floating to the top.
