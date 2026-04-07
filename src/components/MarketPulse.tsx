@@ -1116,9 +1116,13 @@ const MOCK_MACRO_STATS = [
 // Phase 19B — Map Pulso do Mercado culture slugs to FAOSTAT commodity slugs
 // (the values written by /api/cron/sync-faostat into macro_statistics.commodity).
 // Cultures absent here have no live FAOSTAT data yet — UI falls back to mock.
+// boi-gordo lives in FAOSTAT QL (livestock) domain — needs a separate scraper.
 const FAOSTAT_COMMODITY_BY_SLUG: Record<string, string> = {
   soja: "soybean",
   milho: "corn",
+  cafe: "coffee",
+  trigo: "wheat",
+  algodao: "cotton",
 };
 
 interface MacroStatRow {

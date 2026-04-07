@@ -10,7 +10,7 @@ import { MockBadge } from "@/components/ui/MockBadge";
 import {
   CheckCircle2, AlertTriangle, XCircle, Circle, ExternalLink,
   Search, Globe, ChevronDown, ChevronUp, Zap, Layers, X,
-  Database, Info,
+  Database, Info, Activity, Wrench, RefreshCw,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -18,7 +18,7 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "registry" | "history" | "quality";
+type Tab = "registry" | "history" | "quality" | "health";
 
 interface RegistrySource {
   id: string;
@@ -168,6 +168,7 @@ export function DataSources({ lang }: { lang: Lang }) {
     { id: "registry", label: lang === "pt" ? "Registro de Fontes" : "Source Registry" },
     { id: "history",  label: lang === "pt" ? "Histórico de Sync"  : "Sync History" },
     { id: "quality",  label: lang === "pt" ? "Qualidade dos Dados": "Data Quality" },
+    { id: "health",   label: lang === "pt" ? "Saúde dos Scrapers" : "Scraper Health" },
   ];
 
   return (
@@ -222,6 +223,7 @@ export function DataSources({ lang }: { lang: Lang }) {
       {tab === "registry" && <RegistryTab lang={lang} />}
       {tab === "history"  && <HistoryTab lang={lang} logs={liveLogs} isReal={logsAreReal} />}
       {tab === "quality"  && <QualityTab lang={lang} logs={liveLogs} logsAreReal={logsAreReal} />}
+      {tab === "health"   && <ScraperHealthTab lang={lang} />}
     </div>
   );
 }
@@ -928,4 +930,326 @@ function QualityTab({ lang, logs, logsAreReal }: { lang: Lang; logs: MockSyncLog
   );
 }
 
+// ─── Tab: Scraper Health (Phase 19A) ─────────────────────────────────────────
 
+interface ScraperHealthRow {
+  scraper_id: string;
+  name: string;
+  description: string | null;
+  source_id: string;
+  kind: string;
+  target_table: string | null;
+  cadence: string;
+  status: "healthy" | "degraded" | "broken" | "disabled";
+  consecutive_failures: number;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  expected_min_rows: number;
+  last_run: {
+    run_id: string;
+    started_at: string;
+    duration_ms: number | null;
+    rows_fetched: number;
+    rows_inserted: number;
+    status: string;
+    error_message: string | null;
+    validation_errors: unknown[];
+  } | null;
+  open_failure_count: number;
+  recent_runs_24h: number;
+  recent_failures_24h: number;
+}
+
+interface ScraperHealthSummary {
+  healthy: number;
+  degraded: number;
+  broken: number;
+  disabled: number;
+  total: number;
+}
+
+const HEALTH_STATUS_CONFIG: Record<
+  ScraperHealthRow["status"],
+  { dotColor: string; bg: string; border: string; text: string; labelPt: string; labelEn: string }
+> = {
+  healthy:  { dotColor: "#2E7D32", bg: "bg-emerald-50",  border: "border-emerald-200", text: "text-emerald-700", labelPt: "Saudável",  labelEn: "Healthy" },
+  degraded: { dotColor: "#E8722A", bg: "bg-amber-50",    border: "border-amber-200",   text: "text-amber-700",   labelPt: "Degradado", labelEn: "Degraded" },
+  broken:   { dotColor: "#F44336", bg: "bg-red-50",      border: "border-red-200",     text: "text-red-700",     labelPt: "Quebrado",  labelEn: "Broken" },
+  disabled: { dotColor: "#9CA3AF", bg: "bg-neutral-100", border: "border-neutral-200", text: "text-neutral-600", labelPt: "Desabilitado", labelEn: "Disabled" },
+};
+
+function fmtRelative(iso: string | null, lang: Lang): string {
+  if (!iso) return lang === "pt" ? "nunca" : "never";
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return lang === "pt" ? "agora" : "just now";
+  if (min < 60) return lang === "pt" ? `há ${min}min` : `${min}min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return lang === "pt" ? `há ${hr}h` : `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  if (d < 30) return lang === "pt" ? `há ${d}d` : `${d}d ago`;
+  return new Date(iso).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US");
+}
+
+function ScraperHealthTab({ lang }: { lang: Lang }) {
+  const [scrapers, setScrapers] = useState<ScraperHealthRow[]>([]);
+  const [summary, setSummary] = useState<ScraperHealthSummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetch("/api/scraper-health")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          setScrapers(json.scrapers || []);
+          setSummary(json.summary || null);
+        } else {
+          setError(json.error || "Failed to load scraper health");
+        }
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [refreshTick]);
+
+  const sortedScrapers = useMemo(() => {
+    // Sort: broken first, then degraded, then healthy, then disabled. Within each, alpha.
+    const order: Record<ScraperHealthRow["status"], number> = {
+      broken: 0,
+      degraded: 1,
+      healthy: 2,
+      disabled: 3,
+    };
+    return [...scrapers].sort((a, b) => {
+      const o = order[a.status] - order[b.status];
+      if (o !== 0) return o;
+      return a.scraper_id.localeCompare(b.scraper_id);
+    });
+  }, [scrapers]);
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-[13px] text-red-700">
+        <strong>{lang === "pt" ? "Erro ao carregar saúde dos scrapers:" : "Failed to load scraper health:"}</strong>{" "}
+        {error}
+        <p className="text-[11px] text-red-600 mt-2">
+          {lang === "pt"
+            ? "Verifique se as migrations 027/028 foram aplicadas no Supabase."
+            : "Check that migrations 027/028 have been applied to Supabase."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary KPIs */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-[15px] font-bold text-neutral-900 flex items-center gap-2">
+            <Activity size={16} className="text-brand-primary" />
+            {lang === "pt" ? "Saúde dos Scrapers" : "Scraper Health"}
+          </h3>
+          <p className="text-[11px] text-neutral-500 mt-0.5">
+            {lang === "pt"
+              ? "Telemetria e auto-correção via scraper_registry / scraper_runs / scraper_knowledge (Fase 19A)"
+              : "Telemetry and auto-correction via scraper_registry / scraper_runs / scraper_knowledge (Phase 19A)"}
+          </p>
+        </div>
+        <button
+          onClick={() => setRefreshTick((t) => t + 1)}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-brand-primary border border-brand-primary rounded-md hover:bg-brand-primary/5 disabled:opacity-50"
+        >
+          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+          {lang === "pt" ? "Atualizar" : "Refresh"}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {(["healthy", "degraded", "broken", "disabled"] as const).map((status) => {
+          const cfg = HEALTH_STATUS_CONFIG[status];
+          const count = summary ? summary[status] : 0;
+          return (
+            <div
+              key={status}
+              className={`${cfg.bg} ${cfg.border} border rounded-lg p-4 flex items-center gap-4`}
+            >
+              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.dotColor }} />
+              <div>
+                <p className={`text-[22px] font-bold ${cfg.text} leading-none`}>{count}</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5 font-medium">
+                  {lang === "pt" ? cfg.labelPt : cfg.labelEn}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Scrapers list */}
+      {sortedScrapers.length === 0 && !loading ? (
+        <div className="bg-white border border-neutral-200 rounded-lg p-6 text-center text-[12px] text-neutral-500">
+          {lang === "pt"
+            ? "Nenhum scraper registrado ainda. Aplique a migration 027 para criar a tabela scraper_registry."
+            : "No scrapers registered yet. Apply migration 027 to create the scraper_registry table."}
+        </div>
+      ) : (
+        <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
+          <table className="w-full text-[12px]">
+            <thead className="bg-neutral-50 text-[10px] uppercase font-bold text-neutral-500">
+              <tr>
+                <th className="text-left px-4 py-2.5">{lang === "pt" ? "Scraper" : "Scraper"}</th>
+                <th className="text-left px-4 py-2.5">Status</th>
+                <th className="text-left px-4 py-2.5">{lang === "pt" ? "Cadência" : "Cadence"}</th>
+                <th className="text-left px-4 py-2.5">{lang === "pt" ? "Último sucesso" : "Last success"}</th>
+                <th className="text-left px-4 py-2.5">{lang === "pt" ? "Linhas (último)" : "Rows (last)"}</th>
+                <th className="text-left px-4 py-2.5">{lang === "pt" ? "Falhas 24h" : "24h failures"}</th>
+                <th className="text-left px-4 py-2.5">{lang === "pt" ? "Falhas abertas" : "Open failures"}</th>
+                <th className="px-4 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedScrapers.map((s) => {
+                const cfg = HEALTH_STATUS_CONFIG[s.status];
+                const isExpanded = expanded === s.scraper_id;
+                return (
+                  <>
+                    <tr
+                      key={s.scraper_id}
+                      className="border-t border-neutral-100 hover:bg-neutral-50/50 cursor-pointer"
+                      onClick={() => setExpanded(isExpanded ? null : s.scraper_id)}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-neutral-900">{s.name}</div>
+                        <div className="text-[10px] text-neutral-500">{s.scraper_id}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold ${cfg.bg} ${cfg.border} ${cfg.text}`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.dotColor }} />
+                          {lang === "pt" ? cfg.labelPt : cfg.labelEn}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-neutral-600">{s.cadence}</td>
+                      <td className="px-4 py-3 text-neutral-600">{fmtRelative(s.last_success_at, lang)}</td>
+                      <td className="px-4 py-3 text-neutral-600">
+                        {s.last_run ? `${s.last_run.rows_fetched}` : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={s.recent_failures_24h > 0 ? "text-red-600 font-bold" : "text-neutral-400"}>
+                          {s.recent_failures_24h}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {s.open_failure_count > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-red-600 font-bold">
+                            <Wrench size={10} />
+                            {s.open_failure_count}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400">0</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-neutral-50/40 border-t border-neutral-100">
+                        <td colSpan={8} className="px-4 py-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
+                            <div>
+                              <div className="font-bold text-neutral-700 mb-2">
+                                {lang === "pt" ? "Definição" : "Definition"}
+                              </div>
+                              <dl className="space-y-1 text-neutral-600">
+                                <div className="flex gap-2">
+                                  <dt className="w-32 text-neutral-400">{lang === "pt" ? "Tipo" : "Kind"}</dt>
+                                  <dd>{s.kind}</dd>
+                                </div>
+                                <div className="flex gap-2">
+                                  <dt className="w-32 text-neutral-400">{lang === "pt" ? "Tabela alvo" : "Target table"}</dt>
+                                  <dd>{s.target_table || "—"}</dd>
+                                </div>
+                                <div className="flex gap-2">
+                                  <dt className="w-32 text-neutral-400">source_id</dt>
+                                  <dd>{s.source_id}</dd>
+                                </div>
+                                <div className="flex gap-2">
+                                  <dt className="w-32 text-neutral-400">{lang === "pt" ? "Mín. linhas" : "Min rows"}</dt>
+                                  <dd>{s.expected_min_rows}</dd>
+                                </div>
+                                <div className="flex gap-2">
+                                  <dt className="w-32 text-neutral-400">{lang === "pt" ? "Falhas consecutivas" : "Consecutive fails"}</dt>
+                                  <dd>{s.consecutive_failures}</dd>
+                                </div>
+                              </dl>
+                              {s.description && (
+                                <p className="mt-3 text-neutral-500 italic leading-relaxed">{s.description}</p>
+                              )}
+                            </div>
+                            <div>
+                              <div className="font-bold text-neutral-700 mb-2">
+                                {lang === "pt" ? "Última execução" : "Last run"}
+                              </div>
+                              {s.last_run ? (
+                                <dl className="space-y-1 text-neutral-600">
+                                  <div className="flex gap-2">
+                                    <dt className="w-32 text-neutral-400">{lang === "pt" ? "Iniciada" : "Started"}</dt>
+                                    <dd>{new Date(s.last_run.started_at).toLocaleString(lang === "pt" ? "pt-BR" : "en-US")}</dd>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <dt className="w-32 text-neutral-400">{lang === "pt" ? "Duração" : "Duration"}</dt>
+                                    <dd>{s.last_run.duration_ms !== null ? `${s.last_run.duration_ms}ms` : "—"}</dd>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <dt className="w-32 text-neutral-400">{lang === "pt" ? "Buscadas / Inseridas" : "Fetched / inserted"}</dt>
+                                    <dd>{s.last_run.rows_fetched} / {s.last_run.rows_inserted}</dd>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <dt className="w-32 text-neutral-400">Status</dt>
+                                    <dd className="font-mono">{s.last_run.status}</dd>
+                                  </div>
+                                  {s.last_run.error_message && (
+                                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-red-700">
+                                      {s.last_run.error_message}
+                                    </div>
+                                  )}
+                                  {Array.isArray(s.last_run.validation_errors) && s.last_run.validation_errors.length > 0 && (
+                                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-amber-700 font-mono text-[10px] max-h-32 overflow-auto">
+                                      {JSON.stringify(s.last_run.validation_errors, null, 2)}
+                                    </div>
+                                  )}
+                                </dl>
+                              ) : (
+                                <div className="text-neutral-400 italic">
+                                  {lang === "pt" ? "Nunca executado" : "Never run"}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="text-[10px] text-neutral-400 italic">
+        {lang === "pt"
+          ? "Auto-correção é humana: quando um scraper fica quebrado, leia scraper_knowledge e corrija o código. Veja docs/SCRAPER_PROTOCOL.md."
+          : "Auto-correction is human-driven: when a scraper goes broken, read scraper_knowledge and fix the code. See docs/SCRAPER_PROTOCOL.md."}
+      </div>
+    </div>
+  );
+}

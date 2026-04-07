@@ -22,12 +22,19 @@ export const FAOSTAT_AREAS: Record<number, string> = {
   351: 'China',
 }
 
-// Items / commodities (FAOSTAT "item_code", QCL domain)
+// Items / commodities (FAOSTAT "item_code", QCL domain — Crops and Livestock).
 // Map to the commodity slugs used elsewhere in the app (matches
-// src/components/MarketPulse.tsx commodity tabs).
+// src/components/MarketPulse.tsx CULTURES slug → FAOSTAT_COMMODITY_BY_SLUG).
+//
+// Note: boi-gordo (cattle) is in the QL livestock domain, not QCL — would need
+// a separate fetch URL. Deferred to a later slice.
 export const FAOSTAT_ITEMS: Record<number, { commodity: string; label: string }> = {
   236: { commodity: 'soybean', label: 'Soybeans' },
-  56: { commodity: 'corn', label: 'Maize (corn)' },
+  56:  { commodity: 'corn',    label: 'Maize (corn)' },
+  656: { commodity: 'coffee',  label: 'Coffee, green' },
+  15:  { commodity: 'wheat',   label: 'Wheat' },
+  328: { commodity: 'cotton',  label: 'Seed cotton, unginned' },
+  156: { commodity: 'sugar',   label: 'Sugar cane' },
 }
 
 // Elements / metrics (FAOSTAT "element_code")
