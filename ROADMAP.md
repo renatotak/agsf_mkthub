@@ -1,7 +1,7 @@
 # AgriSafe Market Hub — Roadmap
 
-> **Last updated:** 2026-04-06
-> **Status:** Phase 17 complete (5-entity foundation shipped). 4-vertical architecture, 13+ modules, 31 Supabase tables, 26 SQL migrations. Phase 18+ open.
+> **Last updated:** 2026-04-07
+> **Status:** Phase 17 complete (5-entity foundation). Phase 19A complete (scraper resilience foundation: `scraper_registry`, `scraper_runs`, `scraper_knowledge`, `runScraper()` wrapper). Phase 19B partial (FAOSTAT live in Pulso do Mercado → Contexto Macro). 4-vertical architecture, 13+ modules, 33 Supabase tables, 28 SQL migrations.
 > **For the latest user-defined task list, see** `docs/TODO_2026-04-06.md`.
 
 ---
@@ -113,28 +113,43 @@ The foundational schema phase that everything else hangs off. Database is now re
 
 From `docs/TODO_2026-04-06.md`:
 
-- [ ] First-row KPI buttons open a **modal** highlighting what's important in each chapter, with a CTA button linking to the chapter
-- [ ] **Mapa de Inteligência Integrada** — natively parse location for every news, event, and weather record so they can all be plotted on the map
-- [ ] Map filter by **date range** (next 30d / next 90d) for events
-- [ ] Notícias in Painel pipe into the **Knowledge Base** (RAG ingestion)
-- [ ] Add new news sources via **LLM agents** (Claude tasks, Grok tasks) running on cloud, controlled by user from desktop
-- [ ] **Webapp version** of the whole app with a **chat feature** so the user can talk to an agent that pulls from the knowledge base (RAG + MCP server)
+- [x] First-row KPI buttons open a **modal** highlighting what's important in each chapter, with a CTA button linking to the chapter ✅
+- [x] **Mapa de Inteligência Integrada** — natively parse location for every news, event, and weather record so they can all be plotted on the map ✅
+- [x] Map filter by **date range** (next 30d / next 90d) for events ✅
+- [x] Notícias in Painel pipe into the **Knowledge Base** (RAG ingestion) ✅
+- [/] Add new news sources via **LLM agents** (Claude tasks, Grok tasks) running on cloud, controlled by user from desktop (Foundation in `sync-llm-intel`)
+- [x] **Webapp version** of the whole app with a **chat feature** so the user can talk to an agent that pulls from the knowledge base (RAG implemented in `OracleChat.tsx`) ✅
 
 ---
 
 ## Phase 19 — Pulso do Mercado: Macro Context Layer
 
-The current Pulso do Mercado covers daily prices and futures. The user wants higher-latency macro data layered in, from official agencies.
+The current Pulso do Mercado covers daily prices and futures. The user wants higher-latency macro data layered in, from official agencies — and the user explicitly raised that scrapers need to be well organized with a knowledge base / auto-correction protocol when sources change. So Phase 19 ships in two prongs: a resilience foundation (19A), then macro scrapers built on top of it (19B).
 
+### Phase 19A — Scraper Resilience Foundation ✅ COMPLETE (2026-04-07)
+
+The pre-Phase-19 cron pipeline only used `logSync()` (a flat per-run pass/fail row in `sync_logs`) — no schema validation, no per-source health, no narrative memory of past failures. Adding 6 macro scrapers on top of that would compound the debt. This phase establishes the protocol every new scraper must follow.
+
+- [x] **Migration 027** — `scraper_registry`, `scraper_runs`, `scraper_knowledge` (3 tables, RLS enabled, deterministic schema_check JSONB)
+- [x] **`src/lib/scraper-runner.ts`** — `runScraper()` wrapper. Validates output rows against the registered schema (required keys + types + numeric ranges + enum values + row count), updates the registry's health (cadence-aware grace period: degraded after 1 failure beyond grace, broken after 3 consecutive), writes a `scraper_knowledge` row of kind=`failure` on every failure, and calls `logSync()` internally for backward compat with the DataSources UI. **Validation is 100% deterministic — no LLM in the loop (guardrail #1).**
+- [x] **`docs/SCRAPER_PROTOCOL.md`** — documents the 4-phase auto-correction loop (detection → diagnosis → fix → validation), explicitly **human-driven** (LLMs may propose fixes in chat sessions, but the actual fix must be reviewed and committed by a human)
+- [x] **`/api/cron/sync-scraper-healthcheck`** — no-op smoke test that pings `api.github.com/zen` to validate the wiring end-to-end. Wired into `sync-all`. Safe to delete after Phase 19B has been green for 2+ weeks.
+
+### Phase 19B — Macro Context First Slice (FAOSTAT) ✅ PARTIAL (2026-04-07)
+
+- [x] Register 6 key macro sources (USDA, FAO, OECD, MDIC, CONAB, World Bank) in `source-registry.json`
+- [x] **Migration 028** — create `macro_statistics` table (was wrongly claimed as "Migration 018" in the previous draft of this roadmap; that migration is actually `entity_model_core.sql` from Phase 17A). Includes guardrail #2 carve-out comment: macro statistics are commodity-dimension aggregates with no entity FK by design. Migration also seeds the `sync-faostat-prod` row in `scraper_registry`.
+- [x] **`/api/cron/sync-faostat`** — TS scraper for FAOSTAT v1 REST (`fenixservices.fao.org/faostat/api/v1/en/data/QCL`). Pulls last 5 years of crop production + export quantity for soybeans and maize across World / Brazil / Argentina / USA / China. Algorithmic FAOSTAT code → commodity slug mapping in `src/lib/macro/faostat-codes.ts`. Built on `runScraper()`. Wired into `sync-all`.
+- [x] **`/api/macro-stats`** — public read endpoint, ISR cached 1h, returns rows + `last_success_at` from `scraper_registry` so the UI can show MockBadge when data is stale (>2x cadence)
+- [x] **MarketPulse → Contexto Macro sub-tab** — `MacroAnalysis` component now fetches FAOSTAT data live from `/api/macro-stats` for soja and milho, pivots long-format rows into the existing wide chart shape, shows a "Live data" pulse badge when fresh, falls back to mock + MockBadge for cultures FAOSTAT doesn't cover (café, boi-gordo, trigo, algodão) or when stale. Source provenance footer shows the FAOSTAT `last_success_at` date.
+- [x] **Bilingual i18n** — `marketPulse.macroLiveBadge`, `macroSourceFootnote`, `macroNoData`, `macroNeverFetched` added to `src/lib/i18n.ts` (PT-BR + EN)
+- [x] **Deprecate** `src/scripts/scrape_macro.py` (USDA WASDE Python draft) — header comment, kept as reference, not deleted
 - [ ] **OECD-FAO Agricultural Outlook** scraper → world supply, demand, price projections
-- [ ] **FAO FAOSTAT** scraper → world production by commodity and country
-- [ ] **USDA WASDE** monthly reports → US/world S&D estimates
+- [ ] **USDA WASDE** monthly reports → US/world S&D estimates (port the Python draft once `scraper_knowledge` has accumulated lessons from FAOSTAT)
 - [ ] **MDIC ComexStat** scraper → Brazilian export volumes/values by HS code
 - [ ] **CONAB safra** monthly reports → Brazilian production by state and crop
-- [ ] **World Bank Pink Sheet** → monthly commodity price index
-- [ ] Update `source-registry.json` and `Ingestão de Dados` to reflect these new sources
-- [ ] Region map: filter follows the **main culture filter** (already done: CommodityMap controlled by parent)
-- [ ] New "Macro Context" sub-tab in Pulso do Mercado showing exports volume, BR production, world production, projection vs actual
+- [ ] **World Bank Pink Sheet** → monthly commodity price index (XLSX, fragile — keep for after WASDE)
+- [ ] FAOSTAT coverage extensions: coffee, cotton, sugar, wheat (current slice covers soybean + maize only)
 
 ---
 

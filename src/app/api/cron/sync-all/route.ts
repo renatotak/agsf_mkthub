@@ -36,6 +36,10 @@ export async function GET(request: Request) {
     // outside scraper_runs / scraper_registry. Safe to delete after FAOSTAT
     // (Phase 19B) has been green for 2+ weeks.
     { name: 'scraper-healthcheck', path: '/api/cron/sync-scraper-healthcheck' },
+    // Phase 19B — FAOSTAT crop production for Pulso do Mercado Contexto Macro.
+    // Source is monthly but the upsert is idempotent, so daily runs cost only
+    // a few hundred KB and let runScraper() exercise the protocol every cycle.
+    { name: 'faostat', path: '/api/cron/sync-faostat' },
     // Industry profiles — Sunday only (heavier AGROFIT API usage)
     ...(new Date().getDay() === 0
       ? [{ name: 'industry-profiles', path: '/api/cron/sync-industry-profiles' }]

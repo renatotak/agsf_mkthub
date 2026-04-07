@@ -11,8 +11,9 @@ import { CommodityMap } from "@/components/CommodityMap";
 import { NACotacoesWidget } from "@/components/NACotacoesWidget";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, Cell,
+  CartesianGrid, Cell, LineChart, Line,
 } from "recharts";
+import { MockBadge } from "@/components/ui/MockBadge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -182,7 +183,7 @@ function useLiveCultureSummaries() {
 export function MarketPulse({ lang }: { lang: Lang }) {
   const tr = t(lang);
   const [indicators, setIndicators] = useState<MarketIndicator[]>([]);
-  const [activeAnalysis, setActiveAnalysis] = useState<"culture" | "region">("culture");
+  const [activeAnalysis, setActiveAnalysis] = useState<"culture" | "region" | "macro">("culture");
   const [activeCulture, setActiveCulture] = useState<string>("soja");
   const [activeRegion, setActiveRegion] = useState<string>("MT");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -237,6 +238,15 @@ export function MarketPulse({ lang }: { lang: Lang }) {
           <MapPin size={15} />
           {lang === "pt" ? "Análise por Região" : "Analysis by Region"}
         </button>
+        <button
+          onClick={() => setActiveAnalysis("macro")}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-[13px] font-semibold transition-all ${
+            activeAnalysis === "macro" ? "bg-brand-primary text-white shadow-sm" : "text-neutral-600 hover:bg-neutral-100"
+          }`}
+        >
+          <BarChart3 size={15} />
+          {lang === "pt" ? "Contexto Macro" : "Macro Context"}
+        </button>
       </div>
 
       {/* Active analysis content */}
@@ -247,10 +257,16 @@ export function MarketPulse({ lang }: { lang: Lang }) {
           summary={summaries[activeCulture]}
           lang={lang}
         />
-      ) : (
+      ) : activeAnalysis === "region" ? (
         <RegionAnalysis
           activeRegion={activeRegion}
           onRegionChange={setActiveRegion}
+          lang={lang}
+        />
+      ) : (
+        <MacroAnalysis
+          activeCulture={activeCulture}
+          onCultureChange={setActiveCulture}
           lang={lang}
         />
       )}
@@ -1080,6 +1096,334 @@ function RegionAnalysis({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 3: MACRO ANALYSIS
+// ═════════════════════════════════════════════════════════════════════════════
+
+const MOCK_MACRO_STATS = [
+  { period: "21/22", br_prod: 125.5, world_prod: 360.2, br_export: 77.1, world_stock: 98.4 },
+  { period: "22/23", br_prod: 154.6, world_prod: 375.4, br_export: 101.8, world_stock: 102.1 },
+  { period: "23/24", br_prod: 147.3, world_prod: 396.7, br_export: 94.2, world_stock: 114.5 },
+  { period: "24/25*", br_prod: 162.1, world_prod: 422.3, br_export: 105.0, world_stock: 126.8 },
+  { period: "26/27 (p)", br_prod: 168.5, world_prod: 435.0, br_export: 112.0, world_stock: 130.2 },
+  { period: "30/31 (p)", br_prod: 185.0, world_prod: 470.0, br_export: 130.0, world_stock: 145.0 },
+];
+
+// Phase 19B — Map Pulso do Mercado culture slugs to FAOSTAT commodity slugs
+// (the values written by /api/cron/sync-faostat into macro_statistics.commodity).
+// Cultures absent here have no live FAOSTAT data yet — UI falls back to mock.
+const FAOSTAT_COMMODITY_BY_SLUG: Record<string, string> = {
+  soja: "soybean",
+  milho: "corn",
+};
+
+interface MacroStatRow {
+  period: string;
+  region: string;
+  indicator: string;
+  value: number;
+  unit: string;
+}
+
+interface MacroChartPoint {
+  period: string;
+  br_prod?: number;
+  world_prod?: number;
+  br_export?: number;
+  world_stock?: number;
+}
+
+/**
+ * Pivot long-format macro_statistics rows into the wide chart shape.
+ * FAOSTAT delivers tonnes; charts expect million metric tons.
+ */
+function pivotMacroRows(rows: MacroStatRow[]): MacroChartPoint[] {
+  const byPeriod = new Map<string, MacroChartPoint>();
+  const TONNES_TO_MMT = 1 / 1_000_000;
+
+  for (const r of rows) {
+    if (typeof r.value !== "number") continue;
+    const period = r.period;
+    if (!byPeriod.has(period)) byPeriod.set(period, { period });
+    const point = byPeriod.get(period)!;
+    const valMmt = r.unit === "tonnes" ? r.value * TONNES_TO_MMT : r.value;
+
+    if (r.indicator === "production" && r.region === "Brazil") point.br_prod = round(valMmt);
+    else if (r.indicator === "production" && r.region === "World") point.world_prod = round(valMmt);
+    else if (r.indicator === "exports" && r.region === "Brazil") point.br_export = round(valMmt);
+    else if (r.indicator === "ending_stocks" && r.region === "World") point.world_stock = round(valMmt);
+  }
+
+  return Array.from(byPeriod.values()).sort((a, b) => a.period.localeCompare(b.period));
+}
+
+function round(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+function MacroAnalysis({
+  activeCulture,
+  onCultureChange,
+  lang,
+}: {
+  activeCulture: string;
+  onCultureChange: (slug: string) => void;
+  lang: Lang;
+}) {
+  const tr = t(lang);
+  const culture = CULTURES.find(c => c.slug === activeCulture) || CULTURES[0];
+
+  // Phase 19B — live FAOSTAT data via /api/macro-stats
+  const [liveRows, setLiveRows] = useState<MacroStatRow[]>([]);
+  const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
+  const [scraperCadence, setScraperCadence] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const faostatCommodity = FAOSTAT_COMMODITY_BY_SLUG[activeCulture];
+    if (!faostatCommodity) {
+      setLiveRows([]);
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/macro-stats?commodity=${faostatCommodity}&limit=200`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && Array.isArray(json.rows)) {
+          setLiveRows(json.rows as MacroStatRow[]);
+          setLastSuccessAt(json.last_success_at ?? null);
+          setScraperCadence(json.scraper_cadence ?? null);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [activeCulture]);
+
+  const liveChartData = useMemo(() => pivotMacroRows(liveRows), [liveRows]);
+
+  // We have usable live data when at least one period carries production for both Brazil and World.
+  const hasLiveData = liveChartData.some(p => p.br_prod !== undefined && p.world_prod !== undefined);
+  const chartData: MacroChartPoint[] = hasLiveData ? liveChartData : MOCK_MACRO_STATS;
+
+  // Stale = older than 2x cadence (60d for monthly). We surface MockBadge in that case.
+  const isStale = (() => {
+    if (!lastSuccessAt) return true;
+    const ageMs = Date.now() - new Date(lastSuccessAt).getTime();
+    const maxAgeMs = scraperCadence === "monthly" ? 60 * 24 * 60 * 60 * 1000 : 14 * 24 * 60 * 60 * 1000;
+    return ageMs > maxAgeMs;
+  })();
+
+  const showMockBadge = !hasLiveData || isStale;
+
+  const sourceFootnote = lastSuccessAt
+    ? tr.marketPulse.macroSourceFootnote.replace(
+        "{date}",
+        new Date(lastSuccessAt).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      )
+    : tr.marketPulse.macroNeverFetched;
+
+  return (
+    <div className="space-y-4">
+      {/* Culture tabs */}
+      <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-2 flex items-center gap-1 overflow-x-auto">
+        {CULTURES.map((c) => (
+          <button
+            key={c.slug}
+            onClick={() => onCultureChange(c.slug)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap transition-colors ${
+              activeCulture === c.slug ? "text-white shadow-sm" : "text-neutral-600 hover:bg-neutral-100"
+            }`}
+            style={activeCulture === c.slug ? { backgroundColor: c.color } : {}}
+          >
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: activeCulture === c.slug ? "white" : c.color }} />
+            {lang === "pt" ? c.label : c.en}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden relative">
+        {showMockBadge && <MockBadge />}
+        <div className="px-6 py-5 border-b border-neutral-100 bg-neutral-50/30 flex items-center justify-between">
+          <div>
+            <h3 className="text-[18px] font-bold text-neutral-900 flex items-center gap-2">
+              {tr.marketPulse.macroTitle}
+              {hasLiveData && !isStale && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {tr.marketPulse.macroLiveBadge}
+                </span>
+              )}
+            </h3>
+            <p className="text-[12px] text-neutral-500">{tr.marketPulse.macroSubtitle}</p>
+          </div>
+          <div className="flex items-center gap-3">
+             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-neutral-400">
+                <div className="w-3 h-3 rounded-sm bg-brand-primary" />
+                {lang === 'pt' ? 'Brasil' : 'Brazil'}
+             </div>
+             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-neutral-400">
+                <div className="w-3 h-3 rounded-sm bg-blue-400" />
+                {lang === 'pt' ? 'Mundo' : 'World'}
+             </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main supply demand chart */}
+            <div className="lg:col-span-2 space-y-6">
+              <div>
+                <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                  <BarChart3 size={14} className="text-brand-primary" />
+                  {tr.marketPulse.productionBR} vs {tr.marketPulse.productionWorld} (Milhões t)
+                </h4>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="colorBR" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#5B7A2F" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#5B7A2F" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorWorld" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#60A5FA" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#60A5FA" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                      <XAxis dataKey="period" tick={{fontSize: 10}} />
+                      <YAxis yAxisId="left" orientation="left" stroke="#5B7A2F" tick={{fontSize: 10}} />
+                      <YAxis yAxisId="right" orientation="right" stroke="#60A5FA" tick={{fontSize: 10}} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e5e0', fontSize: '11px' }}
+                      />
+                      <Area yAxisId="left" type="monotone" dataKey="br_prod" name={tr.marketPulse.productionBR} stroke="#5B7A2F" fillOpacity={1} fill="url(#colorBR)" strokeWidth={2} />
+                      <Area yAxisId="right" type="monotone" dataKey="world_prod" name={tr.marketPulse.productionWorld} stroke="#60A5FA" fillOpacity={1} fill="url(#colorWorld)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <TrendingUp size={14} className="text-amber-600" />
+                    {tr.marketPulse.exportsVolume} (Brasil)
+                  </h4>
+                  <div className="h-[180px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                        <XAxis dataKey="period" tick={{fontSize: 10}} />
+                        <YAxis tick={{fontSize: 10}} />
+                        <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '11px' }} />
+                        <Bar dataKey="br_export" name={tr.marketPulse.exportsVolume} fill="#E8722A" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div>
+                   <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <Layers size={14} className="text-blue-600" />
+                    {tr.marketPulse.inventory} (Mundo)
+                  </h4>
+                  <div className="h-[180px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                        <XAxis dataKey="period" tick={{fontSize: 10}} />
+                        <YAxis tick={{fontSize: 10}} />
+                        <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '11px' }} />
+                        <Line type="monotone" dataKey="world_stock" name={tr.marketPulse.inventory} stroke="#3B82F6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar macro context */}
+            <div className="space-y-4">
+              <div className="bg-neutral-50 rounded-lg border border-neutral-100 p-4">
+                <h5 className="text-[11px] font-bold text-neutral-500 uppercase mb-3">{lang === 'pt' ? 'Resumo Estratégico' : 'Strategic Summary'}</h5>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <TrendingUp size={14} className="text-emerald-700" />
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-bold text-neutral-900">{lang === 'pt' ? 'Exportação Recorde' : 'Record Exports'}</p>
+                      <p className="text-[11px] text-neutral-500 leading-relaxed">
+                        {lang === 'pt' 
+                          ? 'Brasil projeta novo recorde de exportação para a safra 24/25, impulsionado pela demanda chinesa.'
+                          : 'Brazil projects new export record for 24/25 crop, driven by Chinese demand.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                      <BarChart3 size={14} className="text-amber-700" />
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-bold text-neutral-900">{lang === 'pt' ? 'Consumo Mundial' : 'World Consumption'}</p>
+                      <p className="text-[11px] text-neutral-500 leading-relaxed">
+                        {lang === 'pt'
+                          ? 'Projeções FAO indicam crescimento de 1.8% no consumo global de proteínas, elevando demanda por grãos.'
+                          : 'FAO projections indicate 1.8% growth in global protein consumption, raising grain demand.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <button className="w-full mt-4 py-2 border border-brand-primary text-brand-primary text-[11px] font-bold rounded-md hover:bg-brand-primary/5 transition-colors">
+                  {lang === 'pt' ? 'Ver Relatório Completo OECD' : 'View Full OECD Report'}
+                </button>
+              </div>
+
+              <div className="bg-neutral-900 rounded-lg p-4 text-white">
+                <h5 className="text-[10px] font-bold text-neutral-400 uppercase mb-3">{tr.marketPulse.projections}</h5>
+                <div className="space-y-3">
+                  {chartData.slice(-2).map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between border-b border-neutral-800 pb-2 last:border-0 last:pb-0">
+                      <div>
+                        <p className="text-[11px] font-bold text-neutral-300">{item.period}</p>
+                        <p className="text-[9px] text-neutral-500">{lang === 'pt' ? 'Estimativa Longo Prazo' : 'Long-term Estimate'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[13px] font-bold text-emerald-400">
+                          {item.br_prod !== undefined ? `${item.br_prod} MT` : "—"}
+                        </p>
+                        <p className="text-[9px] text-neutral-500">{lang === 'pt' ? 'Safra Brasil' : 'Brazil Crop'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Phase 19B — source provenance footer */}
+          <div className="mt-4 pt-4 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-500">
+            <span>{sourceFootnote}</span>
+            {!FAOSTAT_COMMODITY_BY_SLUG[activeCulture] && (
+              <span className="italic">{tr.marketPulse.macroNoData}</span>
+            )}
+            {loading && (
+              <span className="flex items-center gap-1">
+                <Loader2 size={10} className="animate-spin" />
+                {lang === "pt" ? "Carregando…" : "Loading…"}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
