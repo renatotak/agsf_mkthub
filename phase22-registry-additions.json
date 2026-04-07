@@ -1,0 +1,42 @@
+[
+  {
+    "id": "src-phase22-reading-room",
+    "name": "Reading Room (Chrome Extension)",
+    "source_org": "AgriSafe Internal",
+    "category": "noticias",
+    "data_type": "JSON (POST)",
+    "description": "Reading Room Chrome extension pushes user-curated articles into agro_news via POST /api/reading-room/ingest. Articles are tagged confidentiality='agrisafe_published' because they came in through an internal AgriSafe tool. Entity-mention parsing runs algorithm-first via src/lib/entity-matcher.ts (no LLM).",
+    "frequency": "on_demand",
+    "url": "/api/reading-room/ingest",
+    "url_secondary": null,
+    "server": "agsf-mkthub (Vercel)",
+    "automated": true,
+    "notes": "Authenticated via shared secret in x-reading-room-secret header (env READING_ROOM_SECRET). The Chrome extension itself lives at C:\\Users\\renat\\.gemini\\antigravity\\projects\\1 personal\\reading-room and is outside this repo. Phase 22.",
+    "origin_file": "phase22",
+    "url_status": "live",
+    "http_status": null,
+    "last_checked_at": null,
+    "last_known_update": null,
+    "used_in_app": true
+  },
+  {
+    "id": "src-phase22-news-sources",
+    "name": "news_sources (registry table)",
+    "source_org": "AgriSafe Internal",
+    "category": "noticias",
+    "data_type": "Postgres table",
+    "description": "Database-backed registry of news providers (RSS feeds, Reading Room, future API/scraper sources). Replaces the hardcoded NEWS_SOURCES constant in src/data/news.ts. CRUD via /api/news-sources/crud and the AgroNews UI sources panel.",
+    "frequency": "on_demand",
+    "url": "/api/news-sources/crud",
+    "url_secondary": null,
+    "server": "Supabase",
+    "automated": true,
+    "notes": "Migration 032_news_sources.sql. Soft-delete only (enabled=false) because agro_news.source_name is plain text. Phase 22.",
+    "origin_file": "phase22",
+    "url_status": "live",
+    "http_status": null,
+    "last_checked_at": null,
+    "last_known_update": null,
+    "used_in_app": true
+  }
+]

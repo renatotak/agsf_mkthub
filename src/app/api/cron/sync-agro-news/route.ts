@@ -3,7 +3,6 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
 import { loadMatchableEntities, matchEntitiesInText, writeEntityMentions } from '@/lib/entity-matcher'
 import Parser from 'rss-parser'
-import { NEWS_SOURCES } from '@/data/news'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +36,14 @@ function generateId(sourceUrl: string): string {
   return `news-${Math.abs(hash).toString(36)}`
 }
 
+interface NewsSourceRow {
+  id: string
+  name: string
+  rss_url: string | null
+  source_type: string
+  enabled: boolean
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization')
   if (
@@ -55,6 +62,21 @@ export async function GET(request: Request) {
     let totalMentions = 0
     const errors: string[] = []
 
+    // ─── Phase 22: load source list from news_sources table ──
+    // Replaces the old hardcoded `NEWS_SOURCES` import. Only RSS sources
+    // with enabled=true are polled here; the Reading Room sentinel row
+    // is fed via /api/reading-room/ingest from the Chrome extension.
+    const { data: sources, error: sourcesError } = await supabase
+      .from('news_sources')
+      .select('id, name, rss_url, source_type, enabled')
+      .eq('enabled', true)
+      .eq('source_type', 'rss')
+
+    if (sourcesError) {
+      throw new Error(`failed to load news_sources: ${sourcesError.message}`)
+    }
+    const rssSources = (sources || []) as NewsSourceRow[]
+
     // Fetch highlighted producers for matching
     const { data: producers } = await supabase
       .from('highlighted_producers')
@@ -69,9 +91,10 @@ export async function GET(request: Request) {
     // (Phase 17D — algorithm-first name matching, no LLM).
     const matchableEntities = await loadMatchableEntities(supabase)
 
-    for (const source of NEWS_SOURCES) {
+    for (const source of rssSources) {
+      if (!source.rss_url) continue
       try {
-        const feed = await parser.parseURL(source.rss)
+        const feed = await parser.parseURL(source.rss_url)
         const items = feed.items.slice(0, 20) // Latest 20 per source
 
         for (const item of items) {
@@ -123,8 +146,39 @@ export async function GET(request: Request) {
             }
           }
         }
+
+        // ─── Phase 22: mark source healthy ───────────────────
+        await supabase
+          .from('news_sources')
+          .update({
+            last_fetched_at: new Date().toISOString(),
+            last_error: null,
+            error_count: 0,
+          })
+          .eq('id', source.id)
       } catch (e: any) {
-        errors.push(`${source.name}: ${e.message}`)
+        const msg = e?.message || String(e)
+        errors.push(`${source.name}: ${msg}`)
+        // ─── Phase 22: bump error counter ────────────────────
+        try {
+          // Read current count to increment atomically-ish (Hobby plan: no
+          // pg_function call needed for a single counter on a tiny table).
+          const { data: cur } = await supabase
+            .from('news_sources')
+            .select('error_count')
+            .eq('id', source.id)
+            .maybeSingle()
+          await supabase
+            .from('news_sources')
+            .update({
+              last_error: msg.slice(0, 500),
+              error_count: ((cur?.error_count as number | undefined) ?? 0) + 1,
+              last_fetched_at: new Date().toISOString(),
+            })
+            .eq('id', source.id)
+        } catch {
+          // not fatal
+        }
       }
     }
 
@@ -143,7 +197,7 @@ export async function GET(request: Request) {
       success: true,
       message: 'Agro news synchronized',
       timestamp: new Date().toISOString(),
-      stats: { new: totalNew, skipped: totalSkipped, entity_mentions: totalMentions },
+      stats: { new: totalNew, skipped: totalSkipped, entity_mentions: totalMentions, sources: rssSources.length },
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error: any) {

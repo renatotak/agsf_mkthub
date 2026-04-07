@@ -1,47 +1,70 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Lang, t } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import {
   Newspaper, ExternalLink, RefreshCw, Loader2, Star,
-  ChevronLeft, ChevronRight, BarChart3,
+  ChevronLeft, ChevronRight, BarChart3, Settings2, Plus,
+  Pencil, Trash2, X, AlertTriangle, BookOpen,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import type { AgroNews as AgroNewsType } from "@/data/news";
-import { mockNews } from "@/data/mock";
 import { MockBadge } from "@/components/ui/MockBadge";
 
 const PAGE_SIZE = 15;
 
 const CATEGORY_LABELS: Record<string, { pt: string; en: string; color: string; chartColor: string }> = {
   commodities: { pt: "Commodities", en: "Commodities", color: "bg-green-100 text-green-800", chartColor: "#22c55e" },
+  livestock: { pt: "Pecu\u00e1ria", en: "Livestock", color: "bg-orange-100 text-orange-800", chartColor: "#f97316" },
   policy: { pt: "Pol\u00edtica", en: "Policy", color: "bg-blue-100 text-blue-800", chartColor: "#3b82f6" },
   technology: { pt: "Tecnologia", en: "Technology", color: "bg-purple-100 text-purple-800", chartColor: "#8b5cf6" },
   credit: { pt: "Cr\u00e9dito", en: "Credit", color: "bg-amber-100 text-amber-800", chartColor: "#f59e0b" },
   sustainability: { pt: "Sustentabilidade", en: "Sustainability", color: "bg-teal-100 text-teal-800", chartColor: "#14b8a6" },
   judicial: { pt: "Judicial", en: "Judicial", color: "bg-red-100 text-red-800", chartColor: "#ef4444" },
   general: { pt: "Geral", en: "General", color: "bg-neutral-100 text-neutral-700", chartColor: "#6b7280" },
+  reading_room: { pt: "Reading Room", en: "Reading Room", color: "bg-indigo-100 text-indigo-700", chartColor: "#6366f1" },
 };
 
-const SOURCE_COLORS: Record<string, string> = {
-  "Canal Rural": "#3b82f6",
-  "Sucesso no Campo": "#14b8a6",
-  "Agrolink": "#22c55e",
-  "CNA Not\u00edcias": "#f59e0b",
-};
+const SOURCE_TYPE_OPTIONS = ["rss", "reading_room", "api", "scrape"] as const;
+const CATEGORY_OPTIONS = Object.keys(CATEGORY_LABELS);
+const LANGUAGE_OPTIONS = ["pt", "en", "es"] as const;
 
-const SOURCE_TEXT_COLORS: Record<string, string> = {
-  "Canal Rural": "text-blue-600",
-  "Sucesso no Campo": "text-teal-600",
-  "Agrolink": "text-green-600",
-  "CNA Not\u00edcias": "text-amber-600",
-};
+interface NewsSource {
+  id: string;
+  name: string;
+  rss_url: string | null;
+  website_url: string | null;
+  category: string;
+  language: string;
+  enabled: boolean;
+  source_type: string;
+  last_fetched_at: string | null;
+  last_error: string | null;
+  error_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function relativeTime(iso: string | null, lang: Lang): string {
+  if (!iso) return lang === "pt" ? "nunca" : "never";
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 0) return lang === "pt" ? "agora" : "just now";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return lang === "pt" ? "agora" : "just now";
+  if (mins < 60) return lang === "pt" ? `${mins} min atrás` : `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return lang === "pt" ? `${hrs} h atrás` : `${hrs} h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return lang === "pt" ? `${days} d atrás` : `${days} d ago`;
+  return new Date(iso).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", { day: "numeric", month: "short" });
+}
 
 export function AgroNews({ lang }: { lang: Lang }) {
+  const tr = t(lang).news;
   const [news, setNews] = useState<AgroNewsType[]>([]);
   const [allNewsForCharts, setAllNewsForCharts] = useState<AgroNewsType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +75,13 @@ export function AgroNews({ lang }: { lang: Lang }) {
   const [producerOnly, setProducerOnly] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [isMock, setIsMock] = useState(true);
+
+  // ─── Sources state (Phase 22) ───────────────────────────────
+  const [sources, setSources] = useState<NewsSource[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
+  const [showSourcesPanel, setShowSourcesPanel] = useState(false);
+  const [editingSource, setEditingSource] = useState<NewsSource | null>(null);
+  const [showSourceModal, setShowSourceModal] = useState(false);
 
   useEffect(() => { setPage(0); }, [categoryFilter, sourceFilter, producerOnly]);
   useEffect(() => { fetchNews(); }, [page, categoryFilter, sourceFilter, producerOnly]);
@@ -68,6 +98,22 @@ export function AgroNews({ lang }: { lang: Lang }) {
     }
     fetchAllForCharts();
   }, []);
+
+  // Fetch sources
+  const fetchSources = useCallback(async () => {
+    setSourcesLoading(true);
+    try {
+      const res = await fetch("/api/news-sources/crud");
+      if (res.ok) {
+        const json = await res.json();
+        setSources(json.sources || []);
+      }
+    } finally {
+      setSourcesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchSources(); }, [fetchSources]);
 
   const fetchNews = async () => {
     setLoading(true);
@@ -96,38 +142,140 @@ export function AgroNews({ lang }: { lang: Lang }) {
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // Chart data: category distribution
+  // Chart data
   const categoryData = Object.entries(CATEGORY_LABELS).map(([key, val]) => ({
     name: lang === "pt" ? val.pt : val.en,
     value: allNewsForCharts.filter((n) => n.category === key).length,
     color: val.chartColor,
   })).filter((d) => d.value > 0);
 
-  // Chart data: source volume
-  const sourceData = Object.keys(SOURCE_COLORS).map((source) => ({
-    name: source,
-    count: allNewsForCharts.filter((n) => n.source_name === source).length,
-    color: SOURCE_COLORS[source],
-  })).filter((d) => d.count > 0);
+  const sourceVolumeData = sources
+    .filter((s) => s.enabled)
+    .map((s) => ({
+      name: s.name,
+      count: allNewsForCharts.filter((n) => n.source_name === s.name).length,
+      color: CATEGORY_LABELS[s.category]?.chartColor || "#6b7280",
+    }))
+    .filter((d) => d.count > 0);
 
-  // Chart data: daily article count (last 30 days)
   const dailyData = buildDailyData(allNewsForCharts, lang);
+
+  // ─── Source CRUD handlers ───────────────────────────────────
+  const openNewSource = () => {
+    setEditingSource({
+      id: "",
+      name: "",
+      rss_url: "",
+      website_url: "",
+      category: "general",
+      language: "pt",
+      enabled: true,
+      source_type: "rss",
+      last_fetched_at: null,
+      last_error: null,
+      error_count: 0,
+      created_at: "",
+      updated_at: "",
+    });
+    setShowSourceModal(true);
+  };
+
+  const openEditSource = (source: NewsSource) => {
+    setEditingSource({ ...source });
+    setShowSourceModal(true);
+  };
+
+  const closeModal = () => {
+    setShowSourceModal(false);
+    setEditingSource(null);
+  };
+
+  const saveSource = async () => {
+    if (!editingSource) return;
+    if (!editingSource.name.trim()) {
+      alert(tr.requiredFields);
+      return;
+    }
+    if (editingSource.source_type === "rss" && !editingSource.rss_url?.trim()) {
+      alert(tr.requiredFields);
+      return;
+    }
+
+    const isEdit = !!editingSource.created_at;
+    const method = isEdit ? "PATCH" : "POST";
+    const body = isEdit
+      ? {
+          id: editingSource.id,
+          name: editingSource.name,
+          rss_url: editingSource.rss_url || null,
+          website_url: editingSource.website_url || null,
+          category: editingSource.category,
+          language: editingSource.language,
+          source_type: editingSource.source_type,
+          enabled: editingSource.enabled,
+        }
+      : {
+          name: editingSource.name,
+          rss_url: editingSource.rss_url || null,
+          website_url: editingSource.website_url || null,
+          category: editingSource.category,
+          language: editingSource.language,
+          source_type: editingSource.source_type,
+          enabled: editingSource.enabled,
+        };
+
+    const res = await fetch("/api/news-sources/crud", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`${tr.sourceError}: ${err.error || res.statusText}`);
+      return;
+    }
+    await fetchSources();
+    closeModal();
+  };
+
+  const deleteSource = async (source: NewsSource) => {
+    if (!confirm(tr.confirmDelete)) return;
+    const res = await fetch(`/api/news-sources/crud?id=${encodeURIComponent(source.id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      alert(tr.sourceError);
+      return;
+    }
+    await fetchSources();
+  };
 
   return (
     <div>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-neutral-800 tracking-tight">
-              {lang === "pt" ? "Not\u00edcias Agro" : "Agro News"}
-            </h2>
-            <p className="text-neutral-500 mt-1 text-sm">
-              {lang === "pt" ? "Not\u00edcias do agroneg\u00f3cio brasileiro em tempo real" : "Real-time Brazilian agribusiness news"}
-            </p>
+            <h2 className="text-2xl font-bold text-neutral-800 tracking-tight">{tr.title}</h2>
+            <p className="text-neutral-500 mt-1 text-sm">{tr.subtitle}</p>
           </div>
           {isMock && <MockBadge />}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSourcesPanel(!showSourcesPanel)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors border ${
+              showSourcesPanel
+                ? "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
+                : "text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+            }`}
+            title={tr.manageSources}
+          >
+            <Settings2 size={16} />
+            <span className="hidden sm:inline">{tr.manageSources}</span>
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">
+              {sources.filter((s) => s.enabled).length}
+            </span>
+          </button>
           <button
             onClick={() => setShowCharts(!showCharts)}
             className={`p-2 rounded-lg text-sm transition-colors ${showCharts ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-400 hover:bg-neutral-100"}`}
@@ -139,19 +287,118 @@ export function AgroNews({ lang }: { lang: Lang }) {
             className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-dark font-medium text-sm transition-colors shadow-sm"
           >
             <RefreshCw size={16} />
-            {lang === "pt" ? "Atualizar" : "Refresh"}
+            {tr.refresh}
           </button>
         </div>
       </div>
+
+      {/* Sources Panel (Phase 22 — CRUD) */}
+      {showSourcesPanel && (
+        <div className="bg-white rounded-lg shadow-sm border border-neutral-200/60 p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-semibold text-neutral-800">{tr.providers}</h3>
+              <p className="text-xs text-neutral-500 mt-0.5">{tr.providersSubtitle}</p>
+            </div>
+            <button
+              onClick={openNewSource}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-dark text-xs font-semibold transition-colors"
+            >
+              <Plus size={14} />
+              {tr.addSource}
+            </button>
+          </div>
+          {sourcesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={20} className="animate-spin text-brand-primary" />
+            </div>
+          ) : sources.length === 0 ? (
+            <p className="text-sm text-neutral-500 text-center py-6">{tr.noSources}</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {sources.map((s) => (
+                <div
+                  key={s.id}
+                  className={`border rounded-lg p-3 flex items-start justify-between gap-3 ${
+                    s.enabled ? "bg-white border-neutral-200" : "bg-neutral-50 border-neutral-200 opacity-70"
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-sm font-semibold text-neutral-800 truncate">{s.name}</h4>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        s.source_type === "reading_room"
+                          ? "bg-indigo-100 text-indigo-700"
+                          : "bg-neutral-100 text-neutral-600"
+                      }`}>
+                        {s.source_type === "reading_room" ? (
+                          <span className="flex items-center gap-1"><BookOpen size={9} />{tr.readingRoomBadge}</span>
+                        ) : (
+                          s.source_type.toUpperCase()
+                        )}
+                      </span>
+                      {!s.enabled && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-neutral-200 text-neutral-600">
+                          {tr.disabled}
+                        </span>
+                      )}
+                      {s.error_count > 0 && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 flex items-center gap-1">
+                          <AlertTriangle size={9} />
+                          {s.error_count}
+                        </span>
+                      )}
+                    </div>
+                    {s.rss_url && (
+                      <p className="text-[11px] text-neutral-500 truncate" title={s.rss_url}>
+                        {s.rss_url}
+                      </p>
+                    )}
+                    {s.source_type === "reading_room" && (
+                      <p className="text-[11px] text-neutral-500">{tr.readingRoomHint}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-1.5 text-[10px] text-neutral-400">
+                      <span>{tr.lastFetched}: {relativeTime(s.last_fetched_at, lang)}</span>
+                      <span>{(CATEGORY_LABELS[s.category]?.[lang]) || s.category}</span>
+                      <span className="uppercase">{s.language}</span>
+                    </div>
+                    {s.last_error && (
+                      <p className="text-[10px] text-red-600 mt-1 truncate" title={s.last_error}>
+                        {tr.lastError}: {s.last_error}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => openEditSource(s)}
+                      className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-brand-primary"
+                      title={tr.editSource}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    {s.enabled && (
+                      <button
+                        onClick={() => deleteSource(s)}
+                        className="p-1.5 rounded hover:bg-red-50 text-neutral-400 hover:text-red-600"
+                        title={tr.deleteSource}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Analytics Charts */}
       {showCharts && allNewsForCharts.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           {/* Category Donut */}
           <div className="bg-white rounded-lg p-5 shadow-sm border border-neutral-200/60">
-            <h3 className="text-sm font-semibold text-neutral-700 mb-3">
-              {lang === "pt" ? "Por Categoria" : "By Category"}
-            </h3>
+            <h3 className="text-sm font-semibold text-neutral-700 mb-3">{tr.byCategory}</h3>
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -176,17 +423,15 @@ export function AgroNews({ lang }: { lang: Lang }) {
 
           {/* Source Volume Bars */}
           <div className="bg-white rounded-lg p-5 shadow-sm border border-neutral-200/60">
-            <h3 className="text-sm font-semibold text-neutral-700 mb-3">
-              {lang === "pt" ? "Volume por Fonte" : "Volume by Source"}
-            </h3>
+            <h3 className="text-sm font-semibold text-neutral-700 mb-3">{tr.volumeBySource}</h3>
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sourceData} barSize={24}>
+                <BarChart data={sourceVolumeData} barSize={24}>
                   <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6B7280" }} />
                   <YAxis tick={{ fontSize: 11, fill: "#9CA3AF" }} />
                   <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E5E7EB" }} />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                    {sourceData.map((entry) => (
+                    {sourceVolumeData.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Bar>
@@ -197,9 +442,7 @@ export function AgroNews({ lang }: { lang: Lang }) {
 
           {/* Daily Article Count Area Chart */}
           <div className="bg-white rounded-lg p-5 shadow-sm border border-neutral-200/60">
-            <h3 className="text-sm font-semibold text-neutral-700 mb-3">
-              {lang === "pt" ? "Artigos por Dia (30d)" : "Articles per Day (30d)"}
-            </h3>
+            <h3 className="text-sm font-semibold text-neutral-700 mb-3">{tr.articlesPerDay}</h3>
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dailyData}>
@@ -230,12 +473,12 @@ export function AgroNews({ lang }: { lang: Lang }) {
           }`}
         >
           <Star size={14} className={producerOnly ? "fill-amber-400 text-amber-400" : ""} />
-          {lang === "pt" ? "Produtores Destaque" : "Highlighted Producers"}
+          {tr.highlightedProducers}
         </button>
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
           className="px-3 py-2 rounded-lg text-xs font-medium bg-white border border-neutral-200 text-neutral-600 focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
         >
-          <option value="">{lang === "pt" ? "Todas Categorias" : "All Categories"}</option>
+          <option value="">{tr.allCategories}</option>
           {Object.entries(CATEGORY_LABELS).map(([key, val]) => (
             <option key={key} value={key}>{lang === "pt" ? val.pt : val.en}</option>
           ))}
@@ -243,11 +486,10 @@ export function AgroNews({ lang }: { lang: Lang }) {
         <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
           className="px-3 py-2 rounded-lg text-xs font-medium bg-white border border-neutral-200 text-neutral-600 focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
         >
-          <option value="">{lang === "pt" ? "Todas Fontes" : "All Sources"}</option>
-          <option value="Canal Rural">Canal Rural</option>
-          <option value="Sucesso no Campo">Sucesso no Campo</option>
-          <option value="Agrolink">Agrolink</option>
-          <option value="CNA Not\u00edcias">CNA Not\u00edcias</option>
+          <option value="">{tr.allSources}</option>
+          {sources.filter((s) => s.enabled).map((s) => (
+            <option key={s.id} value={s.name}>{s.name}</option>
+          ))}
         </select>
       </div>
 
@@ -259,12 +501,8 @@ export function AgroNews({ lang }: { lang: Lang }) {
       ) : news.length === 0 ? (
         <div className="text-center py-16">
           <Newspaper size={48} className="mx-auto text-neutral-300 mb-4" />
-          <p className="text-neutral-500 font-medium">
-            {lang === "pt" ? "Nenhuma not\u00edcia encontrada" : "No news found"}
-          </p>
-          <p className="text-neutral-400 text-sm mt-1">
-            {lang === "pt" ? "Execute o cron de sincroniza\u00e7\u00e3o para coletar not\u00edcias" : "Run the sync cron to collect news"}
-          </p>
+          <p className="text-neutral-500 font-medium">{tr.noNews}</p>
+          <p className="text-neutral-400 text-sm mt-1">{tr.runSyncHint}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -273,7 +511,7 @@ export function AgroNews({ lang }: { lang: Lang }) {
               <div className="flex items-start gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span className={`text-[11px] font-semibold uppercase tracking-wide ${SOURCE_TEXT_COLORS[item.source_name] || "text-neutral-500"}`}>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
                       {item.source_name}
                     </span>
                     {item.category && CATEGORY_LABELS[item.category] && (
@@ -332,6 +570,138 @@ export function AgroNews({ lang }: { lang: Lang }) {
               className="p-2 rounded-lg hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
               <ChevronRight size={16} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Source CRUD Modal */}
+      {showSourceModal && editingSource && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-neutral-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200">
+              <h3 className="text-lg font-semibold text-neutral-800">
+                {editingSource.created_at ? tr.editSource : tr.addSource}
+              </h3>
+              <button onClick={closeModal} className="p-1.5 rounded hover:bg-neutral-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                  {tr.sourceName} *
+                </label>
+                <input
+                  type="text"
+                  value={editingSource.name}
+                  onChange={(e) => setEditingSource({ ...editingSource, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+                  placeholder="Canal Rural"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                  {tr.sourceType}
+                </label>
+                <select
+                  value={editingSource.source_type}
+                  onChange={(e) => setEditingSource({ ...editingSource, source_type: e.target.value })}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+                >
+                  {SOURCE_TYPE_OPTIONS.map((st) => (
+                    <option key={st} value={st}>
+                      {st === "rss" ? tr.sourceTypeRss : st === "reading_room" ? tr.sourceTypeReadingRoom : st === "api" ? tr.sourceTypeApi : tr.sourceTypeScrape}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {editingSource.source_type === "rss" && (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                    {tr.rssUrl} *
+                  </label>
+                  <input
+                    type="url"
+                    value={editingSource.rss_url || ""}
+                    onChange={(e) => setEditingSource({ ...editingSource, rss_url: e.target.value })}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+                    placeholder="https://example.com/feed"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                  {tr.websiteUrl}
+                </label>
+                <input
+                  type="url"
+                  value={editingSource.website_url || ""}
+                  onChange={(e) => setEditingSource({ ...editingSource, website_url: e.target.value })}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+                  placeholder="https://example.com"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                    {tr.category}
+                  </label>
+                  <select
+                    value={editingSource.category}
+                    onChange={(e) => setEditingSource({ ...editingSource, category: e.target.value })}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+                  >
+                    {CATEGORY_OPTIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {(CATEGORY_LABELS[c]?.[lang]) || c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                    {tr.language}
+                  </label>
+                  <select
+                    value={editingSource.language}
+                    onChange={(e) => setEditingSource({ ...editingSource, language: e.target.value })}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+                  >
+                    {LANGUAGE_OPTIONS.map((l) => (
+                      <option key={l} value={l}>{l.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={editingSource.enabled}
+                  onChange={(e) => setEditingSource({ ...editingSource, enabled: e.target.checked })}
+                  className="rounded border-neutral-300"
+                />
+                {tr.enabled}
+              </label>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-200 bg-neutral-50">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 rounded-lg"
+              >
+                {tr.cancel}
+              </button>
+              <button
+                onClick={saveSource}
+                className="px-4 py-2 text-sm font-semibold text-white bg-brand-primary hover:bg-brand-primary-dark rounded-lg"
+              >
+                {tr.saveSource}
+              </button>
+            </div>
           </div>
         </div>
       )}

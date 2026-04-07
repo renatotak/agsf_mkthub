@@ -34,6 +34,15 @@ export const NEWS_CATEGORIES = [
   'general',
 ] as const;
 
+/**
+ * @deprecated Phase 22 — superseded by the `news_sources` Postgres table
+ * (see `src/db/migrations/032_news_sources.sql`). The cron at
+ * `src/app/api/cron/sync-agro-news/route.ts` now reads its source list
+ * from that table instead of importing this constant. The export is
+ * preserved for any tooling/scripts that still reference it; do not
+ * add new sources here — add them via the AgroNews UI or
+ * `POST /api/news-sources/crud`.
+ */
 export const NEWS_SOURCES = [
   { id: 'canal-rural', name: 'Canal Rural', rss: 'https://www.canalrural.com.br/feed/' },
   { id: 'sucesso-no-campo', name: 'Sucesso no Campo', rss: 'https://sucessonocampo.com.br/feed/' },

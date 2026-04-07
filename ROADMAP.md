@@ -194,10 +194,11 @@ The current `AgInputIntelligence.tsx` was a wrapper around AGROFIT/Bioinsumos li
 
 ## Phase 22 — Notícias Agro: CRUD + Reading-Room Integration
 
-- [ ] **Modal/list with CRUD** for news providers (currently 5 RSS feeds, hardcoded)
-- [ ] Connect the existing **reading-room Chrome extension** (`C:\Users\renat\.gemini\antigravity\projects\1 personal\reading-room`) to push articles into Supabase instead of localhost
-- [ ] More source detail: provider name, RSS URL, last fetch, error count
-- [ ] Article entity-mention parser: when ingesting an article, scan for known CNPJs / cidades / culturas and write to `entity_mentions`
+- [x] **Modal/list with CRUD** for news providers — `news_sources` table (migration 032) + `/api/news-sources/crud` (GET/POST/PATCH/DELETE) + sources panel + edit modal in `AgroNews.tsx`. Soft-delete only (`enabled=false`) because `agro_news.source_name` is plain text.
+- [x] Connect the existing **reading-room Chrome extension** (`C:\Users\renat\.gemini\antigravity\projects\1 personal\reading-room`) to push articles into Supabase instead of localhost — `POST /api/reading-room/ingest` authenticated via `x-reading-room-secret` header (env `READING_ROOM_SECRET`). Articles land in `agro_news` with `confidentiality='agrisafe_published'`.
+- [x] More source detail: `name`, `rss_url`, `website_url`, `category`, `language`, `enabled`, `source_type`, `last_fetched_at`, `last_error`, `error_count`, `created_at`, `updated_at`, `confidentiality`. Cron `sync-agro-news` now writes back `last_fetched_at` / `last_error` / `error_count` per source.
+- [x] Article entity-mention parser: KEPT the algorithm-first `entity-matcher.ts` pipeline (Phase 17D). Both `sync-agro-news` and `reading-room/ingest` run `loadMatchableEntities` → `matchEntitiesInText` → `writeEntityMentions`. No LLM extraction.
+- [x] `NEWS_SOURCES` constant in `src/data/news.ts` deprecated (kept exported for back-compat) and the cron now reads `news_sources` directly. Seed migration carries over the original 5 RSS feeds + a Reading Room sentinel row.
 
 ---
 
