@@ -32,6 +32,10 @@ export async function GET(request: Request) {
     { name: 'events-na', path: '/api/cron/sync-events-na' },
     { name: 'competitors', path: '/api/cron/sync-competitors' },
     { name: 'retailer-intelligence', path: '/api/cron/sync-retailer-intelligence' },
+    // Phase 19A — runScraper() smoke test. Pings GitHub zen, no DB writes
+    // outside scraper_runs / scraper_registry. Safe to delete after FAOSTAT
+    // (Phase 19B) has been green for 2+ weeks.
+    { name: 'scraper-healthcheck', path: '/api/cron/sync-scraper-healthcheck' },
     // Industry profiles — Sunday only (heavier AGROFIT API usage)
     ...(new Date().getDay() === 0
       ? [{ name: 'industry-profiles', path: '/api/cron/sync-industry-profiles' }]
