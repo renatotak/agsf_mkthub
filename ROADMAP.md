@@ -185,10 +185,10 @@ The current `AgInputIntelligence.tsx` was a wrapper around AGROFIT/Bioinsumos li
 
 ## Phase 21 — Radar Competitivo: CRUD + Web Enrichment
 
-- [ ] **Modal with CRUD** — add/edit/delete competitors directly from the UI
-- [ ] Each company supports **manual notes** + **automatic web search** enrichment
-- [ ] Anchor competitors to the canonical `companies` table via `cnpj_basico`
-- [ ] Optional Harvey Ball comparison matrix (vertical, depth, precision, pulse, regulatory, UX)
+- [x] **Modal with CRUD** — add/edit/delete competitors directly from the UI (`CompetitorRadar.tsx` rewrite, follows the `RetailersDirectory.tsx` portal-modal pattern; new `/api/competitors/crud` route handles POST/PATCH/DELETE)
+- [x] Each company supports **manual notes** (textarea on the competitor row + modal) + **automatic web search** enrichment via `/api/competitors/enrich-web` (algorithmic Cheerio scrape + DuckDuckGo/Google CSE; optional OpenAI prose summary gated on `OPENAI_API_KEY`)
+- [x] Anchor competitors to the canonical `legal_entities` table via `entity_uid` — migration `031_competitors_crud_extensions.sql` adds `competitors.entity_uid` (FK), backfills from the 020 `source_ref` mapping, and the CRUD route calls `ensureLegalEntityUid()` whenever a `cnpj_basico` is supplied
+- [x] **Harvey Ball comparison matrix** — 6 dimensions (vertical, depth, precision, pulse, regulatory, ux) on a 0-4 scale, persisted as `harvey_ball_scores jsonb` and mirrored into the legacy `score_*` columns so the existing matrix view + `sync-competitors` cron stay coherent. Modal exposes 6 sliders; main page renders SVG Harvey Balls (no images).
 
 ---
 

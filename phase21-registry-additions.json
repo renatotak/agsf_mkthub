@@ -1,0 +1,5 @@
+{
+  "phase": 21,
+  "description": "Radar Competitivo CRUD + Web Enrichment. No new public data sources are introduced — competitor enrichment reuses the existing Google Custom Search and DuckDuckGo HTML paths already registered for company-research.",
+  "additions": []
+}
