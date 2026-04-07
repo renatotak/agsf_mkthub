@@ -77,7 +77,7 @@ export default function Home() {
 }
 
 import { DashboardMap } from "@/components/DashboardMap";
-import { ChapterModal } from "@/components/ChapterModal";
+import { ChapterModal, type ChapterTarget } from "@/components/ChapterModal";
 
 // ─── Executive Dashboard Overview ───
 
@@ -155,9 +155,13 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
     }).catch(() => {});
   }, []);
 
-  const [selectedChapter, setSelectedChapter] = useState<Module | null>(null);
+  // Phase 23-followup: chapter target widened to include "riskSignals"
+  // pseudo-module so the dashboard can open a modal for the cross-vertical
+  // Diretório × RJ view. The CTA still routes through Module so we map
+  // riskSignals → retailers when navigating to the full chapter.
+  const [selectedChapter, setSelectedChapter] = useState<ChapterTarget | null>(null);
 
-  const handleKpiClick = (mod: Module) => {
+  const handleKpiClick = (mod: ChapterTarget) => {
     setSelectedChapter(mod);
   };
 
@@ -256,7 +260,11 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
         </button>
 
         {/* Risk Signals — cross-reference Diretório × Recuperação Judicial */}
-        <RiskSignals lang={lang} compact onDrilldown={() => setActiveModule("retailers")} />
+        {/* Phase 23-followup: clicking the Sinais de Risco card now opens
+            the ChapterModal first (cross-vertical Diretório × RJ view) —
+            previously it bypassed the modal and jumped straight to /retailers,
+            so the user couldn't see the at-a-glance highlights other KPIs offer. */}
+        <RiskSignals lang={lang} compact onDrilldown={() => handleKpiClick("riskSignals")} />
       </div>
 
       {/* Intelligence Map — fully live data */}

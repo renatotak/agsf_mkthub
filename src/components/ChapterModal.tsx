@@ -3,18 +3,28 @@
 import { useEffect, useState } from "react";
 import { Lang, t } from "@/lib/i18n";
 import { Module } from "@/components/Sidebar";
-import { 
-  X, ChevronRight, BarChart3, Newspaper, Calendar, 
+import {
+  X, ChevronRight, BarChart3, Newspaper, Calendar,
   Scale, Store, Database, PenTool, TrendingUp, TrendingDown,
-  AlertTriangle, CheckCircle2, Loader2, ExternalLink
+  AlertTriangle, CheckCircle2, Loader2, ExternalLink, ShieldAlert
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+
+// Phase 23-followup: widen chapter type so the Painel can also open a
+// modal for "riskSignals" (the cross-vertical Diretório × RJ view).
+// "riskSignals" is a pseudo-module that exists only for the modal —
+// it's NOT in the Sidebar so the Module type from Sidebar.tsx stays
+// untouched. The CTA "Ver Módulo Completo" maps it to "retailers".
+export type ChapterTarget = Module | "riskSignals";
 
 interface ChapterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  chapter: Module | null;
+  chapter: ChapterTarget | null;
   lang: Lang;
+  // The CTA accepts a real Module (where the user navigates). The caller
+  // is responsible for mapping pseudo-modules like "riskSignals" → real
+  // chapter targets like "retailers" before calling.
   onCTA: (m: Module) => void;
 }
 
@@ -31,7 +41,17 @@ export function ChapterModal({ isOpen, onClose, chapter, lang, onCTA }: ChapterM
     }
   }, [isOpen, chapter]);
 
-  const fetchChapterInsights = async (mod: Module) => {
+  // Phase 23-followup: close on Esc key for keyboard accessibility
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
+
+  const fetchChapterInsights = async (mod: ChapterTarget) => {
     setLoading(true);
     try {
       if (mod === "market") {
@@ -60,16 +80,44 @@ export function ChapterModal({ isOpen, onClose, chapter, lang, onCTA }: ChapterM
           .limit(5);
         setData(news || []);
       } else if (mod === "events") {
-        const res = await fetch("/api/events-na");
+        // Phase 23-followup: was using /api/events-na (live AgroAgenda
+        // proxy that returns the AgroEvent shape) AND rendering it.titulo
+        // / it.localidade which DON'T EXIST in that shape — every card
+        // showed an empty title and today's date. Now uses /api/events-db
+        // (the unified Supabase events table from Phase 23A).
+        const res = await fetch("/api/events-db");
         const json = await res.json();
         if (json.success && json.data) {
-          setData(json.data.filter((e: any) => new Date(e.dataInicio) >= new Date()).slice(0, 5));
+          const today = new Date().toISOString().slice(0, 10);
+          setData(
+            (json.data as any[])
+              .filter((e) => e.dataInicio && e.dataInicio >= today)
+              .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio))
+              .slice(0, 5),
+          );
         }
       } else if (mod === "recuperacao") {
+        // Phase 23-followup: column names were wrong (company_name +
+        // debt_amount) — Supabase JS returned an error and the modal
+        // showed "Nenhum destaque". The actual columns are entity_name
+        // + debt_value (verified via Supabase MCP).
         const { data: rj } = await supabase
           .from("recuperacao_judicial")
-          .select("company_name, state, debt_amount, filing_date")
+          .select("entity_name, state, debt_value, filing_date")
           .order("filing_date", { ascending: false })
+          .limit(5);
+        setData(rj || []);
+      } else if (mod === "riskSignals") {
+        // Phase 23-followup: NEW pseudo-module that renders the cross-
+        // vertical Diretório × RJ view via the v_retailers_in_rj view
+        // (created in mig 015 / 017). Top 5 distressed retailers by
+        // debt — the same surface RiskSignals.tsx already shows on the
+        // dashboard, but in modal form when the user clicks the
+        // dashboard KPI card.
+        const { data: rj } = await supabase
+          .from("v_retailers_in_rj")
+          .select("nome_fantasia, razao_social, rj_state, rj_debt_value, rj_filing_date, rj_status, classificacao")
+          .order("rj_debt_value", { ascending: false })
           .limit(5);
         setData(rj || []);
       } else if (mod === "retailers") {
@@ -117,7 +165,8 @@ export function ChapterModal({ isOpen, onClose, chapter, lang, onCTA }: ChapterM
   const getChapterTitle = () => {
     if (chapter === "dashboard") return lang === "pt" ? "Painel Executivo" : "Executive Dashboard";
     if (chapter === "settings") return lang === "pt" ? "Configurações" : "Settings";
-    
+    if (chapter === "riskSignals") return lang === "pt" ? "Sinais de Risco" : "Risk Signals";
+
     // Map existing translations
     const keysMap: Record<string, keyof typeof tr.modules> = {
       market: "marketPulse",
@@ -128,7 +177,7 @@ export function ChapterModal({ isOpen, onClose, chapter, lang, onCTA }: ChapterM
       dataSources: "dataSources",
       contentHub: "contentHub",
     };
-    const key = keysMap[chapter];
+    const key = keysMap[chapter as string];
     return key ? tr.modules[key] : chapter;
   };
 
@@ -141,6 +190,7 @@ export function ChapterModal({ isOpen, onClose, chapter, lang, onCTA }: ChapterM
       case "retailers": return <Store className="text-brand-primary" size={24} />;
       case "dataSources": return <Database className="text-neutral-900" size={24} />;
       case "contentHub": return <PenTool className="text-brand-primary" size={24} />;
+      case "riskSignals": return <ShieldAlert className="text-error" size={24} />;
       default: return null;
     }
   };
@@ -205,26 +255,87 @@ export function ChapterModal({ isOpen, onClose, chapter, lang, onCTA }: ChapterM
                 </div>
               ))}
 
-              {chapter === "events" && data.map((it, i) => (
-                <div key={i} className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/30 flex gap-4">
-                  <div className="w-12 h-12 bg-white rounded-lg border border-neutral-200 flex flex-col items-center justify-center shrink-0">
-                    <span className="text-[10px] font-bold text-error uppercase leading-none">{new Date(it.dataInicio).toLocaleDateString("pt-BR", { month: "short" })}</span>
-                    <span className="text-[18px] font-black text-neutral-900 leading-none mt-0.5">{new Date(it.dataInicio).getDate()}</span>
+              {chapter === "events" && data.map((it, i) => {
+                // Phase 23-followup: render the correct AgroEvent shape
+                // (was using it.titulo / it.localidade — fields that don't
+                // exist in the API response, hence the empty cards bug).
+                const d = new Date(it.dataInicio + "T12:00:00");
+                const valid = !Number.isNaN(d.getTime());
+                const location = [it.cidade, it.estado].filter(Boolean).join(", ");
+                return (
+                  <div key={i} className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/30 flex gap-4">
+                    <div className="w-12 h-12 bg-white rounded-lg border border-neutral-200 flex flex-col items-center justify-center shrink-0">
+                      <span className="text-[10px] font-bold text-error uppercase leading-none">
+                        {valid ? d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") : "—"}
+                      </span>
+                      <span className="text-[18px] font-black text-neutral-900 leading-none mt-0.5">
+                        {valid ? d.getDate() : "—"}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-neutral-900 leading-tight line-clamp-2">{it.nome}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {location && <p className="text-[11px] text-neutral-500">{location}</p>}
+                        {it.source_name && (
+                          <span className="text-[9px] font-bold px-1 py-0 rounded bg-neutral-100 text-neutral-600 uppercase">
+                            {it.source_name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[13px] font-semibold text-neutral-900 leading-tight">{it.titulo}</p>
-                    <p className="text-[11px] text-neutral-500 mt-1">{it.localidade}</p>
+                );
+              })}
+
+              {chapter === "recuperacao" && data.map((it, i) => (
+                <div key={i} className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/30">
+                  <div className="flex justify-between items-start mb-1 gap-2">
+                    <span className="text-[13px] font-bold text-neutral-900 line-clamp-1 flex-1">{it.entity_name}</span>
+                    <span className="text-[10px] font-bold bg-error/10 text-error px-1.5 py-0.5 rounded uppercase shrink-0">{it.state || "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px] text-neutral-600">
+                    <span>
+                      {lang === "pt" ? "Dívida:" : "Debt:"}{" "}
+                      <span className="font-mono font-bold text-neutral-900">
+                        {it.debt_value
+                          ? new Intl.NumberFormat(lang === "pt" ? "pt-BR" : "en-US", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(Number(it.debt_value))
+                          : "—"}
+                      </span>
+                    </span>
+                    {it.filing_date && (
+                      <span className="text-[10px] text-neutral-400">
+                        {new Date(it.filing_date).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US")}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
 
-              {chapter === "recuperacao" && data.map((it, i) => (
-                <div key={i} className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/30">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-[13px] font-bold text-neutral-900">{it.company_name}</span>
-                    <span className="text-[10px] font-bold bg-error/10 text-error px-1.5 py-0.5 rounded uppercase">{it.state}</span>
+              {chapter === "riskSignals" && data.map((it, i) => (
+                <div key={i} className="p-3 rounded-xl border border-error/20 bg-error/5">
+                  <div className="flex justify-between items-start mb-1 gap-2">
+                    <span className="text-[13px] font-bold text-neutral-900 line-clamp-1 flex-1">
+                      {it.nome_fantasia || it.razao_social}
+                    </span>
+                    <span className="text-[10px] font-bold bg-error/10 text-error px-1.5 py-0.5 rounded uppercase shrink-0">
+                      {it.rj_state || "—"}
+                    </span>
                   </div>
-                  <p className="text-[12px] text-neutral-600">Dívida: <span className="font-mono font-bold">{it.debt_amount}</span></p>
+                  <div className="flex items-center justify-between text-[12px] text-neutral-600">
+                    <span>
+                      {lang === "pt" ? "Exposição:" : "Exposure:"}{" "}
+                      <span className="font-mono font-bold text-neutral-900">
+                        {it.rj_debt_value
+                          ? new Intl.NumberFormat(lang === "pt" ? "pt-BR" : "en-US", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(Number(it.rj_debt_value))
+                          : "—"}
+                      </span>
+                    </span>
+                    {it.classificacao && it.classificacao !== "0" && (
+                      <span className="text-[10px] font-bold px-1.5 py-0 rounded bg-neutral-200 text-neutral-700 uppercase">
+                        {lang === "pt" ? "Classe" : "Class"} {it.classificacao}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
 
@@ -281,8 +392,8 @@ export function ChapterModal({ isOpen, onClose, chapter, lang, onCTA }: ChapterM
           >
             {lang === "pt" ? "Fechar" : "Close"}
           </button>
-          <button 
-            onClick={() => onCTA(chapter)}
+          <button
+            onClick={() => onCTA(chapter === "riskSignals" ? "retailers" : (chapter as Module))}
             className="flex-[2] px-4 py-2.5 rounded-xl bg-brand-primary text-white text-[14px] font-bold flex items-center justify-center gap-2 hover:bg-brand-primary/90 transition-colors shadow-lg shadow-brand-primary/20"
           >
             {lang === "pt" ? "Ver Módulo Completo" : "View Full Module"}
