@@ -7,9 +7,10 @@ import { MockBadge } from "@/components/ui/MockBadge";
 import { Badge } from "@/components/ui/Badge";
 import {
   Search, Newspaper, BookOpen, Lightbulb,
-  BarChart3, Loader2, ExternalLink, Network,
+  BarChart3, Loader2, ExternalLink, Network, Sparkles,
 } from "lucide-react";
 import { KnowledgeMindMap } from "@/components/KnowledgeMindMap";
+import { OracleChat } from "@/components/OracleChat";
 
 interface KnowledgeItem {
   id: string;
@@ -46,7 +47,7 @@ export function KnowledgeBase({ lang }: { lang: Lang }) {
   const [totalItems, setTotalItems] = useState(0);
   const [isMock, setIsMock] = useState(true);
   const [tierFilter, setTierFilter] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<"search" | "mindmap">("search");
+  const [activeTab, setActiveTab] = useState<"search" | "mindmap" | "oracle">("search");
 
   useEffect(() => {
     fetchStats();
@@ -149,10 +150,18 @@ export function KnowledgeBase({ lang }: { lang: Lang }) {
           >
             <Network size={14} /> {lang === "pt" ? "Mapa de Conexões" : "Connection Map"}
           </button>
+          <button
+            onClick={() => setActiveTab("oracle")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${activeTab === "oracle" ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-500 hover:text-neutral-700"}`}
+          >
+            <Sparkles size={14} /> AgriSafe Oracle
+          </button>
         </div>
       </div>
 
-      {activeTab === "mindmap" ? (
+      {activeTab === "oracle" ? (
+        <OracleChat lang={lang} />
+      ) : activeTab === "mindmap" ? (
         <KnowledgeMindMap lang={lang} />
       ) : (<>
 

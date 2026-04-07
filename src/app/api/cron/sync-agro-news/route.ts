@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
 import { loadMatchableEntities, matchEntitiesInText, writeEntityMentions } from '@/lib/entity-matcher'
+import { isGeminiConfigured, generateEmbeddingBatch } from '@/lib/gemini'
 import Parser from 'rss-parser'
 
 export const dynamic = 'force-dynamic'
@@ -61,6 +62,19 @@ export async function GET(request: Request) {
     let totalSkipped = 0
     let totalMentions = 0
     const errors: string[] = []
+    // Phase 18: collect new articles for batch embedding (gated on Gemini config)
+    const newItemsToEmbed: Array<{
+      id: string
+      title: string
+      summary: string | null
+      source_url: string
+      category: string
+      tags: string[]
+      published_at: string
+      confidentiality?: string
+      textToEmbed: string
+    }> = []
+    const hasGemini = isGeminiConfigured()
 
     // ─── Phase 22: load source list from news_sources table ──
     // Replaces the old hardcoded `NEWS_SOURCES` import. Only RSS sources
@@ -132,6 +146,19 @@ export async function GET(request: Request) {
             totalSkipped++
           } else {
             totalNew++
+            // Phase 18: queue for batch embedding into knowledge_items
+            if (hasGemini) {
+              newItemsToEmbed.push({
+                id: newsItem.id,
+                title: newsItem.title,
+                summary: newsItem.summary,
+                source_url: newsItem.source_url,
+                category: newsItem.category,
+                tags: newsItem.tags,
+                published_at: newsItem.published_at,
+                textToEmbed: `${newsItem.title} ${newsItem.summary || ''}`,
+              })
+            }
             // Algorithm-first entity mention detection: find known legal_entities
             // whose names appear in the article text, write to entity_mentions.
             const entityUids = matchEntitiesInText(`${title} ${summary}`, matchableEntities)
@@ -182,6 +209,41 @@ export async function GET(request: Request) {
       }
     }
 
+    // Phase 18: Hot Knowledge Ingestion — embed and write to knowledge_items
+    let knowledgeCount = 0
+    if (newItemsToEmbed.length > 0 && hasGemini) {
+      try {
+        const batchSize = 20
+        for (let i = 0; i < newItemsToEmbed.length; i += batchSize) {
+          const batch = newItemsToEmbed.slice(i, i + batchSize)
+          const embeddings = await generateEmbeddingBatch(batch.map((it) => it.textToEmbed))
+
+          const knowledgeItems = batch.map((it, idx) => ({
+            tier: 2,
+            title: it.title,
+            summary: it.summary,
+            source_type: 'news',
+            source_table: 'agro_news',
+            source_id: it.id,
+            source_url: it.source_url,
+            category: it.category,
+            tags: it.tags,
+            published_at: it.published_at,
+            embedding: `[${embeddings[idx].join(',')}]`,
+            confidentiality: it.confidentiality || 'public',
+          }))
+
+          const { error: kError } = await supabase
+            .from('knowledge_items')
+            .upsert(knowledgeItems, { onConflict: 'source_table,source_id' })
+
+          if (!kError) knowledgeCount += batch.length
+        }
+      } catch (e: any) {
+        errors.push(`Knowledge Base Ingestion: ${e.message}`)
+      }
+    }
+
     await logSync(supabase, {
       source: 'sync-agro-news',
       started_at: startedAt,
@@ -197,7 +259,13 @@ export async function GET(request: Request) {
       success: true,
       message: 'Agro news synchronized',
       timestamp: new Date().toISOString(),
-      stats: { new: totalNew, skipped: totalSkipped, entity_mentions: totalMentions, sources: rssSources.length },
+      stats: {
+        new: totalNew,
+        skipped: totalSkipped,
+        knowledge_ingested: knowledgeCount,
+        entity_mentions: totalMentions,
+        sources: rssSources.length,
+      },
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error: any) {

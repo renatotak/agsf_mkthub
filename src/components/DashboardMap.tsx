@@ -5,6 +5,7 @@ import { APIProvider, Map as GMap, AdvancedMarker, InfoWindow, useMap } from "@v
 import {
   Calendar, Eye, EyeOff, ExternalLink,
   CloudRain, Thermometer, MapPin, Search, X, RefreshCw,
+  Newspaper, Gavel, AlertCircle, Home, Maximize,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Lang } from "@/lib/i18n";
@@ -81,7 +82,7 @@ function resolveCoords(city?: string | null, state?: string | null): { lat: numb
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type MarkerType = "event" | "weather";
+type MarkerType = "event" | "weather" | "news" | "rj";
 
 type MapMarker = {
   id: string;
@@ -99,6 +100,8 @@ type MapMarker = {
 const LAYER_META: Record<MarkerType, { label: string; labelEn: string; color: string }> = {
   event:    { label: "Eventos",  labelEn: "Events",   color: "#5B7A2F" },
   weather:  { label: "Clima / Alertas", labelEn: "Weather / Alerts", color: "#1565C0" },
+  news:     { label: "Notícias", labelEn: "News",     color: "#E8722A" },
+  rj:       { label: "Recup. Judicial", labelEn: "Distress", color: "#C62828" },
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -109,10 +112,17 @@ export function DashboardMap({ lang }: { lang: Lang }) {
   const [citySearch, setCitySearch] = useState("");
   const [showEvents, setShowEvents] = useState(true);
   const [showWeather, setShowWeather] = useState(true);
+  const [showNews, setShowNews] = useState(true);
+  const [showRJ, setShowRJ] = useState(true);
+  const [eventTimeFilter, setEventTimeFilter] = useState<number | null>(30); // days
+  const [mapTypeId, setMapTypeId] = useState<"terrain" | "satellite">("terrain");
 
   // Data state
   const [allEvents, setAllEvents] = useState<MapMarker[]>([]);
   const [allWeather, setAllWeather] = useState<MapMarker[]>([]);
+  const [allNews, setAllNews] = useState<MapMarker[]>([]);
+  const [activeRJ, setActiveRJ] = useState<MapMarker[]>([]);
+
   const [allCities, setAllCities] = useState<{ label: string; lat: number; lng: number }[]>([]);
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const [bbox, setBbox] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
@@ -188,7 +198,7 @@ export function DashboardMap({ lang }: { lang: Lang }) {
       setAllWeather(markers);
     }).catch(() => {});
 
-    // All unique cities from retailer_locations (for city search)
+    // All unique cities from retailer_locations (for city search and parsing)
     supabase
       .from("retailer_locations")
       .select("municipio, uf, latitude, longitude")
@@ -199,19 +209,114 @@ export function DashboardMap({ lang }: { lang: Lang }) {
         const seen = new Map<string, { label: string; lat: number; lng: number }>();
         for (const r of data) {
           const key = `${r.municipio}, ${r.uf}`.toLowerCase();
-          if (!seen.has(key)) seen.set(key, { label: `${r.municipio}, ${r.uf}`, lat: r.latitude, lng: r.longitude });
+          if (!seen.has(key)) {
+            seen.set(key, { label: `${r.municipio}, ${r.uf}`, lat: Number(r.latitude), lng: Number(r.longitude) });
+          }
         }
-        setAllCities([...seen.values()].sort((a, b) => a.label.localeCompare(b.label)));
+        const cityList = [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+        setAllCities(cityList);
+
+        // Once cities are loaded, parse news and RJ
+        // 1. News
+        supabase.from("agro_news").select("*").order("published_at", { ascending: false }).limit(50).then(({ data: newsData }) => {
+          if (!newsData) return;
+          const newsMarkers: MapMarker[] = [];
+          for (const n of newsData) {
+            let coords = null;
+            let finalLoc = "";
+
+            // Strategy A: Direct Tag / Label (if we had it)
+            // Strategy B: Search title/summary for city names
+            const text = `${n.title} ${n.summary || ""}`;
+            for (const c of cityList) {
+              if (text.toLowerCase().includes(c.label.toLowerCase().split(",")[0].trim())) {
+                coords = { lat: c.lat, lng: c.lng };
+                finalLoc = c.label;
+                break;
+              }
+            }
+
+            // Strategy C: State lookup (MT, MS, SP, etc.)
+            if (!coords) {
+              for (const [uf, c] of Object.entries(UF_COORDS)) {
+                if (text.includes(` ${uf}`) || text.includes(` em ${uf}`) || text.includes(` no ${uf}`) || text.includes(` na ${uf}`)) {
+                  coords = c;
+                  finalLoc = uf;
+                  break;
+                }
+              }
+            }
+
+            if (coords) {
+              newsMarkers.push({
+                id: `nw-${n.id}`,
+                type: "news",
+                lat: coords.lat + (Math.random() - 0.5) * 0.05,
+                lng: coords.lng + (Math.random() - 0.5) * 0.05,
+                title: n.title,
+                subtitle: n.source_name || "News",
+                url: n.source_url,
+                uf: finalLoc.includes(",") ? finalLoc.split(",")[1].trim() : finalLoc,
+                extra: <div className="text-[11px] text-neutral-500 mt-1">{new Date(n.published_at).toLocaleDateString()}</div>
+              });
+            }
+          }
+          setAllNews(newsMarkers);
+        });
+
+        // 2. RJ Data
+        supabase.from("recuperacao_judicial").select("*").order("filing_date", { ascending: false }).limit(30).then(({ data: rjData }) => {
+          if (!rjData) return;
+          const rjMarkers: MapMarker[] = [];
+          for (const rj of rjData) {
+            const coords = UF_COORDS[rj.state?.toUpperCase() || ""];
+            if (coords) {
+              rjMarkers.push({
+                id: `rj-${rj.id}`,
+                type: "rj",
+                lat: coords.lat + (Math.random() - 0.5) * 0.2, // Spread more for states
+                lng: coords.lng + (Math.random() - 0.5) * 0.2,
+                title: rj.entity_name,
+                subtitle: `${rj.court || "Justiça"} | ${rj.state}`,
+                uf: rj.state,
+                extra: (
+                  <div className="mt-2 space-y-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-error font-bold">{rj.status === "em_andamento" ? "Em Aberto" : rj.status}</span>
+                      <span className="text-neutral-500">{rj.filing_date}</span>
+                    </div>
+                    {rj.debt_value && (
+                      <p className="text-[12px] font-bold text-neutral-900">
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(rj.debt_value)}
+                      </p>
+                    )}
+                  </div>
+                )
+              });
+            }
+          }
+          setActiveRJ(rjMarkers);
+        });
       });
   }, []);
 
   // Apply filters
   const filteredMarkers = useMemo(() => {
     let markers: MapMarker[] = [];
-    if (showEvents) markers = markers.concat(allEvents);
+    if (showEvents) {
+      let events = allEvents;
+      if (eventTimeFilter) {
+        const horizon = new Date();
+        horizon.setDate(horizon.getDate() + eventTimeFilter);
+        events = events.filter(m => m.date && new Date(m.date) <= horizon);
+      }
+      markers = markers.concat(events);
+    }
     if (showWeather) markers = markers.concat(allWeather);
+    if (showNews) markers = markers.concat(allNews);
+    if (showRJ) markers = markers.concat(activeRJ);
 
-    if (ufFilter) markers = markers.filter(m => m.uf?.toUpperCase() === ufFilter);
+    if (ufFilter) markers = markers.filter(m => m.uf?.toUpperCase().trim() === ufFilter.toUpperCase().trim());
     if (citySearch.trim()) {
       const q = citySearch.trim().toLowerCase();
       markers = markers.filter(m =>
@@ -238,6 +343,8 @@ export function DashboardMap({ lang }: { lang: Lang }) {
   const counts = {
     event: filteredMarkers.filter(m => m.type === "event").length,
     weather: filteredMarkers.filter(m => m.type === "weather").length,
+    news: filteredMarkers.filter(m => m.type === "news").length,
+    rj: filteredMarkers.filter(m => m.type === "rj").length,
   };
 
   // Map center — zoom to selected city, filtered region, or default
@@ -317,35 +424,39 @@ export function DashboardMap({ lang }: { lang: Lang }) {
             <LayerToggle active={showEvents} onClick={() => setShowEvents(!showEvents)}
               color={LAYER_META.event.color} label={lang === "pt" ? "Eventos" : "Events"} count={counts.event} />
             <LayerToggle active={showWeather} onClick={() => setShowWeather(!showWeather)}
-              color={LAYER_META.weather.color} label={lang === "pt" ? "Clima / Alertas" : "Weather / Alerts"} count={counts.weather} />
+              color={LAYER_META.weather.color} label={lang === "pt" ? "Clima" : "Weather"} count={counts.weather} />
+            <LayerToggle active={showNews} onClick={() => setShowNews(!showNews)}
+              color={LAYER_META.news.color} label={lang === "pt" ? "Notícias" : "News"} count={counts.news} />
+            <LayerToggle active={showRJ} onClick={() => setShowRJ(!showRJ)}
+              color={LAYER_META.rj.color} label={lang === "pt" ? "Alertas RJ" : "Distress"} count={counts.rj} />
           </div>
 
           <div className="h-5 w-px bg-neutral-200 hidden sm:block" />
 
           {/* UF filter */}
           <select value={ufFilter} onChange={e => setUfFilter(e.target.value)}
-            className="px-2 py-1.5 bg-neutral-50 border border-neutral-200 rounded text-[12px] focus:outline-none focus:ring-1 focus:ring-brand-primary/30">
-            <option value="">{lang === "pt" ? "Todos estados" : "All states"}</option>
+            className="px-2 py-1 bg-neutral-50 border border-neutral-200 rounded text-[11px] h-7 focus:outline-none focus:ring-1 focus:ring-brand-primary/30">
+            <option value="">{lang === "pt" ? "Todos os estados" : "All states"}</option>
             {ALL_UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
           </select>
 
           {/* City autocomplete search */}
           {citySearch ? (
             /* Selected city chip */
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-surface border border-brand-light rounded-md text-[12px] font-medium text-brand-primary">
-              <MapPin size={11} />
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-brand-surface border border-brand-light rounded text-[11px] h-7 font-medium text-brand-primary">
+              <MapPin size={10} />
               {citySearch}
-              <button onClick={clearCity} className="ml-1 text-brand-primary/60 hover:text-brand-primary"><X size={12} /></button>
+              <button onClick={clearCity} className="ml-0.5 text-brand-primary/60 hover:text-brand-primary"><X size={10} /></button>
             </div>
           ) : (
             /* Search input with dropdown */
             <div className="relative" ref={cityRef}>
-              <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400" />
               <input type="text" value={cityQuery}
                 onChange={e => { setCityQuery(e.target.value); setCityDropdownOpen(true); }}
                 onFocus={() => setCityDropdownOpen(true)}
                 placeholder={lang === "pt" ? "Buscar cidade..." : "Search city..."}
-                className="pl-7 pr-3 py-1.5 w-44 bg-neutral-50 border border-neutral-200 rounded text-[12px] focus:outline-none focus:ring-1 focus:ring-brand-primary/30" />
+                className="pl-7 pr-3 py-1 w-44 bg-neutral-50 border border-neutral-200 rounded text-[11px] h-7 focus:outline-none focus:ring-1 focus:ring-brand-primary/30" />
               {cityDropdownOpen && citySuggestions.length > 0 && (
                 <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg border border-neutral-200 shadow-lg z-50 max-h-52 overflow-y-auto">
                   {citySuggestions.map((c, i) => (
@@ -361,20 +472,30 @@ export function DashboardMap({ lang }: { lang: Lang }) {
             </div>
           )}
 
-          {hasFilters && (
-            <button onClick={clearFilters} className="flex items-center gap-1 text-[11px] text-error font-medium hover:underline">
-              <X size={12} />{lang === "pt" ? "Limpar" : "Clear"}
-            </button>
-          )}
-
-          <div className="ml-auto text-[11px] text-neutral-400">
-            {filteredMarkers.length} {lang === "pt" ? "pontos" : "points"}
+          <div className="ml-auto flex items-center gap-4">
+            {showEvents && (
+              <div className="flex items-center gap-1 bg-neutral-100 p-0.5 rounded text-[9px]">
+                {[30, 90].map(d => (
+                  <button key={d} onClick={() => setEventTimeFilter(d)}
+                    className={`px-1.5 py-0.5 rounded transition-all ${eventTimeFilter === d ? "bg-white shadow-sm text-brand-primary font-bold" : "text-neutral-500 hover:text-neutral-700"}`}>
+                    {d}d
+                  </button>
+                ))}
+                <button onClick={() => setEventTimeFilter(null)}
+                   className={`px-1.5 py-0.5 rounded transition-all ${eventTimeFilter === null ? "bg-white shadow-sm text-brand-primary font-bold" : "text-neutral-500 hover:text-neutral-700"}`}>
+                   {lang === 'pt' ? 'Tudo' : 'All'}
+                </button>
+              </div>
+            )}
+            <div className="text-[11px] text-neutral-400">
+              {filteredMarkers.length} {lang === "pt" ? "pontos" : "points"}
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── Map ── */}
-      <div className="relative w-full h-[380px] bg-neutral-100">
+      <div id="dashboard-map-container" className="relative w-full h-[380px] bg-neutral-100">
         {MAP_KEY ? (
           <APIProvider apiKey={MAP_KEY}>
             <GMap
@@ -382,10 +503,10 @@ export function DashboardMap({ lang }: { lang: Lang }) {
               defaultZoom={mapZoom}
               key={`${mapCenter.lat}-${mapCenter.lng}-${mapZoom}`}
               mapId="dashboard-intel-map"
-              disableDefaultUI={false}
-              zoomControl
-              mapTypeControl
-              mapTypeId="terrain"
+              disableDefaultUI={true}
+              zoomControl={true}
+              mapTypeControl={false}
+              mapTypeId={mapTypeId}
               streetViewControl={false}
               fullscreenControl={false}
               rotateControl={false}
@@ -398,6 +519,8 @@ export function DashboardMap({ lang }: { lang: Lang }) {
                     style={{ backgroundColor: LAYER_META[m.type]?.color || "#5B7A2F" }}>
                     {m.type === "event" && <Calendar size={13} />}
                     {m.type === "weather" && <CloudRain size={13} />}
+                    {m.type === "news" && <Newspaper size={13} />}
+                    {m.type === "rj" && <Gavel size={13} />}
                   </div>
                 </AdvancedMarker>
               ))}
@@ -424,6 +547,47 @@ export function DashboardMap({ lang }: { lang: Lang }) {
                   </div>
                 </InfoWindow>
               )}
+
+              {/* Custom Map Type Toggle (Small) */}
+              <div className="absolute top-3 left-3 flex bg-white/90 backdrop-blur-sm rounded border border-neutral-200 overflow-hidden shadow-md z-10 transition-all hover:bg-white">
+                <button
+                  onClick={() => setMapTypeId("terrain")}
+                  className={`px-2 py-1 text-[10px] font-bold transition-all ${mapTypeId === "terrain" ? "bg-brand-primary text-white" : "text-neutral-500 hover:text-neutral-700"}`}>
+                  Map
+                </button>
+                <div className="w-[1px] bg-neutral-200" />
+                <button
+                  onClick={() => setMapTypeId("satellite")}
+                  className={`px-2 py-1 text-[10px] font-bold transition-all ${mapTypeId === "satellite" ? "bg-brand-primary text-white" : "text-neutral-500 hover:text-neutral-700"}`}>
+                  Satellite
+                </button>
+              </div>
+
+              {/* Benchmark Controls (Top Right) */}
+              <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
+                <button
+                  onClick={() => {
+                    const el = document.getElementById("dashboard-map-container");
+                    if (el?.requestFullscreen) el.requestFullscreen();
+                  }}
+                  className="w-8 h-8 bg-white/90 backdrop-blur-sm rounded border border-neutral-200 flex items-center justify-center text-neutral-600 shadow-md hover:bg-white hover:text-brand-primary transition-all"
+                  title={lang === "pt" ? "Tela Cheia" : "Fullscreen"}>
+                  <Maximize size={15} />
+                </button>
+                <button
+                  onClick={() => {
+                    setUfFilter("");
+                    setCitySearch("");
+                    setCityQuery("");
+                    setBbox(null);
+                    setBboxDirty(false);
+                  }}
+                  className="w-8 h-8 bg-white/90 backdrop-blur-sm rounded border border-neutral-200 flex items-center justify-center text-neutral-600 shadow-md hover:bg-white hover:text-brand-primary transition-all"
+                  title={lang === "pt" ? "Recentrar" : "Recenter"}>
+                  <Home size={15} />
+                </button>
+              </div>
+
               <BboxCaptureButton lang={lang} bboxDirty={bboxDirty} bboxActive={!!bbox}
                 onApply={(b) => { setBbox(b); setBboxDirty(false); }}
                 onClear={() => { setBbox(null); setBboxDirty(false); }} />
@@ -469,11 +633,11 @@ function LayerToggle({ active, onClick, color, label, count }: {
 }) {
   return (
     <button onClick={onClick}
-      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all border ${
-        active ? "border-neutral-300 bg-white shadow-sm" : "border-transparent bg-neutral-100 text-neutral-400"
+      className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] h-7 font-semibold transition-all border ${
+        active ? "border-neutral-300 bg-white shadow-sm" : "border-transparent bg-neutral-50 text-neutral-400"
       }`}>
-      {active ? <Eye size={12} style={{ color }} /> : <EyeOff size={12} />}
-      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: active ? color : "#D1D5DB" }} />
+      {active ? <Eye size={11} style={{ color }} /> : <EyeOff size={11} />}
+      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: active ? color : "#D1D5DB" }} />
       <span className={active ? "text-neutral-800" : ""}>{label}</span>
       <span className={`text-[9px] ${active ? "text-neutral-400" : "text-neutral-300"}`}>({count})</span>
     </button>
@@ -504,8 +668,8 @@ function BboxCaptureButton({ lang, bboxDirty, bboxActive, onApply, onClear }: {
       {bboxDirty && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
           <button onClick={handleApply}
-            className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-neutral-200 text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 hover:border-brand-primary transition-all">
-            <RefreshCw size={13} className="text-brand-primary" />
+            className="flex items-center gap-2 px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-neutral-200 text-[11px] font-bold text-neutral-700 hover:bg-white hover:border-brand-primary transition-all">
+            <RefreshCw size={11} className="text-brand-primary" />
             {lang === "pt" ? "Buscar nesta área" : "Search this area"}
           </button>
         </div>

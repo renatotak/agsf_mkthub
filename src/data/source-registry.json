@@ -3356,5 +3356,77 @@
     "http_status": 200,
     "last_checked_at": "2026-04-02T18:01:43.819Z",
     "used_in_app": true
+  },
+  {
+    "id": "src-macro-1",
+    "name": "USDA WASDE",
+    "source_org": "USDA",
+    "category": "macro",
+    "data_type": "PDF, CSV",
+    "description": "World Agricultural Supply and Demand Estimates. Monthly reports on global S&D for major crops.",
+    "frequency": "mensal",
+    "url": "https://www.usda.gov/oce/commodity/wasde",
+    "automated": true,
+    "used_in_app": true
+  },
+  {
+    "id": "src-macro-2",
+    "name": "FAO FAOSTAT",
+    "source_org": "FAO",
+    "category": "macro",
+    "data_type": "API, CSV",
+    "description": "United Nations food and agriculture statistics. World production, consumption, and trade.",
+    "frequency": "anual",
+    "url": "https://www.fao.org/faostat/en/#data",
+    "automated": true,
+    "used_in_app": true
+  },
+  {
+    "id": "src-macro-3",
+    "name": "OECD-FAO Agricultural Outlook",
+    "source_org": "OECD/FAO",
+    "category": "macro",
+    "data_type": "PDF, CSV",
+    "description": "Medium-term projections (10 years) for agricultural commodity markets.",
+    "frequency": "anual",
+    "url": "https://www.oecd-ilibrary.org/agriculture-and-food/oecd-fao-agricultural-outlook_19991142",
+    "automated": true,
+    "used_in_app": true
+  },
+  {
+    "id": "src-macro-4",
+    "name": "MDIC ComexStat",
+    "source_org": "MDIC",
+    "category": "export",
+    "data_type": "API, CSV",
+    "description": "Official Brazilian foreign trade statistics. Exports by HS code and state.",
+    "frequency": "mensal",
+    "url": "http://comexstat.mdic.gov.br/pt/home",
+    "automated": true,
+    "used_in_app": true
+  },
+  {
+    "id": "src-macro-5",
+    "name": "CONAB Safra",
+    "source_org": "CONAB",
+    "category": "safra",
+    "data_type": "PDF, XLS",
+    "description": "Monthly Brazilian crop production estimates by state, crop, and area.",
+    "frequency": "mensal",
+    "url": "https://www.conab.gov.br/info-agro/safras",
+    "automated": true,
+    "used_in_app": true
+  },
+  {
+    "id": "src-macro-6",
+    "name": "World Bank Pink Sheet",
+    "source_org": "World Bank",
+    "category": "macro",
+    "data_type": "PDF, XLS",
+    "description": "Monthly commodity price indices and forecasts.",
+    "frequency": "mensal",
+    "url": "https://www.worldbank.org/en/research/commodity-markets",
+    "automated": true,
+    "used_in_app": true
   }
 ]
