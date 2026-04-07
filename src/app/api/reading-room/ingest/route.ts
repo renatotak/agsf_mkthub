@@ -5,6 +5,7 @@ import {
   matchEntitiesInText,
   writeEntityMentions,
 } from "@/lib/entity-matcher";
+import { isGeminiConfigured, generateEmbedding } from "@/lib/gemini";
 
 /**
  * Phase 22 — Reading Room Chrome extension ingest endpoint.
@@ -192,7 +193,43 @@ export async function POST(req: NextRequest) {
     console.error("[reading-room/ingest] entity matcher failed:", e?.message);
   }
 
-  // ─── 5. Touch the news_sources sentinel row (best-effort) ───
+  // ─── 5. Hot Knowledge Ingestion ─────────────────────────────
+  // Same pattern as sync-agro-news/route.ts (Phase 18 followup): if Gemini
+  // is configured, embed the article and upsert into knowledge_items so
+  // the RAG endpoint at /api/knowledge/chat can find it. Single article
+  // (not batch) since the extension pushes one at a time. Best-effort —
+  // a Gemini failure does not fail the ingest because the agro_news row
+  // is already saved.
+  let knowledgeIndexed = false;
+  if (isGeminiConfigured()) {
+    try {
+      const textToEmbed = `${cleanTitle} ${summary}`;
+      const embedding = await generateEmbedding(textToEmbed);
+      const { error: kError } = await supabase.from("knowledge_items").upsert(
+        {
+          tier: 2,
+          title: cleanTitle,
+          summary: summary || null,
+          source_type: "news",
+          source_table: "agro_news",
+          source_id: newsId,
+          source_url: url,
+          category: newsRow.category,
+          tags,
+          published_at: fetchedAt,
+          embedding: `[${embedding.join(",")}]`,
+          confidentiality: newsRow.confidentiality,
+        },
+        { onConflict: "source_table,source_id" },
+      );
+      if (!kError) knowledgeIndexed = true;
+      else console.error("[reading-room/ingest] knowledge_items upsert failed:", kError.message);
+    } catch (e: any) {
+      console.error("[reading-room/ingest] embedding failed:", e?.message);
+    }
+  }
+
+  // ─── 6. Touch the news_sources sentinel row (best-effort) ───
   try {
     await supabase
       .from("news_sources")
@@ -208,5 +245,6 @@ export async function POST(req: NextRequest) {
     entity_mentions: entityMentionsWritten,
     category: newsRow.category,
     mentions_producer: newsRow.mentions_producer,
+    knowledge_indexed: knowledgeIndexed,
   });
 }

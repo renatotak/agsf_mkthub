@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import {
   Newspaper, ExternalLink, RefreshCw, Loader2, Star,
   ChevronLeft, ChevronRight, BarChart3, Settings2, Plus,
-  Pencil, Trash2, X, AlertTriangle, BookOpen,
+  Pencil, Trash2, X, AlertTriangle, BookOpen, Brain, Bookmark,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area,
@@ -75,6 +75,8 @@ export function AgroNews({ lang }: { lang: Lang }) {
   const [producerOnly, setProducerOnly] = useState(false);
   const [showCharts, setShowCharts] = useState(true);
   const [isMock, setIsMock] = useState(true);
+  // Phase 22 follow-up: which agro_news IDs are indexed in knowledge_items
+  const [kbIndexedIds, setKbIndexedIds] = useState<Set<string>>(new Set());
 
   // ─── Sources state (Phase 22) ───────────────────────────────
   const [sources, setSources] = useState<NewsSource[]>([]);
@@ -132,10 +134,25 @@ export function AgroNews({ lang }: { lang: Lang }) {
       setNews(data);
       if (count != null) setTotalCount(count);
       setIsMock(false);
+      // Phase 22 follow-up: check which of these news IDs are indexed in
+      // knowledge_items so we can render a "🧠 KB" badge per article.
+      // Single small query, runs after the news fetch completes.
+      try {
+        const ids = data.map((n: any) => n.id);
+        const { data: kbRows } = await supabase
+          .from("knowledge_items")
+          .select("source_id")
+          .eq("source_table", "agro_news")
+          .in("source_id", ids);
+        setKbIndexedIds(new Set((kbRows || []).map((r: any) => r.source_id as string)));
+      } catch {
+        setKbIndexedIds(new Set());
+      }
     } else {
       setNews([]);
       setTotalCount(0);
       setIsMock(false);
+      setKbIndexedIds(new Set());
     }
     setLoading(false);
   };
@@ -475,6 +492,19 @@ export function AgroNews({ lang }: { lang: Lang }) {
           <Star size={14} className={producerOnly ? "fill-amber-400 text-amber-400" : ""} />
           {tr.highlightedProducers}
         </button>
+        {/* Phase 22 follow-up: Reading Room quick-filter chip */}
+        <button
+          onClick={() => setSourceFilter(sourceFilter === "Reading Room" ? "" : "Reading Room")}
+          title={lang === "pt" ? "Mostrar apenas artigos enviados pela extensão Reading Room" : "Show only articles pushed via the Reading Room extension"}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+            sourceFilter === "Reading Room"
+              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+              : "bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50"
+          }`}
+        >
+          <Bookmark size={14} className={sourceFilter === "Reading Room" ? "fill-indigo-400 text-indigo-500" : ""} />
+          {lang === "pt" ? "Reading Room" : "Reading Room"}
+        </button>
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
           className="px-3 py-2 rounded-lg text-xs font-medium bg-white border border-neutral-200 text-neutral-600 focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
         >
@@ -517,6 +547,24 @@ export function AgroNews({ lang }: { lang: Lang }) {
                     {item.category && CATEGORY_LABELS[item.category] && (
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${CATEGORY_LABELS[item.category].color}`}>
                         {lang === "pt" ? CATEGORY_LABELS[item.category].pt : CATEGORY_LABELS[item.category].en}
+                      </span>
+                    )}
+                    {item.source_name === "Reading Room" && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 flex items-center gap-1"
+                        title={lang === "pt" ? "Salvo via extensão Reading Room" : "Pushed via Reading Room extension"}
+                      >
+                        <Bookmark size={10} className="fill-indigo-400 text-indigo-500" />
+                        Reading Room
+                      </span>
+                    )}
+                    {kbIndexedIds.has(item.id) && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 flex items-center gap-1"
+                        title={lang === "pt" ? "Indexado na Base de Conhecimento (knowledge_items)" : "Indexed in the Knowledge Base (knowledge_items)"}
+                      >
+                        <Brain size={10} />
+                        KB
                       </span>
                     )}
                     {item.mentions_producer && (
