@@ -135,38 +135,49 @@ node --env-file=.env.local src/scripts/geocode-retailers.js  # Geocode retailer 
 | Base de Conhecimento | `KnowledgeBase.tsx` (search + AgroTermos), `KnowledgeMindMap.tsx` (table-graph viz) |
 
 **Cron pipeline** (`/api/cron/sync-all` → daily 08:00 UTC, single Vercel Hobby cron):
+
+Daily jobs (10):
 1. `sync-market-data` — BCB SGS → `commodity_prices`, `market_indicators`
-2. `sync-agro-news` — 5 RSS feeds → `agro_news` (+ entity-mention matching via `src/lib/entity-matcher.ts`)
+2. `sync-agro-news` — 5 RSS feeds → `agro_news` (+ `entity-matcher` + Phase 24F inline norm extractor → `regulatory_norms`)
 3. `sync-recuperacao-judicial` — 2 legal RSS → `recuperacao_judicial`
 4. `archive-old-news` — OpenAI summaries + pgvector → `news_knowledge`
 5. `sync-regulatory` — 3 legal RSS → `regulatory_norms`
-6. `sync-events-na` — AgroAgenda API → `events`
-7. `sync-events-agroadvance` — agroadvance.com.br Cheerio scraper → `events`
-8. `sync-faostat` — FAOSTAT macro production → `macro_statistics`
-9. `sync-prices-na` — NA regional prices → `commodity_prices_regional`
-10. `sync-competitors` — competitor enrichment → `competitors`
-11. `sync-industry-profiles` — industry profile enrichment → `industries`
-12. `sync-retailer-intelligence` — AI retailer intelligence → `retailer_intelligence`
-13. `sync-agrofit-bulk` — federal AGROFIT crawl → `industry_products`
-14. `sync-scraper-healthcheck` — no-op probe for `runScraper()` wiring
+6. `sync-cnj-atos` — **Phase 24F** CNJ JSON API (atos.cnj.jus.br) → `regulatory_norms`
+7. `sync-events-na` — AgroAgenda API → `events`
+8. `sync-competitors` — competitor enrichment → `competitor_signals`
+9. `sync-retailer-intelligence` — AI retailer intelligence → `retailer_intelligence`
+10. `sync-faostat` — FAOSTAT macro production → `macro_statistics`
+11. `sync-scraper-healthcheck` — no-op probe for `runScraper()` wiring
 
-**Live API routes (ISR cached):**
+Sunday-only (6):
+12. `sync-industry-profiles` — industry profile enrichment → `industries`
+13. `sync-agrofit-bulk` — federal AGROFIT crawl → `industry_products`
+14. `sync-events-agroadvance` — agroadvance.com.br Cheerio scraper → `events`
+15. `sync-cvm-agro` — **Phase 24D** CVM legislacao walker → `regulatory_norms`
+16. `sync-bcb-rural` — **Phase 24D** curated BCB landing-page catalog → `regulatory_norms`
+17. `sync-key-agro-laws` — **Phase 24D** Lei CPR / Falências / Nova Lei do Agro seed → `regulatory_norms`
+18. `sync-worldbank-prices` — **Phase 24E** World Bank Pink Sheet xlsx → `macro_statistics`
+
+**Live API routes (ISR cached or on-demand):**
 - `/api/prices-na` — Notícias Agrícolas commodity prices (revalidate 10min)
 - `/api/prices-na/regional` — Per-city prices: 322 praças for soy, 6 commodities
 - `/api/intl-futures` — Yahoo Finance v8 proxy for CBOT/ICE/CME futures (15min ISR)
-- `/api/events-na` — AgroAgenda events (revalidate 1h)
+- `/api/events-na`, `/api/events-db` — AgroAgenda + unified events table (revalidate 1h / 10min)
 - `/api/news-na` — NA news with category filter
 - `/api/agroapi/clima` — Embrapa ClimAPI weather (revalidate 1h)
-- `/api/agroapi/agrofit` — AGROFIT product search
-- `/api/agroapi/bioinsumos` — Bioinsumos search
-- `/api/agroapi/termos` — AgroTermos glossary
+- `/api/agroapi/agrofit` / `bioinsumos` / `termos` — AGROFIT product search, Bioinsumos, AgroTermos
+- `/api/macro-stats` — read endpoint for `macro_statistics` (FAOSTAT + World Bank), 1h ISR
 - `/api/company-enrichment` — Receita Federal data (BrasilAPI/CNPJ.ws/ReceitaWS, cached 30d)
-- `/api/company-research` — Web search (Google CSE / DuckDuckGo + optional OpenAI summary)
+- `/api/company-research` — Web search (Google CSE / DuckDuckGo + optional OpenAI summary). **Phase 24B**: reads lens config from `analysis_lenses` (DB-backed) with code fallback. `analysis_type` body param picks the lens.
 - `/api/company-notes` — User-editable company notes
-- `/api/retailers/update` — Update editable retailer fields
-- `/api/rj-scan` — DuckDuckGo web scan for agro companies in restructuring
+- `/api/retailers/update`, `/api/retailers/kpi-summary` — retailer field edits + Diretório de Canais 4-card KPI summary
+- `/api/cnpj/establishments` — **Phase 24B** generic on-demand RF establishment fetcher (BrasilAPI ordens 0001..N, inline geocoding via `src/lib/geocode.ts`, cached in `cnpj_establishments`)
+- `/api/analysis-lenses` — **Phase 24B** CRUD for the editable analysis lens registry. Backs Settings → "Lentes de Análise"
+- `/api/regulatory/upload` — **Phase 24C** manual `regulatory_norms` insert (Marco Regulatório "Inserir Norma" modal)
+- `/api/rj-scan` — DuckDuckGo web scan for agro companies in restructuring (Phase 16l)
+- `/api/rj-add` — **Phase 24C** manual RJ insert by CNPJ + BrasilAPI lookup + DDG debt-amount scrape
 
-All cron routes log to `sync_logs` via `src/lib/sync-logger.ts`.
+All cron routes log to `sync_logs` via `src/lib/sync-logger.ts` AND (since Phase 19A) write to `scraper_runs` + update `scraper_registry.status` via `runScraper()` for protocol-compliant scrapers.
 
 ## Key Files
 
@@ -177,17 +188,27 @@ All cron routes log to `sync_logs` via `src/lib/sync-logger.ts`.
 | `src/data/source-registry.json` | 176 catalogued public sources |
 | `src/lib/i18n.ts` | All PT-BR / EN translations |
 | `src/lib/agroapi.ts` | Embrapa AgroAPI OAuth2 client + typed helpers |
-| `src/lib/sync-logger.ts` | Cron logging utility |
-| `src/app/api/cron/` | 7 cron routes + sync-all orchestrator |
-| `src/app/api/prices-na/regional/` | Per-city commodity price scraper (322 praças) |
-| `src/app/api/intl-futures/` | Yahoo Finance v8 futures proxy (CBOT/ICE/CME) |
-| `src/app/api/company-enrichment/` | Receita Federal company lookup (3-source fallback) |
-| `src/app/api/company-research/` | Web search (DuckDuckGo + Google CSE + OpenAI) |
-| `src/db/migrations/` | SQL migrations 001–017 |
-| `src/scripts/geocode-retailers.js` | 3-tier geocoding (Google/CEP/Nominatim) |
+| `src/lib/sync-logger.ts` | Cron logging utility (legacy `sync_logs` flat per-run row) |
+| `src/lib/scraper-runner.ts` | **Phase 19A** — `runScraper()` wrapper. Validates output rows against `scraper_registry.schema_check`, updates per-scraper health, writes to `scraper_runs` + `scraper_knowledge`. Every Phase 19+ scraper uses this. |
+| `src/lib/entity-matcher.ts` | **Phase 17D** — algorithm-first matcher (Portuguese-agro stopwords + multi-word/length-10 rule + `SHORT_NAME_ALLOWLIST` audited brands). Used by `sync-agro-news` + `reading-room/ingest`. |
+| `src/lib/extract-norms-from-news.ts` | **Phase 24F** — pure-regex norm-citation extractor. 11 patterns covering Provimento/Resolução/Lei/Decreto/etc. Two-gate filter: agro context AND norm citation. Used inline by `sync-agro-news`. |
+| `src/lib/geocode.ts` | **Phase 24B** — reusable 3-tier geocoder (Google → AwesomeAPI CEP → Nominatim). Imported by `/api/cnpj/establishments`. Mirrors `src/scripts/geocode-retailers.js`. |
+| `src/lib/entities.ts` | `ensureLegalEntityUid()` helper — idempotent, race-safe. Wired into `/api/company-enrichment`, `/api/company-notes`, `/api/company-research` (Phase 17C). |
+| `src/components/EntityMapShell.tsx` | **Phase 24B** — reusable Painel-style map shell shared by `IndustriesDirectory` and `RetailersDirectory`. Layer toggle chips, UF dropdown, city autocomplete, terrain/satellite, fullscreen, recenter, "Buscar nesta área" bbox. |
+| `src/components/AnalysisLensesEditor.tsx` | **Phase 24B** — Settings panel for editing the `analysis_lenses` table (search template + system prompt + model/temp/tokens per lens). |
+| `src/app/api/cron/` | 17 cron routes + `sync-all` orchestrator. **Phase 19+ scrapers wrapped by `runScraper()`**, legacy ones still on `logSync()`. |
+| `src/app/api/cnpj/establishments/` | **Phase 24B** generic RF establishment fetcher with inline geocoding |
+| `src/app/api/analysis-lenses/` | **Phase 24B** CRUD endpoint for editable lens registry |
+| `src/app/api/regulatory/upload/` | **Phase 24C** manual `regulatory_norms` insert |
+| `src/app/api/rj-add/` | **Phase 24C** manual RJ insert by CNPJ + BrasilAPI + DDG debt scrape |
+| `src/db/migrations/` | SQL migrations 001–039 (39 total). 035 = `cnpj_establishments`, 036 = `analysis_lenses`, 037 = CVM/BCB/key-laws scrapers, 038 = World Bank scraper, 039 = CNJ scraper |
+| `src/scripts/apply-migration.js` | **Phase 24B** — applies a single migration file via `DATABASE_URL` Postgres pooler. Used after the user added the session-pooler URL to `.env.local`. |
+| `src/scripts/backfill-cnpj-establishments.js` | **Phase 24B** — walks every entity with `role_type='industry'`, fetches all ordens via BrasilAPI, geocodes them, upserts. Already run: 1,699 establishments cached. |
+| `src/scripts/backfill-norms-from-news.js` | **Phase 24F** — re-scans `agro_news` rows through the norm extractor. Use after extractor updates. |
+| `src/scripts/geocode-retailers.js` | 3-tier geocoding for `retailer_locations` (Phase 16i) |
 | `src/scripts/seed-rj-from-receita.ts` | Seed RJ data from crawlers DB |
 | `imports/cnpj-metadados.pdf` | Receita Federal CNPJ data layout reference |
-| `chrome-extensions/reading-room/` | Embedded Chrome MV3 extension that pushes saved articles to `/api/reading-room/ingest` (Phase 22). See `chrome-extensions/reading-room/README.md` for install + config. The extension and the Market Hub backend ship together — the extension is the producer, `/api/reading-room/ingest` + `agro_news` + entity-matcher is the consumer. |
+| `chrome-extensions/reading-room/` | Embedded Chrome MV3 extension. Pushes saved articles to `/api/reading-room/ingest` (Phase 22). |
 
 ## Data Classification (Receita Federal vs AgriSafe)
 
@@ -223,13 +244,22 @@ The Knowledge Base (RAG / chat) must respect this tier when answering — never 
 
 ```
 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY   # Required
-SUPABASE_SERVICE_ROLE_KEY / CRON_SECRET                     # Required
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY                             # Required (maps)
+SUPABASE_SERVICE_ROLE_KEY                                   # Required (server-side admin)
+DATABASE_URL                                                # Direct Postgres pooler — needed for migrations + scripts
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY                             # Required (maps + tier-1 geocoding)
 AGROAPI_CONSUMER_KEY / AGROAPI_CONSUMER_SECRET              # Required (Embrapa)
-GOOGLE_CUSTOM_SEARCH_KEY / GOOGLE_CUSTOM_SEARCH_CX          # Optional (web research, 100 free/day)
-OPENAI_API_KEY                                              # Optional (archive, AI summaries)
+GOOGLE_CUSTOM_SEARCH_KEY / GOOGLE_CUSTOM_SEARCH_CX          # Optional (web research, 100 free/day — currently disabled at the project level, returns 403)
+OPENAI_API_KEY                                              # Optional (archive, AI summaries, analysis lenses)
 GEMINI_API_KEY                                              # Optional (knowledge embeddings)
+READING_ROOM_SECRET                                         # Phase 22 — Chrome extension auth
+CRON_SECRET                                                 # Optional (production cron auth gate)
 ```
+
+`DATABASE_URL` must use the **Session pooler** (port 5432, NOT Transaction pooler 6543) because DDL needs session mode. Format:
+```
+postgresql://postgres.<project-ref>:<DB-PASSWORD>@aws-N-<region>.pooler.supabase.com:5432/postgres
+```
+Special characters in the DB password must be percent-encoded (`@`→`%40`, `!`→`%21`).
 
 ## Design Tokens
 

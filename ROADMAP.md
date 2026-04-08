@@ -1,455 +1,222 @@
 # AgriSafe Market Hub — Roadmap
 
-> **Last updated:** 2026-04-07
-> **Status:** Phase 17 complete (5-entity foundation). Phase 19A complete (scraper resilience foundation: `scraper_registry`, `scraper_runs`, `scraper_knowledge`, `runScraper()` wrapper, `/api/scraper-health` endpoint, DataSources Scraper Health tab, Dashboard KPI surfacing). Phase 19B partial (FAOSTAT live in Pulso do Mercado → Contexto Macro for soja/milho/café/trigo/algodão). Phase 20A complete (federal AGROFIT bulk + Inteligência de Insumos Oracle UX). Phase 21 complete (Radar Competitivo CRUD + Harvey Ball matrix + web enrichment). Phase 22 complete (Notícias Agro CRUD + `news_sources` table + Reading Room extension v3.0 auto-sync). Phase 23A complete (Eventos Agro: AgroAdvance scraper, source provenance badges, AI enrichment, EventTracker → Supabase). Phase 24A complete (Diretório de Indústrias split-out, CRM-focused indicator row with RJ + News-mentions modals, `/api/retailers/kpi-summary`, sortable list columns). Phase 24A2 complete (industries CSV backfill: 256 industries via `legal_entities` + `entity_roles`, 163 inpEV members, /api/industries union endpoint, IndustriesDirectory filter+sort UX, entity-matcher SHORT_NAME_ALLOWLIST + 1000-row PostgREST cap fix). 4-vertical architecture, 14 modules, 50 Supabase tables, 34 SQL migrations, 9,674 legal entities, 9,609 entity roles.
-> **For the latest user-defined task list, see** `documentation/TODO_2026-04-06.md`.
+> **Last updated:** 2026-04-08
+> 4 verticals · 14 modules · 51 Supabase tables · 39 SQL migrations · 17 cron routes · 9 registered scrapers (all healthy) · 9,674 legal entities · 5-entity model live.
+> Latest user task list: `documentation/TODO_2026-04-06.md`
 
 ---
 
-## Current State (April 2026)
+## Status Snapshot (2026-04-08)
 
-| Component | Status |
-|-----------|--------|
-| Architecture | 4 verticals, 14 modules |
-| Data sources | 176 catalogued (~120 active) |
-| Live cron pipeline | 14 jobs via `sync-all` |
-| Supabase tables | 50 tables, 34 SQL migrations, 5-entity model live |
-| Legal entities (canonical) | 9,674 (9,328 retailers + 274 industries + 80 RJ-only + 7 competitors) |
-| Entity roles | 9,609 (9,328 retailer / 274 industry / others) |
-| Entity mentions (graph edges) | 130 (118 RJ + 12 agro_news, algorithm-matched) |
-| Retailers | 9,328 channels / 24,275 locations (geocoded), all linked to entity_uid |
-| Industries | 274 (18 curated AGROFIT brands + 256 imported via Phase 24A2 CSV — 163 inpEV members) |
-| Recuperação Judicial | 118 records, all linked to entity_uid |
-| Risk signals | 38 channels in distress, R$ 582.6M exposed (cross-ref view) |
-| Live data | BCB SGS, NA prices/news (regional + futures), AgroAgenda + AgroAdvance events, ClimAPI, Embrapa AgroAPI, Yahoo Finance intl futures, FAOSTAT macro, Reading Room ingest |
-| Auth | Supabase Auth + SSR middleware |
-| Deployment | Vercel (production, single Hobby cron) |
-
----
-
-## Architectural North Star (locked 2026-04-06)
-
-The platform exists to support analyses around **5 core nodes**. Every feature, every table, every scraper must contribute data that resolves to one or more of them. **Canonical reference: `documentation/ENTITY_MODEL.md`.**
-
-| # | Node | Identity | Multi-stakeholder model |
-|---|---|---|---|
-| 1 | **Legal Entity** | `entity_uid` + `tax_id` (CPF or CNPJ) | `entity_roles` junction (one CNPJ can be retailer + producer + client at once) |
-| 2 | **Farm** | `farm_uid` (CAR/INCRA/centroid) | `farm_ownership` junction (multi-shareholder, mixing CPFs and CNPJs) |
-| 3 | **Asset** | `asset_uid` (CPR/loan/note/insurance) | `asset_parties` junction (borrower / lender / guarantor / beneficiary) |
-| 4 | **Commercial Activity** | `activity_uid` (sale/barter/trade) | retailer + buyer + farm + product (single-FK each) |
-| 5 | **AgriSafe Service** | `service_uid` | `client_group_uid` (always a Group, even of size 1) + polymorphic `service_targets` (farm | entity | group | asset) |
-
-**Cross-cutting:** `groups`, `group_members`, `entity_mentions` (junction for news / regulations / events).
-
-**Implementation rule:** algorithms first, LLMs last. LLMs are reserved for prose generation, conversational interfaces, and last-resort fuzzy matching. See CLAUDE.md and AGENTS.md for full details.
+| Area | Live |
+|---|---|
+| **Architecture** | 4 verticals (Ingest → Analyze → Create → Comply), 14 modules |
+| **5-entity model** | 9,674 legal_entities · 9,609 entity_roles · 143 entity_mentions |
+| **Diretório de Canais** | 9,328 retailers · 24,275 retailer_locations (geocoded) · CRM-style 4-card KPI row · sortable columns · RJ + News-mention modals |
+| **Diretório de Indústrias** | 274 (18 curated + 256 imported via CSV) · 1,699 cnpj_establishments (100% geocoded via Nominatim) · list+map+expandable rows · 4-button row actions (RF data / Web search / AI analysis / Buscar filiais) |
+| **Marco Regulatório** | 16 norms (CVM 6 · BCB 6 · CONGRESSO 3 · CNJ 1) · "Inserir Norma" + "Fontes" modals · CNJ JSON daily · CVM curated daily + historical backfill done · BCB curated · key agro laws (CPR, Falências, Nova Lei do Agro) seeded · news norm-citation extractor inline in sync-agro-news |
+| **Recuperação Judicial** | 131 cases (118 RJ + 13 manual) · "Adicionar CNPJ" modal with BrasilAPI lookup + DDG debt scrape |
+| **Pulso de Mercado** | BCB SGS · NA prices (regional + futures) · Yahoo intl futures · FAOSTAT macro (5 cultures) · World Bank Pink Sheet annual prices (6 commodities × 15 years) |
+| **Notícias Agro** | 203 articles · 5 RSS feeds + Reading Room v3.0 Chrome extension · CRUD modal · entity-mention matcher + norm-citation extractor inline |
+| **Eventos Agro** | AgroAgenda + AgroAdvance unified into events table · per-event AI enrichment · source provenance badges |
+| **Ingestão de Dados** | 176 sources catalogued (125 active / 25 inactive / 24 error / 2 unchecked) · 9 scrapers in `scraper_registry` · Saúde dos Scrapers tab · source→tables mapping |
+| **Inteligência de Insumos** | Oracle UX with culture+pest filter · molecule-grouped brand alternatives sorted by competitiveness (patented → commodity) · federal AGROFIT bulk catalog |
+| **Radar Competitivo** | CRUD modal · Harvey Ball matrix · web enrichment per company |
+| **Configurações** | Editable analysis lenses (DB-backed prompts via `analysis_lenses` table) · Reading Room install guide |
+| **Auth + deploy** | Supabase Auth + SSR middleware · Vercel Hobby (single daily cron at 08:00 UTC) |
 
 ---
 
-## Phase History (Completed)
+## What's Live (compact phase history)
 
-| Phase | What | Done |
-|-------|------|------|
-| 1–7 | Research, architecture, build v1, Supabase, data ingestion, mobile UI | ✅ |
-| 8 | Design System Migration (AgriSafe brand tokens) | ✅ |
-| 9 | Charts & Visualization (Recharts across 4 modules) | ✅ |
-| R | Four-Vertical Reorganization | ✅ |
-| 10–12 | Data Ingestion vertical, Executive Dashboard, Live Data Feeding | ✅ |
-| 13 | Regulatory cron pipeline | ✅ |
-| 14 | MarketPulse Bloomberg Enhancement | ✅ |
-| 15 | Content Intelligence + Source Registry (166 sources) | ✅ |
-| 15a–15e | MockBadge, Retailers migration, Events scraper rewrite | ✅ |
-| 16a–16h | NA widgets, Embrapa AgroAPI, AgroAgenda, Dashboard Map, BeefPoint, ClimAPI, SmartSolos, Maps cleanup | ✅ |
-| 16i | Retailers Directory: full CNPJ formatting, Receita Federal enrichment, QSA modal, editable fields, web research | ✅ |
-| 16j | Settings & Help module, Sidebar Settings entry | ✅ |
-| 16k | Regulatório vertical full rebuild (Marco Regulatório + Recuperação Judicial with KPIs, charts, search, timeline) | ✅ |
-| 16l | RJ web scan via DuckDuckGo (`/api/rj-scan`) | ✅ |
-| 16m | Migration 015: 9 FK constraints, indexes, `v_retailers_in_rj`, `v_retailer_profile` views | ✅ |
-| 16n | Migration 016: security advisor fixes (SECURITY INVOKER views, RLS on company_*) | ✅ |
-| 16o | Migration 017: tightened `v_retailers_in_rj` to precise CNPJ matching | ✅ |
-| 16p | Seed 118 RJ companies from Receita Federal CNPJ tables (crawlers DB) | ✅ |
-| 16q | RiskSignals component + Dashboard KPI (R$ 582.6M cross-vertical insight) | ✅ |
-| 16r | Knowledge Mind Map: interactive 22-table 4-tier visualization in Base de Conhecimento | ✅ |
-| 16s | Pulso do Mercado complete redesign (Highlights box + Culture/Region tabs + Logistics range chart) | ✅ |
-| 16t | NA scraper fixes (4 broken URLs, BR number format parser, Scot Consultoria boi-gordo quirks, kg→@ conversion) | ✅ |
-| 16u | Yahoo Finance intl futures proxy `/api/intl-futures` (replaced broken TradingView embed) | ✅ |
-| 16v | CommodityMap controlled mode (sync with parent culture) | ✅ |
-| 17A–17F | Five Core Nodes Foundation — see Phase 17 block below | ✅ |
+Every shipped phase in chronological order. For deeper detail on a specific phase, search the git log by commit message.
 
----
-
-## Phase 17 — Five Core Nodes Foundation ✅ COMPLETE (2026-04-06)
-
-The foundational schema phase that everything else hangs off. Database is now reorganized around the 5 core nodes from `documentation/ENTITY_MODEL.md`. Shipped in **6 commits across 6 sub-phases**, all pushed to `origin/main`.
-
-| Sub-phase | Commit | Migration(s) | What |
-|-----------|--------|--------------|------|
-| **17A** | `733f674` | 018, 019 | 12 new tables: 5 core nodes (`legal_entities`, `farms`, `assets`, `commercial_activities`, `agrisafe_service_contracts`) + 7 junction/support tables (`entity_roles`, `groups`, `group_members`, `farm_ownership`, `asset_parties`, `agrisafe_service_targets`, `entity_mentions`). RLS + confidentiality on every table, 15 FK constraints. |
-| **17B** | `b75f7d8` | 020–023 | Backfill **9,433 legal_entities** (9,328 retailers + 80 RJ-only + 18 industries + 7 competitors) and **9,353 entity_roles** assignments. Re-key 5 satellite tables to `entity_uid` (100% link rate). Add `confidentiality` enum to 25 more tables (16 public / 6 agrisafe_published / 3 agrisafe_confidential). Rebuild `v_retailer_profile`, `v_retailers_in_rj`, plus new canonical `v_entity_profile` (one-row entity lookup). All views use `security_invoker=on`. |
-| **17C** | `f374b17` | 024 | Add `retailers.entity_uid` FK + backfill (9,328/9,328). New helper `src/lib/entities.ts#ensureLegalEntityUid` (idempotent, race-safe). Wire it into write APIs (`/api/company-enrichment`, `/api/company-notes`, `/api/company-research`) so every new row carries `entity_uid`. |
-| **17D** | `08dc7c4` | 025 | Backfill `entity_mentions` from RJ (118 mentions, subject/negative). New algorithm-first matcher `src/lib/entity-matcher.ts` with Portuguese-agro stopword blocklist + multi-word/length-10 rule. Wire matcher into `sync-agro-news` and `sync-recuperacao-judicial` crons. **Initial backfill: 2 true-positive news mentions, zero false positives** (CAPAL COOPERATIVA, SPAÇO AGRÍCOLA). |
-| **17E** | `21b39f7` | — | `/api/retailer-intelligence` accepts `entity_uid` (preferred) or `cnpj_raiz` (fallback). News lookup REPLACED: was an ILIKE substring scan over `agro_news` (lossy, accent-blind, slow at scale), now a deterministic JOIN through `entity_mentions`. UI panel propagates entity_uid. |
-| **17F** | `22bd422` | 026 | Add `recuperacao_judicial.entity_uid` FK + backfill (118/118). Mirrors mig 024. Existing `select("*")` in the UI auto-carries entity_uid for any future drill-down — no UI changes needed. |
-
-**End-state numbers:**
-- 31 tables (was 22), 26 migrations (was 17)
-- 9,433 legal_entities, 9,353 entity_roles, 120 entity_mentions
-- All 9,328 retailers + all 118 RJ rows linked to a canonical entity
-- `get_advisors`: 0 ERRORs, only the same pre-existing WARNs as before Phase 17
-
-**Architectural payoffs unlocked for Phase 18+:**
-- Anything that mentions a CNPJ now resolves to a single `entity_uid` — drill-downs across modules trivialize.
-- Cross-cutting graph queries: *"show me all news mentioning the entities currently in RJ"* is one JOIN.
-- Confidentiality tier in place at row level on 31 tables — RAG/chat in Phase 28 can filter by user role.
-- Reusable algorithm-first entity matcher (`src/lib/entity-matcher.ts`) ready for events / regulations / industries crons when those get wired.
-
-**Cleanup deferred (low priority, do alongside Phase 24):**
-- Drop legacy `cnpj_raiz` / `cnpj_basico` text columns once nothing reads them
-- Wire entity-matcher into `sync-events-na`, `sync-regulatory`, `archive-old-news`
-- Refresh `KnowledgeMindMap.tsx` "current state" view — the future-state nodes shown there are now real, not aspirational
-- Migrate the remaining cnpj_raiz reads in `RetailersDirectory.tsx`, `RegulatoryFramework.tsx`, `RecuperacaoJudicial.tsx`, `CompetitorRadar.tsx` to entity_uid
+| Phase | What | When |
+|---|---|---|
+| 1–7 | Research, architecture, build v1, Supabase, data ingestion, mobile UI | — |
+| 8 | Design System Migration (AgriSafe brand tokens) | — |
+| 9 | Charts & Visualization (Recharts across 4 modules) | — |
+| R | Four-Vertical Reorganization | — |
+| 10–12 | Data Ingestion vertical, Executive Dashboard, Live Data Feeding | — |
+| 13 | Regulatory cron pipeline | — |
+| 14 | MarketPulse Bloomberg Enhancement | — |
+| 15 | Content Intelligence + Source Registry (176 sources catalogued) | — |
+| 16a–16v | NA widgets, Embrapa AgroAPI, AgroAgenda, Dashboard Map, RJ web scan, Migrations 015–017 (FK + views), RiskSignals (R$ 582mi cross-vertical), Knowledge Mind Map, Pulso do Mercado redesign, Yahoo intl futures | — |
+| **17A–17F** | **5-entity foundation.** Migrations 018-026: legal_entities + farms + assets + commercial_activities + agrisafe_service_contracts + 7 junctions. Backfill 9,433 entities + 9,353 roles. Re-key 5 satellite tables. `entity-matcher.ts` algorithm-first matcher. Confidentiality enum on 31 tables. Views rebuilt with `security_invoker=on`. | 2026-04-06 |
+| **18** | **Painel improvements.** KPI cards open ChapterModal · Mapa de Inteligência Integrada with location-parsed news/events/weather · 30/90/Tudo date filter (now also gates news + RJ as past windows) · Notícias → Knowledge Base RAG ingestion. | 2026-04-07 |
+| **19A** | **Scraper Resilience Foundation.** Migration 027: `scraper_registry` + `scraper_runs` + `scraper_knowledge`. `runScraper()` wrapper validates output deterministically (no LLM). Saúde dos Scrapers tab + Dashboard "Dados" KPI. SCRAPER_PROTOCOL.md doc. | 2026-04-07 |
+| **19B** | **FAOSTAT macro.** Migration 028 + 029: macro_statistics table. `sync-faostat` covers soja/milho/café/trigo/algodão. MarketPulse → Contexto Macro tab live. | 2026-04-07 |
+| **20A** | **Inteligência de Insumos Oracle.** Migration 030: industry_products + active_ingredients + product_uses + v_oracle_brand_alternatives. `sync-agrofit-bulk` Sunday-only. Oracle UX with patented→commodity competitiveness ranking. | 2026-04-07 |
+| **21** | **Radar Competitivo CRUD + Harvey Ball.** Migration 031. Modal with sliders, web enrichment via `/api/competitors/enrich-web`. | 2026-04-07 |
+| **22** | **Notícias Agro CRUD.** Migration 032: news_sources table. Reading Room Chrome extension v3.0 auto-syncs into Supabase via `/api/reading-room/ingest`. | 2026-04-07 |
+| **23A** | **Eventos Agro unified.** Migration 034: events extended with source provenance + lat/lng + AI enrichment. AgroAdvance scraper. EventTracker reads from `/api/events-db`. Per-event Enrich button. | 2026-04-07 |
+| **24A** | **Diretório split-out + CRM KPI row.** Industries chapter created. RetailerKpiRow with 4 cards (Total + bar / Cities + concentration / In RJ / Mentioned in News). `/api/retailers/kpi-summary`. Sortable columns. | 2026-04-07 |
+| **24A1** | **Entity-matcher SHORT_NAME_ALLOWLIST.** ~25 audited iconic agribrands bypass the 10-char minimum. Inverted join in kpi-summary fixes the 1000-row PostgREST cap that hid COMIGO. | 2026-04-07 |
+| **24A2** | **Industries CSV backfill.** 256 industries + 163 inpEV members imported into legal_entities + entity_roles. `/api/industries` returns curated+imported union. IndustriesDirectory filter+sort UX. | 2026-04-07 |
+| **24B** | **Industries map + EntityMapShell + editable lenses.** Migration 035: cnpj_establishments. `/api/cnpj/establishments` on-demand BrasilAPI fetcher with inline 3-tier geocoding. `EntityMapShell.tsx` shared by both directories (Painel-style layer chips, terrain/satellite, fullscreen, recenter, "Buscar nesta área"). Migration 036: analysis_lenses table. Settings → Lentes de Análise editor. `/api/company-research` reads lens config from DB with code fallback. **Backfill: 1,699 establishments cached, 100% geocoded.** | 2026-04-08 |
+| **24C** | **Marco Reg upload + RJ CRUD + Source→Tables mapping.** `/api/regulatory/upload` + Inserir Norma + Fontes modals. `/api/rj-add` with BrasilAPI lookup + DDG debt scrape regex. DataSources `CATEGORY_TO_TABLES` map surfaced in domain expand + per-endpoint detail. | 2026-04-08 |
+| **24D** | **Marco Reg scrapers (CVM + BCB + key laws).** Migration 037 + scraper_knowledge note. `sync-cvm-agro` (direct CVM index walker, weekly), `sync-bcb-rural` (curated catalog, weekly), `sync-key-agro-laws` (CPR / Falências / Nova Lei do Agro seeder, weekly). | 2026-04-08 |
+| **24E** | **World Bank Pink Sheet.** Migration 038. `sync-worldbank-prices` parses CMO Annual Prices xlsx with header sanity check. 6 commodities × 15 years = 90 rows seeded. MarketPulse Macro tab gets a new "Preço Anual Mundial" line chart. | 2026-04-08 |
+| **24F** | **CNJ atos + news norm-citation extractor.** Migration 039. `sync-cnj-atos` walks atos.cnj.jus.br/api/atos JSON daily, regex-filters by agro keywords, upserts hits with body=CNJ. `src/lib/extract-norms-from-news.ts` 11-pattern extractor hooked into sync-agro-news inline. `backfill-norms-from-news.js` for historical reprocessing. **First run found Provimento 216/2026 in the live DB.** | 2026-04-08 |
+| **24D-historical** | **Full CVM walk.** `backfill-cvm-historical.js` walked all 868 docs (inst001..627 + resol001..241), surfaced 5 additional historical agro-relevant CVM Resoluções (165, 175, 184, 214 + Instrução 422 + 600). CVM body count: 1 → 6. | 2026-04-08 |
+| **27 (UI)** | **Source registry health check.** `check-source-registry.js` probed all 176 entries. Result: 125 active / 25 inactive / 24 error / 2 unchecked. Ingestão de Dados KPI strip now reflects real data instead of "166 unchecked". | 2026-04-08 |
 
 ---
 
-## Phase 18 — Painel (Dashboard) Improvements
+## Active Backlog (what's still open)
 
-From `documentation/TODO_2026-04-06.md`:
+Items grouped by intent. Priority order within each group is roughly decreasing.
 
-- [x] First-row KPI buttons open a **modal** highlighting what's important in each chapter, with a CTA button linking to the chapter ✅
-- [x] **Mapa de Inteligência Integrada** — natively parse location for every news, event, and weather record so they can all be plotted on the map ✅
-- [x] Map filter by **date range** (next 30d / next 90d) for events ✅
-- [x] Notícias in Painel pipe into the **Knowledge Base** (RAG ingestion) ✅
-- [/] Add new news sources via **LLM agents** (Claude tasks, Grok tasks) running on cloud, controlled by user from desktop (Foundation in `sync-llm-intel`)
-- [x] **Webapp version** of the whole app with a **chat feature** so the user can talk to an agent that pulls from the knowledge base (RAG implemented in `OracleChat.tsx`) ✅
+### Marco Regulatório / Compliance
 
----
+- **CNAE classifier on insert** — when a norm is inserted (manually or via CNJ scraper), run an algorithmic CNAE classifier to populate an `affected_companies` array. The norm-extractor lib already tags `affected_areas`; mapping those to CNAEs is the missing step.
+- **CVM date-extractor fix** — `cvm-422` and `cvm-175` get `published_at = today` because the date regex picks up CVM's "last updated" footer instead of the original publication date in `<p>` body. Look in the first body paragraph, not the page footer.
+- **Tighten CVM agro pattern** — `fundo.{0,30}agro` clause causes 2/6 false positives (cvm-165, cvm-600). Consider dropping it; the FIAGRO matches don't need it.
 
-## Phase 19 — Pulso do Mercado: Macro Context Layer
+### Ingestão de Dados
 
-The current Pulso do Mercado covers daily prices and futures. The user wants higher-latency macro data layered in, from official agencies — and the user explicitly raised that scrapers need to be well organized with a knowledge base / auto-correction protocol when sources change. So Phase 19 ships in two prongs: a resilience foundation (19A), then macro scrapers built on top of it (19B).
+- **Source CRUD UI** — sources currently live in `source-registry.json`. Add a `data_sources` table or extend the `news_sources` pattern, expose CRUD in DataSources tab.
+- **Per-source enable/disable toggle** — once source CRUD lands, write to `data_sources.active`.
+- **`source-registry.json` periodic re-check** — `check-source-registry.js` is one-shot today. Wire it into a Sunday-only cron so the registry stays fresh.
+- **Walk all 600 CVM inst###.html** — ✅ **DONE 2026-04-08** via `backfill-cvm-historical.js`.
 
-### Phase 19A — Scraper Resilience Foundation ✅ COMPLETE (2026-04-07)
+### Pulso de Mercado
 
-The pre-Phase-19 cron pipeline only used `logSync()` (a flat per-run pass/fail row in `sync_logs`) — no schema validation, no per-source health, no narrative memory of past failures. Adding 6 macro scrapers on top of that would compound the debt. This phase establishes the protocol every new scraper must follow.
+- **USDA PSD scrapers** — oilseeds (3.7 MB) + grains_pulses (2.7 MB) + cotton (459 KB) ZIPs all alive. Need a ZIP-CSV parser dep (`yauzl` or equivalent). Marginal value over FAOSTAT but adds country-level production/exports forecasts.
+- **OECD-FAO Agricultural Outlook xlsx** — URL changes annually, data is forward-projection. Skip until/unless the user explicitly asks for forecast data.
+- **MDIC ComexStat scraper** — Brazilian export volumes/values by HS code. The probe in Phase 24E showed comexstat.mdic.gov.br is alive but layout needs analysis.
+- **CONAB safra monthly reports** — Brazilian production by state and crop.
+- **FAOSTAT QL livestock domain** — boi-gordo coverage (currently mock).
 
-- [x] **Migration 027** — `scraper_registry`, `scraper_runs`, `scraper_knowledge` (3 tables, RLS enabled, deterministic schema_check JSONB)
-- [x] **`src/lib/scraper-runner.ts`** — `runScraper()` wrapper. Validates output rows against the registered schema (required keys + types + numeric ranges + enum values + row count), updates the registry's health (cadence-aware grace period: degraded after 1 failure beyond grace, broken after 3 consecutive), writes a `scraper_knowledge` row of kind=`failure` on every failure, and calls `logSync()` internally for backward compat with the DataSources UI. **Validation is 100% deterministic — no LLM in the loop (guardrail #1).**
-- [x] **`documentation/SCRAPER_PROTOCOL.md`** — documents the 4-phase auto-correction loop (detection → diagnosis → fix → validation), explicitly **human-driven** (LLMs may propose fixes in chat sessions, but the actual fix must be reviewed and committed by a human)
-- [x] **`/api/cron/sync-scraper-healthcheck`** — no-op smoke test that pings `api.github.com/zen` to validate the wiring end-to-end. Wired into `sync-all`. Safe to delete after Phase 19B has been green for 2+ weeks.
-- [x] **`/api/scraper-health` endpoint** — public read aggregator that joins `scraper_registry` × latest `scraper_runs` × open `scraper_knowledge` failures. Returns per-scraper health rows + 24h failure counts + summary `{healthy, degraded, broken, disabled}`.
-- [x] **DataSources → "Saúde dos Scrapers" tab** — surfaces the resilience layer in the existing Ingestão de Dados UI. Status badges, expandable rows showing definition + last run + validation errors, refresh button, sorted with broken/degraded floating to the top.
-- [x] **Dashboard "Dados" KPI tile augmented** — turns red when any scraper is `broken` and shows the count, amber when `degraded`. Click drills to the Scraper Health tab.
+### Inteligência de Insumos
 
-### Phase 19B — Macro Context First Slice (FAOSTAT) ✅ PARTIAL (2026-04-07)
+- **State sources** — per-state secretaria de agricultura lists for products approved at state level. Schema is ready (`industry_products.source_dataset` enum has `state_secretaria_*` slots). Priority states: MT, MS, GO, PR, RS, SP, MG, BA. Needs URL + selector verification per state.
+- **Manufacturer backfill** — walk distinct AGROFIT `titular_registro` values that don't match any pre-existing `industries` row, propose new entries.
+- **Real price data** — v0 Oracle uses `holder_count` as a proxy for "cheaper alternative". A real price comparison needs scraping retailer price tables.
+- **Region awareness** — kicks in once state secretariat scrapers ship.
 
-- [x] Register 6 key macro sources (USDA, FAO, OECD, MDIC, CONAB, World Bank) in `source-registry.json`
-- [x] **Migration 028** — create `macro_statistics` table (was wrongly claimed as "Migration 018" in the previous draft of this roadmap; that migration is actually `entity_model_core.sql` from Phase 17A). Includes guardrail #2 carve-out comment: macro statistics are commodity-dimension aggregates with no entity FK by design. Migration also seeds the `sync-faostat-prod` row in `scraper_registry`.
-- [x] **`/api/cron/sync-faostat`** — TS scraper for FAOSTAT v1 REST (`fenixservices.fao.org/faostat/api/v1/en/data/QCL`). Pulls last 5 years of crop production + export quantity for soybeans, maize, coffee, wheat, cotton, and sugar cane across World / Brazil / Argentina / USA / China. Algorithmic FAOSTAT code → commodity slug mapping in `src/lib/macro/faostat-codes.ts`. Built on `runScraper()`. Wired into `sync-all`. **Migration 029** widened the coverage from the initial soja+milho slice.
-- [x] **`/api/macro-stats`** — public read endpoint, ISR cached 1h, returns rows + `last_success_at` from `scraper_registry` so the UI can show MockBadge when data is stale (>2x cadence)
-- [x] **MarketPulse → Contexto Macro sub-tab** — `MacroAnalysis` component now fetches FAOSTAT data live from `/api/macro-stats` for soja, milho, café, trigo, and algodão. Pivots long-format rows into the existing wide chart shape, shows a "Live data" pulse badge when fresh, falls back to mock + MockBadge for cultures FAOSTAT doesn't cover (boi-gordo lives in QL livestock domain — separate scraper) or when stale. Source provenance footer shows the FAOSTAT `last_success_at` date.
-- [x] **Bilingual i18n** — `marketPulse.macroLiveBadge`, `macroSourceFootnote`, `macroNoData`, `macroNeverFetched` added to `src/lib/i18n.ts` (PT-BR + EN)
-- [x] **Deprecate** `src/scripts/scrape_macro.py` (USDA WASDE Python draft) — header comment, kept as reference, not deleted
-- [ ] **OECD-FAO Agricultural Outlook** scraper → world supply, demand, price projections
-- [ ] **USDA WASDE** monthly reports → US/world S&D estimates (port the Python draft once `scraper_knowledge` has accumulated lessons from FAOSTAT)
-- [ ] **MDIC ComexStat** scraper → Brazilian export volumes/values by HS code
-- [ ] **CONAB safra** monthly reports → Brazilian production by state and crop
-- [ ] **World Bank Pink Sheet** → monthly commodity price index (XLSX, fragile — keep for after WASDE)
-- [x] FAOSTAT coverage extensions: coffee, cotton, sugar cane, wheat ✅ (Migration 029 + faostat-codes.ts + slug map)
-- [ ] FAOSTAT QL (livestock) domain → boi-gordo coverage
+### Diretório (CRM build-out — Phase 24G)
 
----
+- **Companies expanding operations** — query Receita Federal `crawlers.cnpj_estabelecimentos` for recently opened CNPJs in agribusiness CNAEs by region.
+- **Per-company enrichment** — Google Maps Street View / Places photo of POS, OneNote meeting file imports, key persons, lead pipeline.
+- **3-tier confidentiality enforcement at query level** — column exists on 20+ tables (mig 022); reads don't filter on it yet.
+- **Knowledge Base + chat tier-aware filtering** — chat must never leak `agrisafe_confidential` content to a `public`-tier session.
+- **CRM workflow** — schedule meetings, find leads, push leads to Central de Conteúdo for newsletter / WhatsApp / email outreach.
 
-## Phase 20 — Inteligência de Insumos Build-Out
+### Knowledge / RAG / Webapp
 
-The current `AgInputIntelligence.tsx` was a wrapper around AGROFIT/Bioinsumos live search. Phase 20 turns it into an **oracle** for ag-input substitution: a normalized local DB of registered products that supports "give me cheaper alternatives to brand X for culture Y" queries via algorithmic JOIN through molecule + holder count.
+- **MCP server** that exposes the knowledge base to Claude / GPT / other LLM agents.
+- **RAG endpoint with confidentiality-tier-aware filtering** — pgvector retrieval respecting the user's tier permissions.
+- **Daily executive briefing** generated from the knowledge base.
+- **Anomaly narratives** when MarketPulse detects rupture (`Math.abs(change) > 2 * stddev`).
+- **Webapp build** — same UI as the Next.js app but with a permanent chat panel always available.
+- **Cron-driven LLM agents** — scan news/events for entity mentions and enrich the knowledge base.
 
-### Phase 20A — Federal AGROFIT slice ✅ COMPLETE (2026-04-07)
+### Eventos Agro (Phase 23B)
 
-- [x] **Federal source**: full AGROFIT registered products via Embrapa AgroAPI (`/agrofit/v1/search/produtos-formulados`). Bulk scraper iterates a fixed seed-query list (6 cultures + 12 active ingredients) and dedupes by `numero_registro` since the API has no list-all endpoint.
-- [x] **Migration 030** — extends `industry_products` from migration 014 with `formulation`, `url_agrofit`, `source_dataset`, `scraped_at`, `confidentiality`, plus a UNIQUE partial index on `agrofit_registro` for idempotent upserts. Adds 3 new normalized helper tables:
-  - `active_ingredients` — molecule master with `holder_count` denormalized cache (the substitution-competitiveness signal)
-  - `industry_product_ingredients` — product × ingredient junction
-  - `industry_product_uses` — junction normalizing AGROFIT's `indicacao_uso[]` into `(product_id, culture_slug, pest_slug)` rows for fast Oracle JOINs
-  - `v_oracle_brand_alternatives` — view that the Oracle endpoint queries
-  - Seeds `sync-agrofit-bulk` in `scraper_registry` (Phase 19A protocol)
-- [x] **`/api/cron/sync-agrofit-bulk`** — TypeScript scraper using `runScraper()`. Fetches via the existing `searchAgrofitProducts()` helper, normalizes into the 4 tables, anchors manufacturers (`titular_registro`) to the existing `industries` table via `agrofit_holder_names[]` lookup. Sunday-only in `sync-all` (~144 max API calls).
-- [x] **`/api/inputs/oracle`** — substitution query endpoint. JOIN through `v_oracle_brand_alternatives`. Groups by molecule, sorts by `holder_count desc` (most competitive first), classifies competitiveness as `patented` (1 holder) → `limited` (2-3) → `generic` (4-10) → `commodity` (10+). Algorithmic only — no LLM.
-- [x] **AgInputIntelligence.tsx Oracle tab** — new tab (default landing) with: culture select (8 cultures), pest free-text input, molecule cards showing competitiveness badge + holder/brand counts, expandable brand list per molecule with manufacturer + formulation + toxicity + AGROFIT deep link. Bilingual via `inputs.oracle*` keys.
+- **App Campo integration** — mobile-side API contract pending.
+- **Geocoding backfill** — populate `events.latitude`/`longitude` for the existing 47 rows so the Dashboard map plots them. Reuse `geocode-retailers.js` 3-tier pattern.
+- **`organizer_cnpj` linking** — when a scraper finds a CNPJ in the event description, route through `ensureLegalEntityUid()`.
+- **baldebranco scraper** — only revisit if (a) page becomes structured or (b) user authorizes a manual one-shot LLM extractor with human review.
 
-### Phase 20B — Deferred (needs user input)
+### Cleanup / Tech debt
 
-- [ ] **State sources**: per-state agriculture secretariat lists (each `secretaria de agricultura` publishes its own approved list). Priority states: MT, MS, GO, PR, RS, SP, MG, BA. Schema is ready (`industry_products.source_dataset` enum already includes `state_secretaria_*` values) — needs URLs and selectors per state, which require live verification.
-- [ ] **Manufacturer backfill**: enrich `industries.agrofit_holder_names[]` from the new bulk catalog. Currently the bulk scraper leaves `industry_id = null` when the AGROFIT `titular_registro` doesn't match any pre-existing holder name variant. A follow-up should walk distinct titulars and propose new `industries` rows.
-- [ ] **Real price data**: the v0 Oracle uses `holder_count` as a proxy for "cheaper alternative". A real price comparison needs scraping retailer price tables — not in scope for Phase 20 (depends on Phase 24/27).
-- [ ] **Region awareness**: ROADMAP originally said "culture + region → suggestions". The v0 ignores region because all federal AGROFIT records are nationally valid. Region-aware filtering kicks in once the state secretariat scrapers ship.
+- **Drop legacy `cnpj_raiz` / `cnpj_basico` text columns** once nothing reads them.
+- **Wire entity-matcher into `sync-events-na`, `sync-regulatory`, `archive-old-news`** — currently only sync-agro-news + reading-room/ingest run it.
+- **Refresh `KnowledgeMindMap.tsx` "current state" view** — the future-state nodes shown there are now real, not aspirational.
+- **Migrate the remaining `cnpj_raiz` reads** in RetailersDirectory.tsx, RegulatoryFramework.tsx, RecuperacaoJudicial.tsx, CompetitorRadar.tsx to `entity_uid`.
+- **Migrate `sync-events-na` to `runScraper()`** — currently still on `logSync()`.
+
+### Polish (Phase 30)
+
+- Sentry error monitoring · WCAG 2.1 accessibility · Dark mode toggle · Ctrl+K command palette · CSV/PDF export per module · Institutional PDF executive briefing format.
 
 ---
 
-## Phase 21 — Radar Competitivo: CRUD + Web Enrichment
+## Reference
 
-- [x] **Modal with CRUD** — add/edit/delete competitors directly from the UI (`CompetitorRadar.tsx` rewrite, follows the `RetailersDirectory.tsx` portal-modal pattern; new `/api/competitors/crud` route handles POST/PATCH/DELETE)
-- [x] Each company supports **manual notes** (textarea on the competitor row + modal) + **automatic web search** enrichment via `/api/competitors/enrich-web` (algorithmic Cheerio scrape + DuckDuckGo/Google CSE; optional OpenAI prose summary gated on `OPENAI_API_KEY`)
-- [x] Anchor competitors to the canonical `legal_entities` table via `entity_uid` — migration `031_competitors_crud_extensions.sql` adds `competitors.entity_uid` (FK), backfills from the 020 `source_ref` mapping, and the CRUD route calls `ensureLegalEntityUid()` whenever a `cnpj_basico` is supplied
-- [x] **Harvey Ball comparison matrix** — 6 dimensions (vertical, depth, precision, pulse, regulatory, ux) on a 0-4 scale, persisted as `harvey_ball_scores jsonb` and mirrored into the legacy `score_*` columns so the existing matrix view + `sync-competitors` cron stay coherent. Modal exposes 6 sliders; main page renders SVG Harvey Balls (no images).
+### Cron pipeline (`/api/cron/sync-all` → daily 08:00 UTC)
 
----
+**11 daily jobs:**
+1. `sync-market-data` — BCB SGS → `commodity_prices`, `market_indicators`
+2. `sync-agro-news` — 5 RSS feeds → `agro_news` (+ entity-matcher + Phase 24F norm extractor → `regulatory_norms`)
+3. `sync-recuperacao-judicial` — 2 legal RSS → `recuperacao_judicial`
+4. `archive-old-news` — OpenAI summaries + pgvector → `news_knowledge`
+5. `sync-regulatory` — 3 legal RSS → `regulatory_norms`
+6. `sync-cnj-atos` — CNJ JSON API → `regulatory_norms`
+7. `sync-events-na` — AgroAgenda → `events`
+8. `sync-competitors` — competitor enrichment → `competitor_signals`
+9. `sync-retailer-intelligence` — AI retailer intelligence → `retailer_intelligence`
+10. `sync-faostat` — FAOSTAT macro production → `macro_statistics`
+11. `sync-scraper-healthcheck` — no-op probe for `runScraper()` wiring
 
-## Phase 22 — Notícias Agro: CRUD + Reading-Room Integration
+**6 Sunday-only jobs:**
+12. `sync-industry-profiles` — industry profile enrichment
+13. `sync-agrofit-bulk` — federal AGROFIT crawl → `industry_products`
+14. `sync-events-agroadvance` — annual AgroAdvance list → `events`
+15. `sync-cvm-agro` — CVM legislacao walker → `regulatory_norms`
+16. `sync-bcb-rural` — curated BCB landing-page catalog → `regulatory_norms`
+17. `sync-key-agro-laws` — Lei CPR / Falências / Nova Lei do Agro seed → `regulatory_norms`
+18. `sync-worldbank-prices` — World Bank Pink Sheet xlsx → `macro_statistics`
 
-- [x] **Modal/list with CRUD** for news providers — `news_sources` table (migration 032) + `/api/news-sources/crud` (GET/POST/PATCH/DELETE) + sources panel + edit modal in `AgroNews.tsx`. Soft-delete only (`enabled=false`) because `agro_news.source_name` is plain text.
-- [x] Connect the existing **reading-room Chrome extension** to push articles into Supabase instead of localhost — `POST /api/reading-room/ingest` authenticated via `x-reading-room-secret` header (env `READING_ROOM_SECRET`). Articles land in `agro_news` with `confidentiality='agrisafe_published'`.
-- [x] **Embed the Chrome extension in this repo** — moved from `C:\Users\renat\.gemini\antigravity\projects\1 personal\reading-room` to `chrome-extensions/reading-room/`. Added a Market Hub settings panel (URL + secret + Save & Test), per-article "🌾 Push to Market Hub" button in the Detail modal, `mkthubSyncedAt` / `mkthubNewsId` stamping, and a 🌾 synced badge on the article cards. Manifest v3 host_permissions extended to `localhost:3000/3001` + `*.vercel.app`. README at `chrome-extensions/reading-room/README.md`. Producer (extension) and consumer (`/api/reading-room/ingest`) now ship together — no more drift.
-- [x] More source detail: `name`, `rss_url`, `website_url`, `category`, `language`, `enabled`, `source_type`, `last_fetched_at`, `last_error`, `error_count`, `created_at`, `updated_at`, `confidentiality`. Cron `sync-agro-news` now writes back `last_fetched_at` / `last_error` / `error_count` per source.
-- [x] Article entity-mention parser: KEPT the algorithm-first `entity-matcher.ts` pipeline (Phase 17D). Both `sync-agro-news` and `reading-room/ingest` run `loadMatchableEntities` → `matchEntitiesInText` → `writeEntityMentions`. No LLM extraction.
-- [x] `NEWS_SOURCES` constant in `src/data/news.ts` deprecated (kept exported for back-compat) and the cron now reads `news_sources` directly. Seed migration carries over the original 5 RSS feeds + a Reading Room sentinel row.
+### Database tables (live)
 
----
+**Core 5-entity model (Phase 17A — migrations 018-019)**
+- `legal_entities` (9,674) · `entity_roles` (9,609) · `entity_mentions` (143)
+- `farms` · `assets` · `commercial_activities` · `agrisafe_service_contracts` (all 0 — empty until ingestion)
+- `groups` · `group_members` · `farm_ownership` · `asset_parties` · `agrisafe_service_targets` (junctions)
 
-## Phase 23 — Eventos Agro: Missing Sources + Source Detail + AI Enrichment
+**Public-data layer**
+- Channels: `retailers` (9,328) · `retailer_locations` (24,275) · `cnpj_establishments` (1,699)
+- Industries: `industries` (18 curated, 256 imported via entity_roles) · `industry_products` (growing) · `retailer_industries` (392) · `active_ingredients` · `industry_product_uses` · `industry_product_ingredients`
+- Risk: `recuperacao_judicial` (131)
+- News + content: `agro_news` (203) · `news_sources` (6+) · `news_knowledge` · `knowledge_items` · `published_articles` (6) · `content_topics` (5) · `competitors` (7) · `competitor_signals` (13)
+- Regulatory: `regulatory_norms` (16: CVM 6 + BCB 6 + CONGRESSO 3 + CNJ 1)
+- Macro: `commodity_prices` (6) · `commodity_price_history` · `market_indicators` (6) · `macro_statistics` (96: WB 90 + USDA 6) · `commodity_prices_regional`
+- Events: `events`
+- Enrichment: `company_enrichment` · `company_notes` · `company_research` (with `analysis_type` column from Phase 24B)
+- Config: `analysis_lenses` (3: retailer, industry, generic)
+- Telemetry: `scraper_registry` (9 healthy) · `scraper_runs` · `scraper_knowledge` · `sync_logs`
 
-### Phase 23A — Schema, scrapers, UI refactor ✅ COMPLETE (2026-04-07)
+**Views (rebuilt in Phase 17B/17E with `security_invoker=on`)**
+- `v_retailer_profile` — retailer + RF enrichment + intelligence in one row
+- `v_retailers_in_rj` — retailers ∩ RJ (powers RiskSignals)
+- `v_entity_profile` — canonical "everything I know about entity X"
+- `v_oracle_brand_alternatives` — Oracle substitution view (Phase 20A)
 
-The Eventos Agro chapter previously read from `/api/events-na` (a live AgroAgenda proxy) — the Supabase `events` table that the cron populated was orphaned in the UI. Phase 23A unifies on the Supabase table as the single source of truth and adds the second cron source.
-
-- [x] **Migration 034** — extends `events` with `source_name`, `source_url` (the LISTING source, distinct from the event's own `website`), `organizer_cnpj`, `latitude`, `longitude`, `enriched_at`, `enrichment_summary`, `enrichment_source` (`gemini` | `openai` | `manual`). Backfills `source_name='AgroAgenda'` on every existing `na-*` row + `source_name='Manual'` on the 6 mig 006 seed rows. Seeds the `sync-events-agroadvance` row in `scraper_registry`. Seeds a `scraper_knowledge.kind='note'` row documenting why baldebranco.com.br is deferred (free-text paragraphs hostile to deterministic scraping per guardrail #1).
-- [x] **AgroAdvance scraper** — `/api/cron/sync-events-agroadvance` parses agroadvance.com.br/blog-feiras-e-eventos-agro-2026/ via deterministic Cheerio selectors (`<h4>` event name + `<p><strong>Data:</strong> ...` / `Local:` / `Site Oficial:` patterns), with Portuguese date-range regex (`DD a DD de MONTH de YYYY` + cross-month variants) and a 27-state name → 2-letter UF lookup. Uses `runScraper()` (Phase 19A protocol). ~27 events scraped per run. Wired into `sync-all` Sunday-only (annual reference page, no daily benefit).
-- [x] **`baldebranco` deferred with documented rationale** — page is free-text paragraphs under `<strong>MONTH</strong>` headers with no semantic field separation. Per guardrail #1 we are NOT shipping LLM-extraction. The `scraper_knowledge` row at scraper_id=`sync-events-agroadvance` kind=`note` records the analysis + two future paths (wait for structured page OR build a one-shot manual LLM extractor with human review).
-- [x] **`sync-events-na` stamps `source_name='AgroAgenda'` + `source_url`** on every upsert going forward. No full migration to `runScraper()` (existing crons stay on `logSync()` until they break, per the Phase 19A protocol).
-- [x] **`/api/events-db`** — new public read endpoint, ISR cached 10 min. Reads from the unified `events` table, maps each row to the existing `AgroEvent` UI shape (extracts city/UF from the `location` text), surfaces `source_name`, `enriched_at`, `enrichment_summary`, lat/lng. Returns per-source counts so the UI can render filter chips.
-- [x] **`/api/events/enrich`** — POST endpoint for the per-event Enrich button. Fetches the event's `website` URL via Cheerio, extracts main paragraph text + meta description (algorithmic), then *optionally* calls Gemini with a Portuguese system prompt to write a 2-3 paragraph executive summary. If `GEMINI_API_KEY` is missing, falls back to a manual summary built from the meta description. Writes back to `events.enrichment_summary` + `enriched_at` + `enrichment_source` (`gemini` | `manual`). LLM step is at the very END of the pipeline and only generates prose — never decides what to extract.
-- [x] **EventTracker.tsx refactor** — now reads from `/api/events-db` instead of `/api/events-na`. Source provenance badge per card (color-coded by source: AgroAgenda blue, AgroAdvance green, Manual grey, Reading Room indigo). New 🌟 AI badge when `enriched_at` is set. New "Enrich" / "Re-enrich" button per card (visible when `website` is set). Toast on enrich success/failure. New source filter chip row showing per-source counts. Calendar + list views also show source badges. Header now lists all sources dynamically with their counts. Footer attribution lists every source instead of hardcoded AgroAgenda.
-
-### Phase 23B — Deferred
-
-- [ ] **App Campo integration** — events feed becomes the calendar source for the AgriSafe field-sales mobile app. Requires the App Campo project's mobile-side API contract.
-- [ ] **Geocoding backfill** — populate `events.latitude` / `longitude` for the existing 47 rows so the Dashboard map can plot them. Reuse the 3-tier geocoding pattern from `geocode-retailers.js`.
-- [ ] **`organizer_cnpj` linking** — when a scraper finds a CNPJ in the event description, route through `ensureLegalEntityUid()` so each event ties to a `legal_entity` (Phase 17 alignment).
-- [ ] **baldebranco scraper** — only revisit if (a) the page becomes more structured or (b) the user explicitly authorizes a manual LLM extractor with human review.
-- [ ] **Migrate `sync-events-na` to `runScraper()`** — currently still on `logSync()`. Migrate when the scraper breaks or otherwise gets touched.
-
----
-
-## Phase 24 — Diretório de Canais → CRM Tool
-
-The current Diretório de Canais shows retailers from a static Excel import. The user wants it to become AgriSafe's **CRM**.
-
-### Phase 24A — Industries split-out + CRM indicator row ✅ COMPLETE (2026-04-07)
-
-- [x] **Split out Industries** into a new top-level chapter `Diretório de Indústrias` with its own sidebar entry, KPI strip, search, and drill-down to `IndustryProfile`. Removed the channels/industries tab toggle from `RetailersDirectory.tsx` — each chapter is now single-purpose.
-- [x] **New CRM-focused indicator row** at the top of `RetailersDirectory.tsx` (replaces the old static Total/Distribuidores/Cooperativas/Estados):
-  1. **Total Channels** + horizontal mini-bar by `grupo_acesso` with color legend
-  2. **Cities** with channels + top 5 by share (deduped on cnpj_raiz)
-  3. **In Recuperação Judicial** → click opens modal with full `RiskSignals` expanded view (38 channels, R$ 582mi exposure)
-  4. **Mentioned in News** → click opens `NewsMentionsModal` with retailer + headline + source + date list (3 retailers, 9 articles after the 24A1 matcher fix)
-- [x] New API route `/api/retailers/kpi-summary` returning all 4 KPIs in a single fetch. Uses the existing 5-entity model: `retailers.entity_uid` (mig 024) → `entity_mentions.entity_uid` (Phase 17E pattern) → `agro_news`. RJ count comes from `v_retailers_in_rj` (mig 023). 30-min ISR cache.
-- [x] Esc-to-close + click-overlay-to-close on the new modals.
-- [x] **Sortable column headers** on the channels list table (Empresa / Grupo / Class. / Faturamento / Porte). Server-side via Supabase `.order(field, ascending)`, resets to page 0 on sort change.
-
-### Phase 24A1 — News mentions matcher fix ✅ COMPLETE (2026-04-07, commit `e07416a`)
-
-- [x] **`SHORT_NAME_ALLOWLIST`** added to `src/lib/entity-matcher.ts` — bypasses the 10-char minimum for ~25 audited iconic agribusiness brands (cooperatives: COMIGO/COCAMAR/COAMO/C.VALE/COPLACANA/LAR; industries: BASF/BAYER/FMC/CORTEVA/SYNGENTA/AMVAC/YARA/NUTRIEN/BUNGE/CARGILL/ADM/LOUIS DREYFUS; agencies: EMBRAPA/CONAB/IBGE/BNDES/ABAG/ANDEF/...). Each entry is a deliberate audit decision — distinctive enough that false positives are unlikely.
-- [x] **Inverted join in `/api/retailers/kpi-summary`** — the old code fetched ALL retailer entity_uids first (~9,328) and filtered the mention set in JS, but the unbounded retailer query was silently truncated by PostgREST's 1000-row default cap, so any retailer ranked beyond 1000 (including COMIGO) was invisible. The fix fetches the small mention set first then looks up retailers via `.in()`.
-- [x] After running `backfill-news-mentions.ts`: 12 mentions (was 2), 3 distinct retailers in card #4 (COMIGO + CAPAL + SPACO AGRICOLA), 9 Tecnoshow COMIGO 2026 articles surfaced. Zero false positives.
-
-### Phase 24A2 — Industries CSV backfill ✅ COMPLETE (2026-04-07, commit `4fdf773`)
-
-- [x] **`src/scripts/backfill-industries-from-csv.js`** loads `local files/26-0407 industrias.csv` (cp1252-encoded) into the 5-entity model. Skips 17 rows marked `apagar` in the Comentários column. Idempotent SELECT-then-INSERT for `legal_entities` (works around the partial unique INDEX on `legal_entities.tax_id`). Writes RF metadata (capital_social, porte, CNAE, # filiais, inpEV membership, natureza_jurídica) into `entity_roles.metadata` jsonb because `company_enrichment.cnpj_basico` has an FK to `retailers.cnpj_raiz` (industries aren't retailers). **Result: 256 industries imported, 163 inpEV members, 0 failures.** Top by capital: SYNGENTA (R$ 9.18 bi), BASF (R$ 8.28 bi), CORTEVA (R$ 3.86 bi), SUMITOMO (R$ 3.12 bi), UPL (R$ 2.87 bi).
-- [x] **`/api/industries`** now returns the union of (a) curated 18 from the `industries` slug catalog plus (b) the 256 entity-role-based imports — **274 total**. Each item carries a `kind` discriminator. Includes a deterministic `cnaeToSegment()` regex helper that maps RF CNAE descriptions to segment buckets (defensivos / fertilizantes / sementes / biológicos / químicos / etc.) — pure regex, guardrail #1.
-- [x] **`IndustriesDirectory.tsx`** rewritten:
-  - KPI tiles: Industries / inpEV members / Segments / Linked retailers
-  - Filter row: segment dropdown, source filter (curated/imported), inpEV-only toggle
-  - Sort dropdown: Name A→Z / Z→A / Capital ↓↑ / Branches ↓
-  - Search matches name, CNPJ, CNAE description, segment
-  - Card render branches on `kind`: curated keeps the rich layout with drill-down; imported shows CNAE + CNPJ + capital + branch count + green inpEV badge
-- [x] Phase 22 source-registry additions merged into `src/data/source-registry.json` (was sitting in scratch `phase22-registry-additions.json` at the project root since 2026-04-07). Empty `phase21-registry-additions.json` deleted.
-
-### Phase 24B (deferred) — Per-company enrichment expansion
-
-- [ ] **Highlights**:
-  - Companies in Recuperação Judicial (already done — `RiskSignals.tsx`)
-  - Companies **expanding operations** — query Receita Federal (`crawlers.cnpj_estabelecimentos`) for recently opened CNPJs in agribusiness CNAEs by region
-  - Companies mentioned in main news portals (NA, Agribiz, neofeed, Bloomberg Línea/agro, Globo Rural, etc.) — populates entity_mentions which then powers KPI card #4
-- [ ] **Per-company enrichment**:
-  - Inpev cross-reference (defensive container recycling membership)
-  - Google Maps Street View / Places photo of the POS
-  - AgriSafe data imported from OneNote meeting files
-  - Key persons, interests, meeting history, lead status
-- [ ] **3-tier confidentiality model** enforced via the existing `confidentiality` column (mig 022 added the column to 20+ tables; queries don't yet filter on it)
-- [ ] **Knowledge Base integration** — chat / RAG queries respect tier permissions
-- [ ] **CRM workflow**: schedule meetings, find leads, push leads to **Central de Conteúdo** for newsletter / WhatsApp / email outreach
-
----
-
-## Phase 25 — Marco Regulatório: Manual Inserts + Source CRUD
-
-- [ ] Button to **upload a new law / regulation** (PDF or text) and add it to `regulatory_norms`
-- [ ] Modal listing all main legal sources with CRUD
-- [ ] When a norm is inserted, run an algorithmic CNAE classifier to populate `affected_companies`
-
----
-
-## Phase 26 — Recuperação Judicial: Easier Backfilling + Debt Scraping
-
-- [ ] **Easy CNPJ insertion** — paste a CNPJ, fetch Receita Federal, classify CNAE, insert into `recuperacao_judicial` if not present
-- [ ] **Debt amount scraper** — for each RJ case, scrape the judicial process page (e-SAJ / TJ portals) OR run a DuckDuckGo / Google search and let an algorithmic regex pull "R$ X milhões" from snippets. LLM only as last-resort summarizer.
-- [ ] Backfill the missing companies the user has flagged
-
----
-
-## Phase 27 — Ingestão de Dados: Source CRUD + Usage Visibility
-
-- [ ] CRUD for sources in the Source Registry UI
-- [ ] **Usage map**: which Supabase tables each source feeds (visual graph)
-- [ ] **Health tracking**: last successful fetch, error count, latency, sample row count
-- [ ] Per-source enable/disable toggle (writes to `source_registry.active`)
-
----
-
-## Phase 28 — Knowledge Architecture & RAG Foundation (carryover from old Phase 16)
-
-- [x] 4-tier knowledge architecture (already enforced via `knowledge_items.tier`)
-- [x] pgvector enabled
-- [x] `news_knowledge` table with embeddings
-- [x] Knowledge Base module with semantic search
-- [x] Knowledge Mind Map visualization
-- [ ] **MCP server** that exposes the knowledge base to Claude / GPT / other LLM agents
-- [ ] **RAG endpoint** with confidentiality-tier-aware filtering
-- [ ] Daily executive briefing generated from the knowledge base
-- [ ] Anomaly narratives when MarketPulse detects rupture
-
----
-
-## Phase 29 — AI Integration & Virtual Coworker (carryover from old Phase 17)
-
-- [ ] OpenAI / Gemini / Claude content generation for first-draft articles from the topic pipeline
-- [ ] Conversational chat interface (chat-style knowledge query) with RAG + tier permissions
-- [ ] **Webapp version** of the entire app — same UI but web-only, with the chat panel always available
-- [ ] Cron-driven LLM agents that scan news/events for entity mentions and enrich the knowledge base
-
----
-
-## Phase 30 — Cross-Platform Intelligence & Polish
-
-- [ ] Cross-reference RJ entities with Admin Portal via CNPJ
-- [ ] Commodity exposure alerts in Admin Dashboard
-- [ ] Market context panel when commercial team views a prospect
-- [ ] Sentry error monitoring
-- [ ] WCAG 2.1 accessibility compliance
-- [ ] Dark mode toggle
-- [ ] Ctrl+K command palette
-- [ ] CSV/PDF export per module
-- [ ] Institutional PDF export (executive briefing format)
-
----
-
-## Cron Pipeline (Current)
-
-| # | Job | Route | Target | Status |
-|---|-----|-------|--------|--------|
-| 1 | sync-market-data | `/api/cron/sync-market-data` | `commodity_prices`, `market_indicators` | ✅ Active |
-| 2 | sync-agro-news | `/api/cron/sync-agro-news` | `agro_news` | ✅ Active |
-| 3 | sync-recuperacao-judicial | `/api/cron/sync-recuperacao-judicial` | `recuperacao_judicial` | ✅ Active |
-| 4 | archive-old-news | `/api/cron/archive-old-news` | `news_knowledge` | ✅ Active |
-| 5 | sync-regulatory | `/api/cron/sync-regulatory` | `regulatory_norms` | ✅ Active |
-| 6 | sync-events-na | `/api/cron/sync-events-na` | `events` | ✅ Active |
-| 7 | sync-competitors | `/api/cron/sync-competitors` | `competitor_signals` | ✅ Active |
-| 8 | sync-retailer-intelligence | `/api/cron/sync-retailer-intelligence` | `retailer_intelligence` | ✅ Active |
-| 9 | sync-industry-profiles | `/api/cron/sync-industry-profiles` | `industries`, `industry_products` | Sundays only |
-| — | sync-prices-na | `/api/cron/sync-prices-na` | (live route, no Supabase write) | Active |
-
-**Non-cron live routes:** `/api/prices-na`, `/api/news-na`, `/api/events-na`, `/api/intl-futures`, `/api/agroapi/*`, `/api/rj-scan`
-
----
-
-## Sidebar Structure (Target after Phase 24)
+### Sidebar structure (current)
 
 ```
 Painel (Executive Overview)
 
 INGESTÃO DE DADOS
-  Fontes de Dados (CRUD)
+  Fontes de Dados (176 sources, Saúde dos Scrapers tab)
 
 INTELIGÊNCIA DE MERCADO
-  Pulso do Mercado
-  Inteligência de Insumos (oracle)
-  Radar Competitivo (CRUD)
-  Notícias Agro (CRUD)
-  Eventos Agro
+  Pulso do Mercado          (BCB + NA + Yahoo + FAOSTAT + WB Pink Sheet)
+  Inteligência de Insumos   (Oracle)
+  Radar Competitivo         (CRUD + Harvey Ball)
+  Notícias Agro             (CRUD + Reading Room)
+  Eventos Agro              (AgroAgenda + AgroAdvance + AI enrich)
 
-DIRETÓRIO  ← split from "Inteligência de Mercado"
-  Diretório de Canais (CRM)
-  Diretório de Indústrias (NEW)
+DIRETÓRIO
+  Diretório de Canais       (CRM-style)
+  Diretório de Indústrias   (list + map + filiais)
 
 MARKETING & CONTEÚDO
   Central de Conteúdo
 
 REGULATÓRIO
-  Marco Regulatório
-  Recuperação Judicial
+  Marco Regulatório         (16 norms + insert + sources modal)
+  Recuperação Judicial      (131 cases + add CNPJ + DDG debt scrape)
 
 BASE DE CONHECIMENTO
   Busca Semântica
   Mapa de Conexões
-  Chat (RAG, Phase 29)
 
 CONFIGURAÇÕES
-  Help / About
+  Lentes de Análise (editable prompts) · Reading Room install · Help
 ```
-
----
-
-## Database Tables (Live, post-Phase 17)
-
-### Core 5-entity model (Phase 17A — migrations 018-019)
-
-| Table | Rows | Purpose |
-|-------|------|---------|
-| `legal_entities` | 9,433 | The universal "actor" — single CNPJ/CPF row with multi-role attachment via `entity_roles` |
-| `farms` | 0 | Physical land units (`car_code`, `incra_code`, centroid, area). Empty until INCRA/CAR ingestion |
-| `assets` | 0 | Financial instruments (CPR / loan / commercial note / insurance / barter). Empty until ingestion |
-| `commercial_activities` | 0 | Commercial transactions (ag input sale / barter / grain trade / livestock sale). Empty until ingestion |
-| `agrisafe_service_contracts` | 0 | AgriSafe service contracts. Empty until CRM ingestion (Phase 24) |
-| `entity_roles` | 9,353 | Many-to-many: which entity holds which role(s). 9,328 retailer + 18 industry + 7 competitor |
-| `groups` | 0 | Named collections of entities (clients, cooperatives, portfolios). Empty until CRM ingestion |
-| `group_members` | 0 | Group membership junction |
-| `farm_ownership` | 0 | Multi-shareholder farms — `(farm_uid, entity_uid, share_pct)` |
-| `asset_parties` | 0 | Multi-stakeholder assets — `(asset_uid, entity_uid, party_role)` |
-| `agrisafe_service_targets` | 0 | Polymorphic service targeting `(target_type, target_id)` |
-| `entity_mentions` | 120 | Cross-cutting graph edges. **118 from RJ + 2 from agro_news** (algorithm-matched, Phase 17D) |
-
-### Public-data layer (anchored to entity_uid post-Phase 17)
-
-| Table | Rows | Source | entity_uid? |
-|-------|------|--------|-------------|
-| `commodity_prices` | 6 | BCB SGS | — (commodity dimension) |
-| `commodity_price_history` | growing | BCB SGS | `commodity_prices.id` (FK) |
-| `market_indicators` | 6 | BCB SGS | — |
-| `agro_news` | 124 | RSS feeds | linked via `entity_mentions` (2 rows) |
-| `events` | 26 | NA / AgroAgenda | needs `entity_mentions` hook (deferred) |
-| `regulatory_norms` | 1 | RSS legal feeds | needs `entity_mentions` hook (deferred) |
-| `recuperacao_judicial` | 118 | RSS + Receita Federal seed | `entity_uid` ✓ (Phase 17F, mig 026) |
-| `retailers` | 9,328 | Excel + Receita Federal | `entity_uid` ✓ (Phase 17C, mig 024) |
-| `retailer_locations` | 24,275 | Excel + 3-tier geocoder | `cnpj_raiz` only (deferred to cleanup) |
-| `company_enrichment` | 2 | BrasilAPI / CNPJ.ws / ReceitaWS | `entity_uid` ✓ (Phase 17B, mig 021) + new rows via API helper (17C) |
-| `company_notes` | 2 | User input | `entity_uid` ✓ (Phase 17B + 17C) |
-| `company_research` | 3 | DuckDuckGo / Google CSE | `entity_uid` ✓ (Phase 17B + 17C) |
-| `industries` | 18 | Manual + AGROFIT | promoted to `legal_entities` with `role_type='industry'` |
-| `retailer_industries` | 392 | Manual junction | both `retailer_entity_uid` + `industry_entity_uid` ✓ (Phase 17B, mig 021) |
-| `industry_products` | 0 | AGROFIT (planned) | `industry_id` (FK) ✓ |
-| `retailer_intelligence` | 2 | Gemini analysis (legacy) | `entity_uid` ✓ (Phase 17B) |
-| `competitors` / `competitor_signals` | 7 / 13 | Seed + news scan | promoted to `legal_entities` with `role_type='competitor'` |
-| `news_knowledge` | 0 | Archive pipeline | needs `entity_mentions` |
-| `knowledge_items` | 49 | Cross-vertical index (pgvector) | needs `entity_mentions` |
-| `published_articles` | 6 | AgriSafe content | — |
-| `content_topics` | 5 | Editorial pipeline | `published_article_id` (FK) ✓ |
-| `sync_logs` | 13 | All crons | — |
-
-### Views (rebuilt in Phase 17B/17E with `security_invoker=on`)
-
-| View | Keyed on | Purpose |
-|------|----------|---------|
-| `v_retailer_profile` | `entity_uid` | Retailer + Receita Federal enrichment + AgriSafe intelligence in one row |
-| `v_retailers_in_rj` | `entity_uid` | Retailers intersected with RJ filings (powers `RiskSignals.tsx`) |
-| `v_entity_profile` | `entity_uid` | NEW canonical "everything I know about entity X" — roles array + retailer facts + RF enrichment + intelligence + RJ state |
 
 ---
 
@@ -457,9 +224,9 @@ CONFIGURAÇÕES
 
 Market Hub is **not just a dashboard** — it is the knowledge engine of the AgriSafe ecosystem:
 
-1. **Data is ingested** algorithmically from public sources (~166 catalogued, ~120 active) — **no LLM scraping**
-2. **Knowledge is organized** around the 5 core entities (company, rural producer, farm, financial operation, ag-input transaction) and the 4 confidentiality tiers (public, agrisafe_published, agrisafe_confidential, client_confidential)
-3. **Insights are generated** by cross-referencing entities (e.g. `v_retailers_in_rj` revealed R$ 582.6M of distressed channels in the Diretório)
+1. **Data is ingested** algorithmically from public sources (176 catalogued, ~125 active) — **no LLM scraping**
+2. **Knowledge is organized** around the 5 core entities and the 4 confidentiality tiers
+3. **Insights are generated** by cross-referencing entities (e.g. `v_retailers_in_rj` revealed R$ 582.6M of distressed channels)
 4. **Content is created** — LinkedIn articles, campaigns, positioning — feeding back into the AgriSafe brand
 5. **The brain is built** — RAG structure that becomes AgriSafe's digital twin, accessible via a webapp chat interface
 
@@ -467,3 +234,17 @@ The platform serves multiple AgriSafe products downstream:
 - **Admin Portal** — credit risk, commercial intelligence
 - **App Campo** — field sales agenda, client visits, calendar from Eventos Agro
 - **Newsletter / WhatsApp outreach** — driven by Central de Conteúdo + CRM leads from Diretório de Canais
+- **External chat** (planned) — webapp UI with permanent chat panel over the knowledge base, RAG with tier-aware permissions
+
+---
+
+## Hard Guardrails (non-negotiable)
+
+See `CLAUDE.md` for the full text.
+
+1. **Algorithms first, LLMs last** — every "extract from page" or "match a CNPJ" task uses regex/Cheerio/SQL, never an LLM. LLMs are reserved for prose generation and chat.
+2. **Everything links to the 5 entities** — every new table either FKs to one of the 5 nodes or writes to `entity_mentions`.
+3. **Public data only** — client PII / financial records / proprietary data are tagged via the `confidentiality` enum and never live in the public layer.
+4. **Single Vercel cron** (Hobby plan limit) — `sync-all` consolidates all jobs.
+5. **Bilingual always** — every UI string in PT-BR + EN via `src/lib/i18n.ts`.
+6. **MockBadge required** when a section falls back to mock data.

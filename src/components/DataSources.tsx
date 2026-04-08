@@ -97,6 +97,36 @@ const CATEGORY_TO_MODULE: Record<string, string> = {
   "outros":         "news"
 };
 
+// Phase 24C — source category → Supabase tables it likely enriches.
+//
+// The user follow-up asked for a way to see "which tables this source feeds".
+// Source-registry.json has 176 entries with no per-source table annotation,
+// so a per-category map is the right granularity for now: it captures the
+// 5-entity model intent, mirrors the cron pipeline in CLAUDE.md, and is
+// cheap to maintain (one place to update when a new ingest target appears).
+//
+// For precise per-scraper mapping (e.g. "sync-faostat-prod → macro_statistics
+// when measure_type='production'"), the Scraper Health tab already shows
+// `target_table` from `scraper_registry`. This map is the broad-strokes
+// counterpart that works across all 176 catalog entries.
+const CATEGORY_TO_TABLES: Record<string, string[]> = {
+  financeiro:      ["commodity_prices", "commodity_prices_regional", "market_indicators"],
+  agropecuaria:    ["commodity_prices", "commodity_prices_regional", "macro_statistics"],
+  indicadores:     ["market_indicators", "macro_statistics"],
+  insumos:         ["industry_products", "industries", "active_ingredients"],
+  clima:           ["weather_observations"],
+  logistica:       ["commodity_prices_regional"],
+  noticias:        ["agro_news", "news_knowledge", "entity_mentions"],
+  regulacao:       ["regulatory_norms"],
+  juridico:        ["recuperacao_judicial", "regulatory_norms"],
+  socioambiental:  ["farms"],
+  agronomico:      ["industry_products", "industries"],
+  fiscal:          ["legal_entities", "company_enrichment"],
+  geografias:      ["retailer_locations", "cnpj_establishments"],
+  cadastral:       ["retailers", "retailer_locations", "cnpj_establishments", "legal_entities"],
+  outros:          [],
+};
+
 /**
  * Safely gets the module label from translations
  */
@@ -585,6 +615,10 @@ function DomainRow({ group, lang, isExpanded, onToggle }: {
                   </span>
                 )}
               </div>
+
+              {/* Phase 24C — Tables this domain enriches */}
+              <DomainTables group={group} lang={lang} />
+
               {/* Endpoint list */}
               <div className="space-y-1.5">
                 {group.sources.map(s => <EndpointDetail key={s.id} s={s} lang={lang} />)}
@@ -594,6 +628,46 @@ function DomainRow({ group, lang, isExpanded, onToggle }: {
         </tr>
       )}
     </>
+  );
+}
+
+// Phase 24C — Domain → tables panel.
+//
+// Aggregates the table mapping across every source in this domain so the
+// user can see at a glance which Supabase tables this domain feeds — the
+// answer to the TODO question "which information was used to enrich the
+// database, which tables".
+function DomainTables({ group, lang }: { group: DomainGroup; lang: Lang }) {
+  const tables = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of group.sources) {
+      const cats = CATEGORY_TO_TABLES[s.category] || [];
+      for (const t of cats) set.add(t);
+    }
+    return Array.from(set).sort();
+  }, [group]);
+
+  if (tables.length === 0) return null;
+
+  return (
+    <div className="flex items-start gap-2 text-[11px] py-1.5 px-2 bg-brand-surface/30 border border-brand-light/40 rounded">
+      <Database size={11} className="text-brand-primary mt-0.5 shrink-0" />
+      <div className="flex-1">
+        <span className="text-[10px] font-bold text-brand-primary uppercase tracking-wider mr-2">
+          {lang === "pt" ? "Tabelas alimentadas" : "Tables enriched"}
+        </span>
+        <span className="inline-flex flex-wrap gap-1 align-middle">
+          {tables.map((t) => (
+            <span
+              key={t}
+              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white border border-brand-primary/20 text-neutral-700"
+            >
+              {t}
+            </span>
+          ))}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -615,6 +689,8 @@ function HealthBadge({ status, active, error, inactive }: {
 
 function EndpointDetail({ s, lang }: { s: RegistrySource; lang: Lang }) {
   const freqInfo = FREQ_LABELS[s.frequency] || { pt: s.frequency, en: s.frequency };
+  // Phase 24C — derive target tables from category map
+  const targetTables = CATEGORY_TO_TABLES[s.category] || [];
 
   return (
     <div className="flex items-start gap-3 px-3 py-2 rounded-md bg-white border border-neutral-100 hover:border-neutral-200 transition-colors">
@@ -649,6 +725,23 @@ function EndpointDetail({ s, lang }: { s: RegistrySource; lang: Lang }) {
         </div>
         {s.description && (
           <p className="text-[11px] text-neutral-500 mt-0.5 line-clamp-2">{s.description}</p>
+        )}
+        {/* Phase 24C — target Supabase tables (only when source is in use) */}
+        {s.used_in_app && targetTables.length > 0 && (
+          <div className="flex items-center gap-1 mt-1 flex-wrap">
+            <Database size={9} className="text-brand-primary/60" />
+            <span className="text-[9px] font-bold text-brand-primary/70 uppercase tracking-wider mr-0.5">
+              {lang === "pt" ? "Tabelas:" : "Tables:"}
+            </span>
+            {targetTables.map((t) => (
+              <span
+                key={t}
+                className="text-[9px] font-mono px-1.5 py-0.25 rounded bg-brand-surface/60 text-brand-primary/90 border border-brand-primary/15"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
         )}
         <a href={s.url} target="_blank" rel="noopener noreferrer"
           className="text-[11px] text-brand-primary hover:text-brand-dark flex items-center gap-1 mt-0.5 break-all">
