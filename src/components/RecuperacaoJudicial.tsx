@@ -7,6 +7,7 @@ import {
   Scale, ExternalLink, RefreshCw, Loader2, Search,
   ChevronLeft, ChevronRight, AlertTriangle, Building2, MapPin,
   BarChart3, ChevronDown, ChevronUp, DollarSign, Globe, Zap,
+  Plus, X, Sparkles,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -64,6 +65,9 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
   // Web scan
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<{ total: number; inserted: number } | null>(null);
+
+  // Phase 24C — Manual add modal
+  const [showAddModal, setShowAddModal] = useState(false);
 
   // Fetch all items for stats (lightweight)
   useEffect(() => {
@@ -198,6 +202,13 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
           {isMock && <MockBadge />}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-surface text-brand-primary border border-brand-primary/30 rounded-md hover:bg-brand-primary/10 text-[13px] font-semibold transition-colors"
+          >
+            <Plus size={14} />
+            {lang === "pt" ? "Adicionar CNPJ" : "Add CNPJ"}
+          </button>
           <button
             onClick={async () => {
               setScanning(true);
@@ -538,6 +549,314 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
           </div>
         </div>
       )}
+
+      {/* Phase 24C — Add by CNPJ modal */}
+      {showAddModal && (
+        <AddRJModal
+          lang={lang}
+          onClose={() => setShowAddModal(false)}
+          onSaved={() => {
+            setShowAddModal(false);
+            fetchAll();
+            fetchItems();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Phase 24C — Add by CNPJ modal ────────────────────────────────────────
+
+function AddRJModal({
+  lang,
+  onClose,
+  onSaved,
+}: {
+  lang: Lang;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [cnpj, setCnpj] = useState("");
+  const [entityName, setEntityName] = useState("");
+  const [state, setState] = useState("");
+  const [entityType, setEntityType] = useState("outros");
+  const [status, setStatus] = useState("em_andamento");
+  const [filingDate, setFilingDate] = useState(new Date().toISOString().slice(0, 10));
+  const [debtValue, setDebtValue] = useState<string>("");
+  const [court, setCourt] = useState("");
+  const [caseNumber, setCaseNumber] = useState("");
+  const [summary, setSummary] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [scrapeDebt, setScrapeDebt] = useState(true);
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [enrichmentNote, setEnrichmentNote] = useState<string | null>(null);
+
+  // Esc to close
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const submit = async () => {
+    setError(null);
+    setEnrichmentNote(null);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/rj-add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cnpj: cnpj.replace(/\D/g, ""),
+          entity_name: entityName || undefined,
+          state: state || undefined,
+          entity_type: entityType,
+          status,
+          filing_date: filingDate,
+          debt_value: debtValue ? Number(debtValue.replace(/\./g, "").replace(",", ".")) : undefined,
+          court: court || undefined,
+          case_number: caseNumber || undefined,
+          summary: summary || undefined,
+          source_url: sourceUrl || undefined,
+          scrape_debt: scrapeDebt && !debtValue,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao salvar");
+
+      // If the backend enriched fields, surface a brief note before closing
+      const notes: string[] = [];
+      if (data.enriched_from?.brasilapi) {
+        notes.push(lang === "pt" ? "razão social via BrasilAPI" : "company name via BrasilAPI");
+      }
+      if (data.enriched_from?.debt_scraped) {
+        notes.push(lang === "pt" ? "dívida extraída de notícias" : "debt scraped from news");
+      }
+      if (notes.length > 0) {
+        setEnrichmentNote(notes.join(" · "));
+        // Brief delay so user sees the badge before the modal closes
+        setTimeout(() => onSaved(), 1500);
+      } else {
+        onSaved();
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-start justify-center bg-black/40 p-4 pt-10 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200">
+          <h3 className="text-[15px] font-bold text-neutral-900 flex items-center gap-2">
+            <Plus size={16} className="text-brand-primary" />
+            {lang === "pt" ? "Adicionar Recuperação Judicial" : "Add Judicial Recovery"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-3">
+          <p className="text-[11px] text-neutral-500 leading-relaxed">
+            {lang === "pt"
+              ? "Informe o CNPJ. A razão social e o estado serão preenchidos automaticamente via BrasilAPI; o valor da dívida será extraído de notícias quando possível. Você pode editar qualquer campo antes de salvar."
+              : "Enter the CNPJ. Company name and state will auto-populate via BrasilAPI; debt amount will be scraped from news when possible. You can edit any field before saving."}
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <RJField label="CNPJ">
+              <input
+                value={cnpj}
+                onChange={(e) => setCnpj(e.target.value)}
+                placeholder="00.000.000/0001-00"
+                className="w-full px-2 py-1.5 text-[12px] font-mono bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              />
+            </RJField>
+            <RJField label={lang === "pt" ? "Estado" : "State"}>
+              <select
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              >
+                <option value="">{lang === "pt" ? "Auto (via CNPJ)" : "Auto (via CNPJ)"}</option>
+                {["SP","MT","MS","GO","MG","PR","RS","BA","TO","MA","PA","PI","SC","ES","CE","PE","RN","PB","AL","SE","DF","RO","AM","RR","AP","AC"].map((uf) => (
+                  <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </select>
+            </RJField>
+          </div>
+
+          <RJField
+            label={lang === "pt" ? "Razão Social" : "Company Name"}
+            hint={lang === "pt" ? "deixe em branco para auto-preencher" : "leave blank to auto-fill"}
+          >
+            <input
+              value={entityName}
+              onChange={(e) => setEntityName(e.target.value)}
+              placeholder={lang === "pt" ? "será preenchido via BrasilAPI" : "will be filled via BrasilAPI"}
+              className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+            />
+          </RJField>
+
+          <div className="grid grid-cols-3 gap-3">
+            <RJField label={lang === "pt" ? "Tipo" : "Type"}>
+              <select
+                value={entityType}
+                onChange={(e) => setEntityType(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              >
+                {Object.entries(ENTITY_TYPES).map(([key, val]: any) => (
+                  <option key={key} value={key}>{lang === "pt" ? val.pt : val.en}</option>
+                ))}
+              </select>
+            </RJField>
+            <RJField label="Status">
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              >
+                {Object.entries(RJ_STATUS).map(([key, val]: any) => (
+                  <option key={key} value={key}>{lang === "pt" ? val.pt : val.en}</option>
+                ))}
+              </select>
+            </RJField>
+            <RJField label={lang === "pt" ? "Data do pedido" : "Filing date"}>
+              <input
+                type="date"
+                value={filingDate}
+                onChange={(e) => setFilingDate(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              />
+            </RJField>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <RJField label={lang === "pt" ? "Vara" : "Court"}>
+              <input
+                value={court}
+                onChange={(e) => setCourt(e.target.value)}
+                placeholder={lang === "pt" ? "ex: 1ª Vara Empresarial SP" : "e.g. 1st Business Court SP"}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              />
+            </RJField>
+            <RJField label={lang === "pt" ? "Nº processo" : "Case number"}>
+              <input
+                value={caseNumber}
+                onChange={(e) => setCaseNumber(e.target.value)}
+                placeholder="0000000-00.0000.0.00.0000"
+                className="w-full px-2 py-1.5 text-[12px] font-mono bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              />
+            </RJField>
+          </div>
+
+          <RJField
+            label={lang === "pt" ? "Dívida (R$)" : "Debt (BRL)"}
+            hint={lang === "pt" ? "deixe em branco para extrair de notícias" : "leave blank to scrape from news"}
+          >
+            <input
+              value={debtValue}
+              onChange={(e) => setDebtValue(e.target.value)}
+              placeholder={lang === "pt" ? "ex: 25000000 ou 25.000.000" : "e.g. 25000000"}
+              className="w-full px-2 py-1.5 text-[12px] font-mono bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+            />
+          </RJField>
+
+          <label className="flex items-center gap-2 text-[11px] text-neutral-600">
+            <input
+              type="checkbox"
+              checked={scrapeDebt}
+              disabled={!!debtValue}
+              onChange={(e) => setScrapeDebt(e.target.checked)}
+            />
+            <Sparkles size={11} className="text-purple-500" />
+            {lang === "pt"
+              ? "Tentar extrair dívida automaticamente de notícias quando o campo estiver vazio"
+              : "Auto-extract debt from news snippets when field is empty"}
+          </label>
+
+          <RJField label={lang === "pt" ? "Resumo" : "Summary"}>
+            <textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              rows={3}
+              placeholder={lang === "pt" ? "Contexto curto (opcional)" : "Short context (optional)"}
+              className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+            />
+          </RJField>
+
+          <RJField label={lang === "pt" ? "URL da fonte" : "Source URL"}>
+            <input
+              type="url"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              placeholder="https://..."
+              className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+            />
+          </RJField>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-neutral-200 bg-neutral-50/50">
+          {error && <span className="text-[11px] text-red-600 mr-auto">{error}</span>}
+          {enrichmentNote && (
+            <span className="text-[11px] text-emerald-600 font-medium mr-auto flex items-center gap-1">
+              <Sparkles size={11} />
+              {enrichmentNote}
+            </span>
+          )}
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 rounded text-[12px] font-semibold border border-neutral-200 text-neutral-600 hover:bg-neutral-100 transition-all"
+          >
+            {lang === "pt" ? "Cancelar" : "Cancel"}
+          </button>
+          <button
+            onClick={submit}
+            disabled={!cnpj.trim() || saving}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-[12px] font-bold bg-brand-primary text-white hover:bg-brand-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+            {lang === "pt" ? "Salvar" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RJField({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1 block">
+        {label}
+        {hint && <span className="ml-1 normal-case text-neutral-400">({hint})</span>}
+      </label>
+      {children}
     </div>
   );
 }

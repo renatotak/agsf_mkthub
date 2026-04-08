@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/Badge";
 import { RetailerExpandedPanel } from "@/components/RetailerExpandedPanel";
 import { RiskSignals } from "@/components/RiskSignals";
 import { RetailerKpiRow } from "@/components/RetailerKpiRow";
-import { APIProvider, Map as GMap, AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
+import { EntityMapShell, EntityMapMarker, EntityMapLayer } from "@/components/EntityMapShell";
 
 const PAGE_SIZE = 25;
 const MAP_LIMIT = 500; // max markers on map
@@ -127,7 +127,6 @@ export function RetailersDirectory({ lang }: { lang: Lang }) {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [mapLocations, setMapLocations] = useState<any[]>([]);
   const [mapLoading, setMapLoading] = useState(false);
-  const [activeMapMarker, setActiveMapMarker] = useState<string | null>(null);
 
   // KPI stats — kept for the header subtitle ("X canais mapeados em Y estados")
   const [stats, setStats] = useState({ total: 0, distribuidores: 0, cooperativas: 0, estados: 0 });
@@ -368,9 +367,7 @@ export function RetailersDirectory({ lang }: { lang: Lang }) {
           </div>
         )
       ) : (
-        <RetailersMap locations={mapLocations} loading={mapLoading} lang={lang}
-          activeId={activeMapMarker} onMarkerClick={setActiveMapMarker} totalCount={totalCount}
-          grupoColors={GRUPO_COLORS} />
+        <RetailersMap locations={mapLocations} loading={mapLoading} lang={lang} totalCount={totalCount} />
       )}
     </div>
   );
@@ -411,6 +408,12 @@ function SortHeader({
 }
 
 // ─── Map View ────────────────────────────────────────────────────────────────
+//
+// Phase 24B: replaced the bespoke wrapper with EntityMapShell so the
+// Diretório de Canais map matches the Painel UI exactly (terrain/satellite,
+// fullscreen, recenter, "Buscar nesta área" bbox capture, layer chips, city
+// autocomplete). Markers come from retailer_locations and are layered by
+// channel group (distribuidor / cooperativa / canal rd / plataforma).
 
 const GRUPO_MARKER_COLORS: Record<string, string> = {
   DISTRIBUIDOR: "#5B7A2F",
@@ -419,121 +422,66 @@ const GRUPO_MARKER_COLORS: Record<string, string> = {
   PLATAFORMA: "#9E9E9E",
 };
 
-function RetailersMap({ locations, loading, lang, activeId, onMarkerClick, totalCount, grupoColors }: {
-  locations: any[]; loading: boolean; lang: Lang; activeId: string | null;
-  onMarkerClick: (id: string | null) => void; totalCount: number;
-  grupoColors: Record<string, string>;
-}) {
-  const MAP_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-  const active = locations.find((l) => String(l.id) === activeId);
+const RETAILER_LAYERS: EntityMapLayer[] = [
+  { key: "DISTRIBUIDOR", label: "Distribuidor", color: GRUPO_MARKER_COLORS.DISTRIBUIDOR },
+  { key: "COOPERATIVA", label: "Cooperativa", color: GRUPO_MARKER_COLORS.COOPERATIVA },
+  { key: "CANAL RD", label: "Canal RD", color: GRUPO_MARKER_COLORS["CANAL RD"] },
+  { key: "PLATAFORMA", label: "Plataforma", color: GRUPO_MARKER_COLORS.PLATAFORMA },
+];
 
-  if (!MAP_KEY) {
-    return (
-      <div className="bg-neutral-100 rounded-lg border border-neutral-200 p-8 text-center text-neutral-500 text-sm">
-        Google Maps API key not configured.
-      </div>
-    );
-  }
+function RetailersMap({ locations, loading, lang, totalCount }: {
+  locations: any[]; loading: boolean; lang: Lang; totalCount: number;
+}) {
+  const markers: EntityMapMarker[] = locations.map((loc) => {
+    // Map razao_social heuristic to layer (legacy: COOP substring → COOPERATIVA)
+    const isCoop = (loc.razao_social || "").toUpperCase().includes("COOP");
+    const layer = isCoop ? "COOPERATIVA" : "DISTRIBUIDOR";
+    return {
+      id: String(loc.id),
+      lat: Number(loc.latitude),
+      lng: Number(loc.longitude),
+      layer,
+      title: loc.nome_fantasia || loc.razao_social || "",
+      subtitle: [loc.municipio, loc.uf].filter(Boolean).join(" - "),
+      uf: loc.uf || undefined,
+      extra: (
+        <div className="mt-1 space-y-0.5">
+          {loc.nome_fantasia && loc.razao_social && (
+            <p className="text-[11px] text-neutral-500">{loc.razao_social}</p>
+          )}
+          {loc.cnpj && (
+            <p className="text-[10px] text-neutral-400 font-mono">{formatCnpj(loc.cnpj)}</p>
+          )}
+          <p className="text-[11px] text-neutral-600">
+            {[loc.logradouro, loc.numero].filter(Boolean).join(", ")}
+          </p>
+          {loc.cep && <p className="text-[10px] text-neutral-400">CEP {loc.cep}</p>}
+          {loc.geo_precision && loc.geo_precision !== "address" && loc.geo_precision !== "original" && (
+            <p className="text-[9px] text-amber-600 font-medium">
+              {lang === "pt" ? "Localização aproximada" : "Approximate location"} ({loc.geo_precision})
+            </p>
+          )}
+        </div>
+      ),
+    };
+  });
+
+  const subtitle = totalCount > MAP_LIMIT
+    ? lang === "pt"
+      ? `${locations.length}+ de ${totalCount.toLocaleString("pt-BR")} canais — use filtros para refinar`
+      : `${locations.length}+ of ${totalCount.toLocaleString("en-US")} channels — refine with filters`
+    : undefined;
 
   return (
-    <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-      {/* Map info bar */}
-      <div className="px-4 py-2.5 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between">
-        <div className="flex items-center gap-3 text-[11px]">
-          {Object.entries(GRUPO_MARKER_COLORS).map(([grupo, color]) => {
-            const count = locations.filter((l) => l.razao_social?.includes("COOP") ? grupo === "COOPERATIVA" : true).length;
-            return (
-              <div key={grupo} className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                <span className="text-neutral-600 font-medium">{grupo}</span>
-              </div>
-            );
-          })}
-        </div>
-        <span className="text-[11px] text-neutral-400">
-          {loading ? (lang === "pt" ? "Carregando..." : "Loading...") :
-           `${locations.length}${locations.length >= MAP_LIMIT ? "+" : ""} ${lang === "pt" ? "pontos" : "points"}`}
-          {totalCount > MAP_LIMIT && (
-            <span className="ml-1 text-neutral-300">
-              ({lang === "pt" ? "use filtros para refinar" : "use filters to refine"})
-            </span>
-          )}
-        </span>
-      </div>
-
-      {/* Map */}
-      <div className="relative" style={{ height: 550 }}>
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-neutral-50 z-10">
-            <Loader2 size={28} className="animate-spin text-brand-primary" />
-          </div>
-        )}
-        <APIProvider apiKey={MAP_KEY}>
-          <GMap
-            defaultCenter={{ lat: -15.78, lng: -47.93 }}
-            defaultZoom={4}
-            mapId="retailers-map"
-            disableDefaultUI={false}
-            zoomControl
-            mapTypeControl
-            mapTypeId="terrain"
-            streetViewControl={false}
-            fullscreenControl={false}
-            rotateControl={false}
-          >
-            {locations.map((loc) => {
-              const markerColor = loc.razao_social?.includes("COOP") ? GRUPO_MARKER_COLORS["COOPERATIVA"] :
-                                  GRUPO_MARKER_COLORS["DISTRIBUIDOR"];
-              return (
-                <AdvancedMarker
-                  key={loc.id}
-                  position={{ lat: loc.latitude, lng: loc.longitude }}
-                  onClick={() => onMarkerClick(String(loc.id))}
-                >
-                  <div
-                    className="w-3 h-3 rounded-full border border-white shadow-sm cursor-pointer hover:scale-150 transition-transform"
-                    style={{ backgroundColor: markerColor }}
-                  />
-                </AdvancedMarker>
-              );
-            })}
-
-            {active && (
-              <InfoWindow
-                position={{ lat: active.latitude, lng: active.longitude }}
-                onCloseClick={() => onMarkerClick(null)}
-                pixelOffset={[0, -5]}
-              >
-                <div className="p-1 max-w-[260px]">
-                  <h4 className="font-bold text-neutral-900 text-[13px] leading-tight">
-                    {active.nome_fantasia || active.razao_social}
-                  </h4>
-                  {active.nome_fantasia && (
-                    <p className="text-[11px] text-neutral-500 mt-0.5">{active.razao_social}</p>
-                  )}
-                  {active.cnpj && (
-                    <p className="text-[10px] text-neutral-400 font-mono mt-0.5">{formatCnpj(active.cnpj)}</p>
-                  )}
-                  <div className="mt-1.5 space-y-0.5 text-[11px] text-neutral-600">
-                    <p className="flex items-center gap-1">
-                      <MapPin size={10} className="text-neutral-400 shrink-0" />
-                      {[active.logradouro, active.numero].filter(Boolean).join(", ")}
-                    </p>
-                    <p>{[active.bairro, active.municipio, active.uf].filter(Boolean).join(" - ")}</p>
-                    {active.cep && <p>CEP: {active.cep}</p>}
-                  </div>
-                  {active.geo_precision && active.geo_precision !== "address" && active.geo_precision !== "original" && (
-                    <p className="mt-1.5 text-[9px] text-amber-600 font-medium">
-                      {lang === "pt" ? "Localização aproximada" : "Approximate location"} ({active.geo_precision})
-                    </p>
-                  )}
-                </div>
-              </InfoWindow>
-            )}
-          </GMap>
-        </APIProvider>
-      </div>
-    </div>
+    <EntityMapShell
+      lang={lang}
+      title={lang === "pt" ? "Mapa de Canais" : "Channels Map"}
+      subtitle={subtitle}
+      markers={markers}
+      layers={RETAILER_LAYERS}
+      loading={loading}
+      mapId="retailers-map"
+    />
   );
 }
 

@@ -1169,6 +1169,15 @@ function round(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+// Phase 24E — World Bank Pink Sheet annual price series.
+// Separate from FAOSTAT because WB uses Pulso slugs directly (soja/milho/...)
+// while FAOSTAT uses English names (soybean/corn/...).
+interface WbPriceRow {
+  period: string;
+  value: number;
+  unit: string;
+}
+
 function MacroAnalysis({
   activeCulture,
   onCultureChange,
@@ -1186,6 +1195,11 @@ function MacroAnalysis({
   const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
   const [scraperCadence, setScraperCadence] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Phase 24E — World Bank Pink Sheet annual prices for the active culture
+  const [wbPrices, setWbPrices] = useState<WbPriceRow[]>([]);
+  const [wbLoading, setWbLoading] = useState(false);
+  const [wbUnit, setWbUnit] = useState<string>("");
 
   useEffect(() => {
     const faostatCommodity = FAOSTAT_COMMODITY_BY_SLUG[activeCulture];
@@ -1205,6 +1219,33 @@ function MacroAnalysis({
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, [activeCulture]);
+
+  // Phase 24E — fetch World Bank prices in parallel. Same /api/macro-stats
+  // endpoint, filtered by source_id and commodity (WB uses Pulso slugs, so
+  // activeCulture passes through directly).
+  useEffect(() => {
+    setWbLoading(true);
+    setWbPrices([]);
+    setWbUnit("");
+    fetch(`/api/macro-stats?commodity=${activeCulture}&source_id=worldbank_pinksheet&indicator=price&limit=20`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && Array.isArray(json.rows) && json.rows.length > 0) {
+          // Sort ascending by period for the line chart
+          const sorted = [...json.rows].sort((a: any, b: any) => a.period.localeCompare(b.period));
+          setWbPrices(
+            sorted.map((r: any) => ({
+              period: r.period,
+              value: typeof r.value === "number" ? r.value : parseFloat(r.value),
+              unit: r.unit,
+            })),
+          );
+          setWbUnit(sorted[0].unit || "");
+        }
+      })
+      .catch(() => {})
+      .finally(() => setWbLoading(false));
   }, [activeCulture]);
 
   const liveChartData = useMemo(() => pivotMacroRows(liveRows), [liveRows]);
@@ -1352,6 +1393,45 @@ function MacroAnalysis({
                   </div>
                 </div>
               </div>
+
+              {/* Phase 24E — World Bank Pink Sheet annual price history */}
+              {wbPrices.length > 0 && (
+                <div>
+                  <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <Globe size={14} className="text-purple-600" />
+                    {lang === "pt" ? "Preço Anual Mundial" : "Annual World Price"} ({wbUnit})
+                    <span className="ml-1 text-[9px] font-normal text-neutral-400 normal-case">
+                      World Bank Pink Sheet
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-full">
+                      <span className="w-1 h-1 rounded-full bg-purple-500" />
+                      LIVE
+                    </span>
+                  </h4>
+                  <div className="h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={wbPrices}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                        <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip
+                          contentStyle={{ borderRadius: "8px", fontSize: "11px" }}
+                          formatter={(v: any) => [`${Number(v).toFixed(2)} ${wbUnit}`, lang === "pt" ? "Preço" : "Price"]}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          name={lang === "pt" ? "Preço Mundial" : "World Price"}
+                          stroke="#9333EA"
+                          strokeWidth={2.5}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Sidebar macro context */}

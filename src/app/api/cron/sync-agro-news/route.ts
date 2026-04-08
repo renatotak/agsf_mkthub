@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
 import { loadMatchableEntities, matchEntitiesInText, writeEntityMentions } from '@/lib/entity-matcher'
 import { isGeminiConfigured, generateEmbeddingBatch } from '@/lib/gemini'
+import { extractNormsFromNews } from '@/lib/extract-norms-from-news'
 import Parser from 'rss-parser'
 
 export const dynamic = 'force-dynamic'
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
     let totalNew = 0
     let totalSkipped = 0
     let totalMentions = 0
+    let totalNormsDetected = 0
     const errors: string[] = []
     // Phase 18: collect new articles for batch embedding (gated on Gemini config)
     const newItemsToEmbed: Array<{
@@ -175,6 +177,37 @@ export async function GET(request: Request) {
                 extractedBy: 'regex_v1',
               })
             }
+
+            // Phase 24F — Norm-citation detector. If the article mentions a
+            // brand new Provimento/Resolução/Lei in agro context, upsert a
+            // regulatory_norms row so the Marco Regulatório chapter shows it
+            // even when sync-regulatory's narrower body filter would skip it.
+            // Pure regex (src/lib/extract-norms-from-news.ts), no LLM.
+            const normCandidates = extractNormsFromNews({
+              title,
+              summary,
+              source_url: item.link,
+              published_at: item.isoDate,
+            })
+            if (normCandidates.length > 0) {
+              const normRows = normCandidates.map((c) => ({
+                id: c.id,
+                body: c.body,
+                norm_type: c.norm_type,
+                norm_number: c.norm_number,
+                title: c.title,
+                summary: c.summary,
+                published_at: c.published_at,
+                effective_at: null,
+                impact_level: c.impact_level,
+                affected_areas: c.affected_areas,
+                source_url: c.source_url,
+              }))
+              const { error: normErr } = await supabase
+                .from('regulatory_norms')
+                .upsert(normRows, { onConflict: 'id', ignoreDuplicates: false })
+              if (!normErr) totalNormsDetected += normRows.length
+            }
           }
         }
 
@@ -268,6 +301,7 @@ export async function GET(request: Request) {
         skipped: totalSkipped,
         knowledge_ingested: knowledgeCount,
         entity_mentions: totalMentions,
+        norms_detected: totalNormsDetected,
         sources: rssSources.length,
       },
       errors: errors.length > 0 ? errors : undefined,

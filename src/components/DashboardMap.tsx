@@ -279,6 +279,9 @@ export function DashboardMap({ lang }: { lang: Lang }) {
                 subtitle: n.source_name || "News",
                 url: n.source_url,
                 uf: finalLoc.includes(",") ? finalLoc.split(",")[1].trim() : finalLoc,
+                // Phase 24B: stamp `date` so the date-range filter (30d/90d/Tudo)
+                // can gate news by recency the same way it already gates events.
+                date: n.published_at || undefined,
                 extra: <div className="text-[11px] text-neutral-500 mt-1">{new Date(n.published_at).toLocaleDateString()}</div>
               });
             }
@@ -301,6 +304,9 @@ export function DashboardMap({ lang }: { lang: Lang }) {
                 title: rj.entity_name,
                 subtitle: `${rj.court || "Justiça"} | ${rj.state}`,
                 uf: rj.state,
+                // Phase 24B: stamp `date` so the date-range filter (30d/90d/Tudo)
+                // can gate RJ filings by recency the same way it gates events.
+                date: rj.filing_date || undefined,
                 extra: (
                   <div className="mt-2 space-y-1">
                     <div className="flex justify-between text-[11px]">
@@ -323,20 +329,38 @@ export function DashboardMap({ lang }: { lang: Lang }) {
   }, []);
 
   // Apply filters
+  // Phase 24B: the date-range toggle now gates events (forward window:
+  // today → today + N), AND news + RJ (backward window: today − N → today).
+  // Weather is always "current" so the toggle does not gate it.
   const filteredMarkers = useMemo(() => {
     let markers: MapMarker[] = [];
+
+    const now = new Date();
+    const futureHorizon = eventTimeFilter ? new Date(now.getTime() + eventTimeFilter * 86_400_000) : null;
+    const pastHorizon = eventTimeFilter ? new Date(now.getTime() - eventTimeFilter * 86_400_000) : null;
+
     if (showEvents) {
       let events = allEvents;
-      if (eventTimeFilter) {
-        const horizon = new Date();
-        horizon.setDate(horizon.getDate() + eventTimeFilter);
-        events = events.filter(m => m.date && new Date(m.date) <= horizon);
+      if (futureHorizon) {
+        events = events.filter(m => m.date && new Date(m.date) <= futureHorizon);
       }
       markers = markers.concat(events);
     }
     if (showWeather) markers = markers.concat(allWeather);
-    if (showNews) markers = markers.concat(allNews);
-    if (showRJ) markers = markers.concat(activeRJ);
+    if (showNews) {
+      let news = allNews;
+      if (pastHorizon) {
+        news = news.filter(m => m.date && new Date(m.date) >= pastHorizon);
+      }
+      markers = markers.concat(news);
+    }
+    if (showRJ) {
+      let rj = activeRJ;
+      if (pastHorizon) {
+        rj = rj.filter(m => m.date && new Date(m.date) >= pastHorizon);
+      }
+      markers = markers.concat(rj);
+    }
 
     if (ufFilter) markers = markers.filter(m => m.uf?.toUpperCase().trim() === ufFilter.toUpperCase().trim());
     if (citySearch.trim()) {
@@ -500,8 +524,19 @@ export function DashboardMap({ lang }: { lang: Lang }) {
           )}
 
           <div className="ml-auto flex items-center gap-4">
-            {showEvents && (
-              <div className="flex items-center gap-1 bg-neutral-100 p-0.5 rounded text-[9px]">
+            {/* Phase 24B: date-range toggle now affects events (forward window),
+                news (backward window) and RJ filings (backward window). It is
+                always visible — previously it was hidden when Eventos was off,
+                which made the UI surprising once news/RJ also obey it. */}
+            {(showEvents || showNews || showRJ) && (
+              <div
+                className="flex items-center gap-1 bg-neutral-100 p-0.5 rounded text-[9px]"
+                title={
+                  lang === "pt"
+                    ? "Janela: eventos próximos / notícias e RJ recentes"
+                    : "Window: upcoming events / recent news and distress filings"
+                }
+              >
                 {[30, 90].map(d => (
                   <button key={d} onClick={() => setEventTimeFilter(d)}
                     className={`px-1.5 py-0.5 rounded transition-all ${eventTimeFilter === d ? "bg-white shadow-sm text-brand-primary font-bold" : "text-neutral-500 hover:text-neutral-700"}`}>

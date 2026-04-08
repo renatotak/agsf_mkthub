@@ -29,6 +29,11 @@ export async function GET(request: Request) {
     { name: 'recuperacao-judicial', path: '/api/cron/sync-recuperacao-judicial' },
     { name: 'archive-old-news', path: '/api/cron/archive-old-news' },
     { name: 'regulatory', path: '/api/cron/sync-regulatory' },
+    // Phase 24F — CNJ atos JSON API. Daily because CNJ publishes new atos
+    // every weekday and the agro-relevant ones (Provimentos on rural RJ,
+    // Resoluções on rural land registry) are time-sensitive. ~200 atos
+    // walked per run, regex-filtered, very cheap.
+    { name: 'cnj-atos', path: '/api/cron/sync-cnj-atos' },
     { name: 'events-na', path: '/api/cron/sync-events-na' },
     { name: 'competitors', path: '/api/cron/sync-competitors' },
     { name: 'retailer-intelligence', path: '/api/cron/sync-retailer-intelligence' },
@@ -45,11 +50,22 @@ export async function GET(request: Request) {
     // ~18 seed queries × ≤8 pages = up to 144 API calls per run)
     // Phase 23 — AgroAdvance events list also Sunday-only (annual reference
     // page, only changes occasionally; no point hitting it daily)
+    // Phase 24D — CVM/BCB/key-laws scrapers also Sunday-only. Each does
+    // ~8-10 DuckDuckGo HTML searches plus follow-up Cheerio fetches; the
+    // upstream pages don't change daily, so weekly is more than enough
+    // and keeps us well below DDG's per-IP quota.
+    // Phase 24E — World Bank Pink Sheet Sunday-only. Annual prices update
+    // ~once per year; the file is 3 MB and the upsert is idempotent, so
+    // weekly is plenty.
     ...(new Date().getDay() === 0
       ? [
           { name: 'industry-profiles', path: '/api/cron/sync-industry-profiles' },
           { name: 'agrofit-bulk', path: '/api/cron/sync-agrofit-bulk' },
           { name: 'events-agroadvance', path: '/api/cron/sync-events-agroadvance' },
+          { name: 'cvm-agro', path: '/api/cron/sync-cvm-agro' },
+          { name: 'bcb-rural', path: '/api/cron/sync-bcb-rural' },
+          { name: 'key-agro-laws', path: '/api/cron/sync-key-agro-laws' },
+          { name: 'worldbank-prices', path: '/api/cron/sync-worldbank-prices' },
         ]
       : []),
   ]

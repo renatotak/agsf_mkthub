@@ -9,6 +9,7 @@ import { MockBadge } from "@/components/ui/MockBadge";
 import {
   ExternalLink, AlertTriangle, Calendar, BookOpen,
   ChevronDown, ChevronUp, Search, Clock, BarChart3, Filter,
+  Upload, List, X, Loader2, Plus, Database, Globe,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -79,6 +80,24 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
   // UI state
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showCharts, setShowCharts] = useState(true);
+
+  // Phase 24C — modal state for upload + sources
+  const [showUpload, setShowUpload] = useState(false);
+  const [showSources, setShowSources] = useState(false);
+
+  // Reload norms after a successful upload so the new row appears
+  // immediately without a page refresh.
+  const refreshNorms = async () => {
+    const { data } = await supabase
+      .from("regulatory_norms")
+      .select("*")
+      .order("published_at", { ascending: false })
+      .limit(100);
+    if (data && data.length > 0) {
+      setNorms(data);
+      setIsMock(false);
+    }
+  };
 
   useEffect(() => {
     supabase.from("regulatory_norms").select("*").order("published_at", { ascending: false }).limit(100)
@@ -179,6 +198,23 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
             <p className="text-[12px] text-neutral-500 mt-0.5">{tr.regulatory.subtitle}</p>
           </div>
           {isMock && <MockBadge />}
+        </div>
+        {/* Phase 24C — Upload + Sources actions */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowSources(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] font-semibold border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50 transition-all"
+          >
+            <List size={13} />
+            {lang === "pt" ? "Fontes" : "Sources"}
+          </button>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] font-semibold border border-brand-primary/30 bg-brand-surface text-brand-primary hover:bg-brand-primary/10 transition-all"
+          >
+            <Upload size={13} />
+            {lang === "pt" ? "Inserir Norma" : "Add Norm"}
+          </button>
         </div>
       </div>
 
@@ -452,6 +488,451 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
           })}
         </div>
       )}
+
+      {/* Phase 24C — Upload modal */}
+      {showUpload && (
+        <UploadNormModal
+          lang={lang}
+          onClose={() => setShowUpload(false)}
+          onSaved={() => {
+            setShowUpload(false);
+            refreshNorms();
+          }}
+        />
+      )}
+
+      {/* Phase 24C — Sources list modal */}
+      {showSources && <SourcesListModal lang={lang} onClose={() => setShowSources(false)} />}
+    </div>
+  );
+}
+
+// ─── Phase 24C — Upload modal ──────────────────────────────────────────────
+
+function UploadNormModal({
+  lang,
+  onClose,
+  onSaved,
+}: {
+  lang: Lang;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [body, setBody] = useState("CMN");
+  const [normType, setNormType] = useState("resolucao");
+  const [normNumber, setNormNumber] = useState("");
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [publishedAt, setPublishedAt] = useState(today);
+  const [effectiveAt, setEffectiveAt] = useState("");
+  const [impact, setImpact] = useState("medium");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [areasInput, setAreasInput] = useState("");
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Esc to close
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const submit = async () => {
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/regulatory/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          body,
+          norm_type: normType,
+          norm_number: normNumber || null,
+          title,
+          summary: summary || null,
+          published_at: publishedAt,
+          effective_at: effectiveAt || null,
+          impact_level: impact,
+          source_url: sourceUrl || null,
+          affected_areas: areasInput
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao salvar");
+      onSaved();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-start justify-center bg-black/40 p-4 pt-10 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200">
+          <h3 className="text-[15px] font-bold text-neutral-900 flex items-center gap-2">
+            <Upload size={16} className="text-brand-primary" />
+            {lang === "pt" ? "Inserir Nova Norma" : "Add New Norm"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-3">
+          <p className="text-[11px] text-neutral-500 leading-relaxed">
+            {lang === "pt"
+              ? "Insira manualmente uma norma encontrada em fontes externas (Diário Oficial, portal do regulador, etc). O documento em si não é armazenado — informe o link da fonte oficial."
+              : "Manually insert a norm you've found in external sources (Diário Oficial, regulator portal, etc). The document itself is not stored — provide the official source link."}
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={lang === "pt" ? "Órgão" : "Body"}>
+              <select
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              >
+                {Object.keys(BODY_STYLES).map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+                <option value="OUTROS">OUTROS</option>
+              </select>
+            </Field>
+            <Field label={lang === "pt" ? "Tipo" : "Type"}>
+              <select
+                value={normType}
+                onChange={(e) => setNormType(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              >
+                {Object.entries(NORM_TYPE_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {lang === "pt" ? v.pt : v.en}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <Field label={lang === "pt" ? "Número" : "Number"}>
+              <input
+                value={normNumber}
+                onChange={(e) => setNormNumber(e.target.value)}
+                placeholder="ex: 5234"
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              />
+            </Field>
+            <Field label={lang === "pt" ? "Publicada em" : "Published"}>
+              <input
+                type="date"
+                value={publishedAt}
+                onChange={(e) => setPublishedAt(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              />
+            </Field>
+            <Field label={lang === "pt" ? "Vigência" : "Effective"}>
+              <input
+                type="date"
+                value={effectiveAt}
+                onChange={(e) => setEffectiveAt(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              />
+            </Field>
+          </div>
+
+          <Field label={lang === "pt" ? "Título" : "Title"}>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={lang === "pt" ? "Título da norma" : "Norm title"}
+              className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+            />
+          </Field>
+
+          <Field label={lang === "pt" ? "Resumo" : "Summary"}>
+            <textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              rows={4}
+              placeholder={lang === "pt" ? "Pontos principais (opcional)" : "Key points (optional)"}
+              className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={lang === "pt" ? "Impacto" : "Impact"}>
+              <select
+                value={impact}
+                onChange={(e) => setImpact(e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              >
+                <option value="high">{lang === "pt" ? "Alto" : "High"}</option>
+                <option value="medium">{lang === "pt" ? "Médio" : "Medium"}</option>
+                <option value="low">{lang === "pt" ? "Baixo" : "Low"}</option>
+              </select>
+            </Field>
+            <Field
+              label={lang === "pt" ? "Áreas afetadas" : "Affected areas"}
+              hint={lang === "pt" ? "separadas por vírgula" : "comma-separated"}
+            >
+              <input
+                value={areasInput}
+                onChange={(e) => setAreasInput(e.target.value)}
+                placeholder="credito_rural, cpr, fiagro"
+                className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+              />
+            </Field>
+          </div>
+
+          <Field
+            label={lang === "pt" ? "URL da fonte oficial" : "Official source URL"}
+            hint={lang === "pt" ? "Diário Oficial, site do regulador, etc" : "Diário Oficial, regulator portal, etc"}
+          >
+            <input
+              type="url"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              placeholder="https://www.in.gov.br/..."
+              className="w-full px-2 py-1.5 text-[12px] bg-white border border-neutral-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-primary/30"
+            />
+          </Field>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-neutral-200 bg-neutral-50/50">
+          {error && <span className="text-[11px] text-red-600 mr-auto">{error}</span>}
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 rounded text-[12px] font-semibold border border-neutral-200 text-neutral-600 hover:bg-neutral-100 transition-all"
+          >
+            {lang === "pt" ? "Cancelar" : "Cancel"}
+          </button>
+          <button
+            onClick={submit}
+            disabled={!title.trim() || saving}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-[12px] font-bold bg-brand-primary text-white hover:bg-brand-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+            {lang === "pt" ? "Salvar" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1 block">
+        {label}
+        {hint && <span className="ml-1 normal-case text-neutral-400">({hint})</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+// ─── Phase 24C — Sources list modal ────────────────────────────────────────
+//
+// Static catalog of the regulatory sources currently in use, plus the
+// official portals where the user can hunt for more norms manually.
+// Mirrors the REGULATORY_SOURCES constant in /api/cron/sync-regulatory.
+
+const REGULATORY_SOURCES_REFERENCE = [
+  // Cron-fed RSS feeds (Phase 1)
+  {
+    type: "rss",
+    name: "ConJur",
+    description_pt: "Consultor Jurídico — feed jurídico filtrado por palavras-chave regulatórias",
+    description_en: "Consultor Jurídico — legal feed filtered by regulatory keywords",
+    url: "https://www.conjur.com.br/rss.xml",
+    portal: "https://www.conjur.com.br",
+  },
+  {
+    type: "rss",
+    name: "Migalhas",
+    description_pt: "Migalhas Quentes — boletim jurídico diário",
+    description_en: "Migalhas Quentes — daily legal bulletin",
+    url: "https://www.migalhas.com.br/rss/quentes.xml",
+    portal: "https://www.migalhas.com.br",
+  },
+  {
+    type: "rss",
+    name: "JOTA",
+    description_pt: "JOTA — análise jurídica e regulatória",
+    description_en: "JOTA — legal and regulatory analysis",
+    url: "https://www.jota.info/feed",
+    portal: "https://www.jota.info",
+  },
+  // Official regulator portals (manual reference — used for Inserir Norma URL)
+  {
+    type: "portal",
+    name: "BCB — Normativos",
+    description_pt: "Banco Central do Brasil — busca de resoluções, circulares e cartas-circulares",
+    description_en: "Brazilian Central Bank — resolutions, circulars and circular letters search",
+    url: "https://www.bcb.gov.br/estabilidadefinanceira/buscanormas",
+    portal: "https://www.bcb.gov.br",
+  },
+  {
+    type: "portal",
+    name: "CMN — Resoluções",
+    description_pt: "Conselho Monetário Nacional — resoluções publicadas pelo BCB",
+    description_en: "National Monetary Council — resolutions published by BCB",
+    url: "https://www.bcb.gov.br/estabilidadefinanceira/cmn",
+    portal: "https://www.bcb.gov.br",
+  },
+  {
+    type: "portal",
+    name: "CVM — Normativos",
+    description_pt: "Comissão de Valores Mobiliários — instruções, deliberações e pareceres",
+    description_en: "Securities Commission — instructions, deliberations and opinions",
+    url: "https://conteudo.cvm.gov.br/legislacao/normas-cvm/index.html",
+    portal: "https://www.cvm.gov.br",
+  },
+  {
+    type: "portal",
+    name: "MAPA — Legislação",
+    description_pt: "Ministério da Agricultura — instruções normativas e portarias",
+    description_en: "Ministry of Agriculture — normative instructions and ordinances",
+    url: "https://www.gov.br/agricultura/pt-br/assuntos/sustentabilidade/legislacao",
+    portal: "https://www.gov.br/agricultura",
+  },
+  {
+    type: "portal",
+    name: "Diário Oficial da União",
+    description_pt: "DOU — Imprensa Nacional, busca por publicações oficiais",
+    description_en: "DOU — National Press, search for official publications",
+    url: "https://www.in.gov.br/leiturajornal",
+    portal: "https://www.in.gov.br",
+  },
+];
+
+function SourcesListModal({ lang, onClose }: { lang: Lang; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const rss = REGULATORY_SOURCES_REFERENCE.filter((s) => s.type === "rss");
+  const portals = REGULATORY_SOURCES_REFERENCE.filter((s) => s.type === "portal");
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-start justify-center bg-black/40 p-4 pt-10 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200">
+          <h3 className="text-[15px] font-bold text-neutral-900 flex items-center gap-2">
+            <List size={16} className="text-brand-primary" />
+            {lang === "pt" ? "Fontes Regulatórias" : "Regulatory Sources"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5 max-h-[70vh] overflow-y-auto">
+          {/* RSS feeds (cron-fed) */}
+          <div>
+            <h4 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Database size={12} />
+              {lang === "pt" ? "RSS automatizados" : "Automated RSS feeds"}
+              <span className="text-[9px] font-normal text-neutral-400 ml-1 normal-case">
+                {lang === "pt" ? "rodam diariamente via cron" : "run daily via cron"}
+              </span>
+            </h4>
+            <div className="space-y-2">
+              {rss.map((s) => (
+                <SourceCard key={s.name} source={s} lang={lang} />
+              ))}
+            </div>
+          </div>
+
+          {/* Manual reference portals */}
+          <div>
+            <h4 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Globe size={12} />
+              {lang === "pt" ? "Portais oficiais para consulta manual" : "Official portals for manual lookup"}
+              <span className="text-[9px] font-normal text-neutral-400 ml-1 normal-case">
+                {lang === "pt" ? "use ao inserir norma" : "use when adding a norm"}
+              </span>
+            </h4>
+            <div className="space-y-2">
+              {portals.map((s) => (
+                <SourceCard key={s.name} source={s} lang={lang} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SourceCard({
+  source,
+  lang,
+}: {
+  source: (typeof REGULATORY_SOURCES_REFERENCE)[number];
+  lang: Lang;
+}) {
+  return (
+    <div className="border border-neutral-200 rounded-md p-3 hover:border-brand-primary/40 transition-colors">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-bold text-neutral-900">{source.name}</p>
+          <p className="text-[11px] text-neutral-500 mt-0.5 leading-snug">
+            {lang === "pt" ? source.description_pt : source.description_en}
+          </p>
+        </div>
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-brand-primary border border-brand-primary/30 rounded hover:bg-brand-surface transition-colors"
+        >
+          {lang === "pt" ? "Abrir" : "Open"} <ExternalLink size={10} />
+        </a>
+      </div>
     </div>
   );
 }

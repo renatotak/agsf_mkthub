@@ -78,6 +78,84 @@ async function searchGoogle(query: string): Promise<{ title: string; snippet: st
   }));
 }
 
+// ─── Analysis-type prompt registry ──────────────────────────────────────────
+//
+// Phase 24B: lenses are now stored in `analysis_lenses` (migration 036) and
+// editable from Settings → Editable Prompts. The in-code constants below are
+// the FALLBACK used when:
+//   • the DB row is missing (migration not applied yet)
+//   • the DB row exists but `enabled=false`
+//   • the migration was applied but the seed insert was skipped
+//
+// Behaviour-equivalent to the seed in 036_analysis_lenses.sql so swapping
+// from code-fallback to DB-backed is invisible to clients.
+
+interface AnalysisLens {
+  searchTemplate: string; // supports {{name}}
+  systemPrompt: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+}
+
+const FALLBACK_LENSES: Record<string, AnalysisLens> = {
+  retailer: {
+    searchTemplate: "{{name}} agronegócio Brasil",
+    systemPrompt:
+      "Você é um analista de inteligência do agronegócio brasileiro. Com base nos resultados de busca, escreva um resumo executivo de 3-5 frases sobre a empresa, sua posição no mercado e relevância no agro. Seja conciso e factual.",
+    model: "gpt-4o-mini",
+    temperature: 0.3,
+    maxTokens: 400,
+  },
+  industry: {
+    searchTemplate: "{{name}} fabricante defensivos fertilizantes sementes biológicos moléculas portfólio Brasil",
+    systemPrompt:
+      "Você é um analista de inteligência da indústria de insumos agrícolas. Com base nos resultados de busca, escreva um resumo executivo de 4-6 frases cobrindo: (1) categorias de produto (defensivos, fertilizantes, sementes, biológicos, etc.), (2) moléculas / ingredientes ativos ou tecnologias notáveis, (3) canais de distribuição e revendas parceiras no Brasil, (4) posicionamento competitivo. Seja factual e específico — cite produtos e moléculas quando aparecerem nos snippets.",
+    model: "gpt-4o-mini",
+    temperature: 0.3,
+    maxTokens: 400,
+  },
+  generic: {
+    searchTemplate: "{{name}} Brasil",
+    systemPrompt:
+      "Você é um analista corporativo. Resuma em 3-4 frases o que se sabe sobre a empresa com base nos resultados de busca. Seja factual.",
+    model: "gpt-4o-mini",
+    temperature: 0.3,
+    maxTokens: 400,
+  },
+};
+
+/**
+ * Resolve a lens by analysis_type. Tries the DB (analysis_lenses) first
+ * and falls back to the in-code constants if the row doesn't exist or the
+ * migration hasn't been applied yet.
+ */
+async function resolveLens(analysisType: string): Promise<AnalysisLens> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("analysis_lenses")
+      .select("search_template, system_prompt, model, temperature, max_tokens, enabled")
+      .eq("id", analysisType)
+      .maybeSingle();
+    if (!error && data && data.enabled !== false) {
+      return {
+        searchTemplate: data.search_template,
+        systemPrompt: data.system_prompt,
+        model: data.model || "gpt-4o-mini",
+        temperature: typeof data.temperature === "number" ? data.temperature : 0.3,
+        maxTokens: data.max_tokens || 400,
+      };
+    }
+  } catch {
+    // Table might not exist yet (migration 036 not applied) — fall through
+  }
+  return FALLBACK_LENSES[analysisType] || FALLBACK_LENSES.retailer;
+}
+
+function applyTemplate(template: string, name: string): string {
+  return template.replace(/\{\{\s*name\s*\}\}/g, name);
+}
+
 // ─── POST handler ───────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -85,14 +163,18 @@ export async function POST(req: NextRequest) {
   const cnpjBasico = body.cnpj_basico?.replace(/\D/g, "");
   const razaoSocial = body.razao_social || "";
   const nomeFantasia = body.nome_fantasia || "";
+  const analysisType = String(body.analysis_type || "retailer").toLowerCase().trim();
 
   if (!cnpjBasico || !razaoSocial) {
     return NextResponse.json({ error: "cnpj_basico e razao_social são obrigatórios" }, { status: 400 });
   }
 
+  // Lens lookup — DB first (analysis_lenses), code fallback otherwise.
+  const lens = await resolveLens(analysisType);
+
   const root = cnpjBasico.padStart(8, "0");
   const companyName = nomeFantasia || razaoSocial;
-  const searchQuery = `${companyName} agronegócio Brasil`;
+  const searchQuery = applyTemplate(lens.searchTemplate, companyName);
 
   // Try Google first, fall back to DuckDuckGo (always works, no key needed)
   let findings = await searchGoogle(searchQuery);
@@ -115,13 +197,13 @@ export async function POST(req: NextRequest) {
       const openai = new OpenAI({ apiKey: openaiKey });
       const snippetsText = findings.map((f, i) => `${i + 1}. ${f.title}: ${f.snippet}`).join("\n");
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: lens.model,
         messages: [
-          { role: "system", content: "Você é um analista de inteligência do agronegócio brasileiro. Com base nos resultados de busca, escreva um resumo executivo de 3-5 frases sobre a empresa, sua posição no mercado e relevância no agro. Seja conciso e factual." },
+          { role: "system", content: lens.systemPrompt },
           { role: "user", content: `Empresa: ${razaoSocial}\nNome fantasia: ${companyName}\n\nResultados:\n${snippetsText}` },
         ],
-        temperature: 0.3,
-        max_tokens: 300,
+        temperature: lens.temperature,
+        max_tokens: lens.maxTokens,
       });
       summary = completion.choices[0]?.message?.content || null;
     } catch {
@@ -139,6 +221,7 @@ export async function POST(req: NextRequest) {
     entity_uid: entityUid,
     razao_social: razaoSocial,
     search_query: searchQuery,
+    analysis_type: analysisType,
     findings,
     summary,
     searched_at: new Date().toISOString(),
