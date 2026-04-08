@@ -17,6 +17,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Minimum length for a single-word name to be a valid match candidate.
  * Multi-word names skip this check. Single-word names below this length
  * produce too many false positives (generic Portuguese agro terms).
+ *
+ * Exceptions: see SHORT_NAME_ALLOWLIST below.
  */
 const MIN_SINGLE_WORD_LEN = 10;
 
@@ -38,6 +40,32 @@ const GENERIC_AGRO_STOPWORDS = new Set<string>([
   "mais agricola", "a agricola", "agricola nova",
 ]);
 
+/**
+ * Allowlist of well-known short brand/acronym names that should match even
+ * though they fall below MIN_SINGLE_WORD_LEN. These are known iconic
+ * agribusiness entities whose normalized name is < 10 chars but unambiguous
+ * in context. Adding to this list is a deliberate, audited decision — each
+ * entry should map to exactly one (or very few) real entities and the
+ * brand should be distinctive enough that false-positive risk is low.
+ *
+ * Values are normalized (lowercase, no diacritics).
+ */
+const SHORT_NAME_ALLOWLIST = new Set<string>([
+  // Cooperatives
+  "comigo",   // Cooperativa Agroindustrial dos Produtores Rurais do Sudoeste Goiano
+  "cocamar",  // Cooperativa Agroindustrial de Maringá
+  "coamo",    // Cooperativa Agroindustrial de Campo Mourão
+  "c.vale",   // Cooperativa Agroindustrial — PR
+  "coplacana",// Cooperativa dos Plantadores de Cana — Piracicaba
+  "lar",      // Lar Cooperativa Agroindustrial — PR (short, but distinctive in agro context)
+  // Industries / brand names that often appear in news
+  "basf", "bayer", "fmc", "corteva", "syngenta", "amvac", "yara", "nutrien",
+  "bunge", "cargill", "adm", "louis dreyfus",
+  // Agencies frequently quoted
+  "embrapa", "conab", "ibge", "bndes", "abag", "andef", "abiquim", "abicarnes",
+  "abimaq", "anec", "aprosoja", "abcs",
+]);
+
 /** Normalize: lowercase, strip diacritics, collapse whitespace. */
 function normalize(s: string): string {
   return s
@@ -52,11 +80,14 @@ function normalize(s: string): string {
  * Is this normalized name specific enough to be a mention-match candidate?
  *
  * Rules (any-of):
+ *  - explicit allowlist (SHORT_NAME_ALLOWLIST) — bypasses stopword + length
  *  - multi-word (contains space) AND not in stopword list
  *  - single word with length >= MIN_SINGLE_WORD_LEN AND not a stopword
  */
 function isSpecificEnough(normalized: string): boolean {
-  if (!normalized || GENERIC_AGRO_STOPWORDS.has(normalized)) return false;
+  if (!normalized) return false;
+  if (SHORT_NAME_ALLOWLIST.has(normalized)) return true;
+  if (GENERIC_AGRO_STOPWORDS.has(normalized)) return false;
   const isMultiWord = normalized.includes(" ");
   if (isMultiWord) return true;
   return normalized.length >= MIN_SINGLE_WORD_LEN;

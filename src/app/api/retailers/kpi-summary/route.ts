@@ -89,15 +89,18 @@ export async function GET() {
 
     // ── 4. Channels mentioned in news ───────────────────────────
     // Phase 17E pattern: entity_mentions where source_table='agro_news'
-    // joined to retailers via entity_uid. We can't directly join to
-    // retailers in PostgREST (no FK chain), so we fetch the universe of
-    // retailer entity_uids first, then filter mentions by that set.
-    const { data: retailerEntityRows } = await supabase
-      .from('retailers')
-      .select('entity_uid')
-      .not('entity_uid', 'is', null);
-    const retailerEntityUids = new Set(
-      (retailerEntityRows || []).map((r: any) => r.entity_uid as string)
+    // joined to retailers via entity_uid. We invert the join direction —
+    // fetch the (small) set of news mentions first, then look up which
+    // are retailers — because PostgREST's default 1000-row cap would
+    // silently truncate the retailer side of a forward join.
+    const { data: mentionRows } = await supabase
+      .from('entity_mentions')
+      .select('entity_uid, source_id')
+      .eq('source_table', 'agro_news')
+      .limit(5000);
+
+    const distinctMentionedEntities = Array.from(
+      new Set((mentionRows || []).map((m: any) => m.entity_uid as string))
     );
 
     let mentionedInNewsCount = 0;
@@ -107,25 +110,28 @@ export async function GET() {
       news_title: string | null;
       source_name: string | null;
       published_at: string | null;
+      retailer_name: string | null;
     }> = [];
 
-    if (retailerEntityUids.size > 0) {
-      // Pull the most recent agro_news mentions, then filter to retailers.
-      // Limit at 500 mentions — generous since the dataset is small and
-      // we only need ~20 for the preview.
-      const { data: mentionRows } = await supabase
-        .from('entity_mentions')
-        .select('entity_uid, source_id')
-        .eq('source_table', 'agro_news')
-        .limit(2000);
+    if (distinctMentionedEntities.length > 0) {
+      // Look up which of those entities are retailers (and grab their
+      // display names in the same query).
+      const { data: retailerHits } = await supabase
+        .from('retailers')
+        .select('entity_uid, nome_fantasia, razao_social')
+        .in('entity_uid', distinctMentionedEntities);
 
+      const nameByEntity = new Map<string, string>();
+      for (const r of retailerHits || []) {
+        const row = r as any;
+        nameByEntity.set(row.entity_uid, row.nome_fantasia || row.razao_social || '');
+      }
+      mentionedInNewsCount = nameByEntity.size;
+
+      // Build the preview: keep only mentions whose entity is a retailer.
       const retailerMentions = (mentionRows || []).filter((m: any) =>
-        retailerEntityUids.has(m.entity_uid)
+        nameByEntity.has(m.entity_uid)
       );
-      mentionedInNewsCount = new Set(retailerMentions.map((m: any) => m.entity_uid)).size;
-
-      // For the preview, take the first ~50 unique news IDs and look them
-      // up in agro_news ordered by published_at desc.
       const previewNewsIds = Array.from(
         new Set(retailerMentions.map((m: any) => m.source_id as string))
       ).slice(0, 50);
@@ -138,29 +144,8 @@ export async function GET() {
           .order('published_at', { ascending: false })
           .limit(20);
 
-        // Re-attach entity_uid + retailer name. Need a quick lookup of
-        // entity_uid → retailer name. We pull a small set of retailers
-        // for the entity_uids that appear in our preview.
-        const previewEntityUids = Array.from(
-          new Set(
-            retailerMentions
-              .filter((m: any) => previewNewsIds.includes(m.source_id))
-              .map((m: any) => m.entity_uid as string)
-          )
-        );
-        const { data: retailerNames } = await supabase
-          .from('retailers')
-          .select('entity_uid, nome_fantasia, razao_social')
-          .in('entity_uid', previewEntityUids);
-        const nameByEntity = new Map<string, string>();
-        for (const r of retailerNames || []) {
-          const row = r as any;
-          nameByEntity.set(row.entity_uid, row.nome_fantasia || row.razao_social || '');
-        }
-
-        // Walk newsRows in published_at order, attach the first matching
-        // retailer for each news_id. (One news article may mention
-        // multiple retailers; for the compact preview we surface one.)
+        // First mention wins per news_id (article may mention multiple
+        // retailers; the compact preview surfaces one).
         const newsToEntity = new Map<string, string>();
         for (const m of retailerMentions) {
           const mm = m as any;
@@ -176,7 +161,7 @@ export async function GET() {
             source_name: n.source_name,
             published_at: n.published_at,
             retailer_name: nameByEntity.get(eUid) || null,
-          } as any;
+          };
         });
       }
     }
