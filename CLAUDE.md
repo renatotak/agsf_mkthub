@@ -5,7 +5,7 @@
 
 ## Project in One Line
 
-**AgriSafe Market Hub** is a bilingual (PT-BR/EN) executive intelligence platform: it ingests public agribusiness data from 166+ sources, organizes it around the **5 core entities** of Brazilian agribusiness (company, rural producer, farm, financial operation, ag-input transaction), and enables the AgriSafe team to generate proprietary insights, content, and compliance intelligence.
+**AgriSafe Market Hub** is a bilingual (PT-BR/EN) executive intelligence platform: it ingests public agribusiness data from 176 sources, organizes it around the **5 core entities** of Brazilian agribusiness (legal entity, farm, asset, commercial activity, AgriSafe service), and enables the AgriSafe team to generate proprietary insights, content, and compliance intelligence.
 
 **Platform flow:** Ingest → Analyze → Create → Comply
 
@@ -118,7 +118,7 @@ Never store client PII, financial records, or proprietary data in the public-dom
 ```bash
 npm run dev                                      # Dev server
 npm run build                                    # Production build
-node src/scripts/build-source-registry.js        # Rebuild 166-source registry
+node src/scripts/build-source-registry.js        # Rebuild 176-source registry
 node src/scripts/seed-content.js                 # Seed articles + topics to Supabase
 node --env-file=.env.local src/scripts/geocode-retailers.js  # Geocode retailer locations
 ```
@@ -127,20 +127,28 @@ node --env-file=.env.local src/scripts/geocode-retailers.js  # Geocode retailer 
 
 | Vertical | Key Components |
 |----------|---------------|
-| Ingestão de Dados | `DataSources.tsx`, `SourceRegistry.tsx` (166 sources, CRUD planned) |
-| Inteligência de Mercado | `MarketPulse.tsx` (Highlights + Culture/Region tabs + Logistics spread + Yahoo Finance intl chart), `CompetitorRadar.tsx` (CRUD planned), `AgroNews.tsx` (CRUD planned), `EventTracker.tsx`, `AgInputIntelligence.tsx` (oracle planned) |
+| Ingestão de Dados | `DataSources.tsx` (with Scraper Health tab), `SourceRegistry.tsx` (176 sources) |
+| Inteligência de Mercado | `MarketPulse.tsx` (Highlights + Culture/Region/Macro tabs + Logistics spread + FAOSTAT macro), `CompetitorRadar.tsx` (CRUD), `AgroNews.tsx` (CRUD + Reading Room), `EventTracker.tsx` (AgroAgenda + AgroAdvance), `AgInputIntelligence.tsx` (Oracle) |
 | Marketing & Conteúdo | `ContentHub.tsx` — see `documentation/CONTENT_HUB_SPEC.md` |
-| Diretório (CRM-grade) | `RetailersDirectory.tsx` (channels), **planned:** `IndustriesDirectory.tsx` (industries split-out), `RiskSignals.tsx` (Diretório × RJ cross-ref) |
+| Diretório (CRM-grade) | `RetailersDirectory.tsx` (channels — sortable list + CRM KPI row + RJ/news modals), `IndustriesDirectory.tsx` (industries — 18 curated + 256 imported via Phase 24A2 CSV), `RiskSignals.tsx` (Diretório × RJ cross-ref) |
 | Regulatório & Compliance | `RegulatoryFramework.tsx`, `RecuperacaoJudicial.tsx` |
 | Base de Conhecimento | `KnowledgeBase.tsx` (search + AgroTermos), `KnowledgeMindMap.tsx` (table-graph viz) |
 
-**Cron pipeline** (`/api/cron/sync-all` → daily 08:00 UTC):
+**Cron pipeline** (`/api/cron/sync-all` → daily 08:00 UTC, single Vercel Hobby cron):
 1. `sync-market-data` — BCB SGS → `commodity_prices`, `market_indicators`
-2. `sync-agro-news` — 5 RSS feeds → `agro_news`
+2. `sync-agro-news` — 5 RSS feeds → `agro_news` (+ entity-mention matching via `src/lib/entity-matcher.ts`)
 3. `sync-recuperacao-judicial` — 2 legal RSS → `recuperacao_judicial`
 4. `archive-old-news` — OpenAI summaries + pgvector → `news_knowledge`
 5. `sync-regulatory` — 3 legal RSS → `regulatory_norms`
 6. `sync-events-na` — AgroAgenda API → `events`
+7. `sync-events-agroadvance` — agroadvance.com.br Cheerio scraper → `events`
+8. `sync-faostat` — FAOSTAT macro production → `macro_statistics`
+9. `sync-prices-na` — NA regional prices → `commodity_prices_regional`
+10. `sync-competitors` — competitor enrichment → `competitors`
+11. `sync-industry-profiles` — industry profile enrichment → `industries`
+12. `sync-retailer-intelligence` — AI retailer intelligence → `retailer_intelligence`
+13. `sync-agrofit-bulk` — federal AGROFIT crawl → `industry_products`
+14. `sync-scraper-healthcheck` — no-op probe for `runScraper()` wiring
 
 **Live API routes (ISR cached):**
 - `/api/prices-na` — Notícias Agrícolas commodity prices (revalidate 10min)
@@ -166,7 +174,7 @@ All cron routes log to `sync_logs` via `src/lib/sync-logger.ts`.
 |----------|---------|
 | `src/data/mock.ts` | Fallback mock data; shown with MockBadge watermark when live data unavailable |
 | `src/data/published-articles.ts` | Curated AgriSafe published content (not mock) |
-| `src/data/source-registry.json` | 166 catalogued public sources |
+| `src/data/source-registry.json` | 176 catalogued public sources |
 | `src/lib/i18n.ts` | All PT-BR / EN translations |
 | `src/lib/agroapi.ts` | Embrapa AgroAPI OAuth2 client + typed helpers |
 | `src/lib/sync-logger.ts` | Cron logging utility |

@@ -5,7 +5,7 @@
 
 ## What This Project Is
 
-AgriSafe Market Hub (`agsf-mkthub`) is a **Next.js 16** executive intelligence platform for AgriSafe Tecnologia — a Brazilian agritech/fintech focused on agribusiness credit and commercial intelligence. It ingests public market data from 166+ sources, organizes it around the **5 core entities** of Brazilian agribusiness, and surfaces it through a Bloomberg-style dashboard for the AgriSafe team.
+AgriSafe Market Hub (`agsf-mkthub`) is a **Next.js 16** executive intelligence platform for AgriSafe Tecnologia — a Brazilian agritech/fintech focused on agribusiness credit and commercial intelligence. It ingests public market data from 176 sources, organizes it around the **5 core entities** of Brazilian agribusiness, and surfaces it through a Bloomberg-style dashboard for the AgriSafe team.
 
 **Platform flow:** Ingest → Analyze → Create → Comply
 
@@ -100,7 +100,7 @@ src/components/
 | Path | What it Contains |
 |------|-----------------|
 | `src/data/mock.ts` | All fallback mock data (shown with MockBadge) |
-| `src/data/source-registry.json` | 166 public sources with URL health |
+| `src/data/source-registry.json` | 176 public sources with URL health |
 | `src/lib/i18n.ts` | All PT-BR / EN translations |
 | `src/lib/sync-logger.ts` | `logSync()` utility for cron routes |
 | `src/app/api/cron/` | 7 cron routes + `sync-all` orchestrator |

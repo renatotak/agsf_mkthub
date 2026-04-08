@@ -1,7 +1,7 @@
 # AgriSafe Market Hub — Roadmap
 
 > **Last updated:** 2026-04-07
-> **Status:** Phase 17 complete (5-entity foundation). Phase 19A complete (scraper resilience foundation: `scraper_registry`, `scraper_runs`, `scraper_knowledge`, `runScraper()` wrapper, `/api/scraper-health` endpoint, DataSources Scraper Health tab, Dashboard KPI surfacing). Phase 19B partial (FAOSTAT live in Pulso do Mercado → Contexto Macro for soja/milho/café/trigo/algodão). Phase 20A complete (federal AGROFIT bulk + Inteligência de Insumos Oracle UX). Phase 21 complete (Radar Competitivo CRUD + Harvey Ball matrix + web enrichment). Phase 22 complete (Notícias Agro CRUD + news_sources table + reading-room ingest endpoint, extension v3.0 auto-sync). Phase 23A complete (Eventos Agro: AgroAdvance scraper, source provenance badges, AI enrichment button, EventTracker refactored to read from Supabase). Phase 24A complete (Diretório de Indústrias split-out, CRM-focused indicator row with RJ + News-mentions modals, /api/retailers/kpi-summary). 4-vertical architecture, 14+ modules, 38 Supabase tables, 34 SQL migrations.
+> **Status:** Phase 17 complete (5-entity foundation). Phase 19A complete (scraper resilience foundation: `scraper_registry`, `scraper_runs`, `scraper_knowledge`, `runScraper()` wrapper, `/api/scraper-health` endpoint, DataSources Scraper Health tab, Dashboard KPI surfacing). Phase 19B partial (FAOSTAT live in Pulso do Mercado → Contexto Macro for soja/milho/café/trigo/algodão). Phase 20A complete (federal AGROFIT bulk + Inteligência de Insumos Oracle UX). Phase 21 complete (Radar Competitivo CRUD + Harvey Ball matrix + web enrichment). Phase 22 complete (Notícias Agro CRUD + `news_sources` table + Reading Room extension v3.0 auto-sync). Phase 23A complete (Eventos Agro: AgroAdvance scraper, source provenance badges, AI enrichment, EventTracker → Supabase). Phase 24A complete (Diretório de Indústrias split-out, CRM-focused indicator row with RJ + News-mentions modals, `/api/retailers/kpi-summary`, sortable list columns). Phase 24A2 complete (industries CSV backfill: 256 industries via `legal_entities` + `entity_roles`, 163 inpEV members, /api/industries union endpoint, IndustriesDirectory filter+sort UX, entity-matcher SHORT_NAME_ALLOWLIST + 1000-row PostgREST cap fix). 4-vertical architecture, 14 modules, 50 Supabase tables, 34 SQL migrations, 9,674 legal entities, 9,609 entity roles.
 > **For the latest user-defined task list, see** `documentation/TODO_2026-04-06.md`.
 
 ---
@@ -10,19 +10,20 @@
 
 | Component | Status |
 |-----------|--------|
-| Architecture | 4 verticals, 13 modules |
-| Data sources | 166 catalogued (~120 active) |
-| Live cron pipeline | 7 jobs via `sync-all` |
-| Supabase tables | 31 tables, 26 SQL migrations, 5-entity model live |
-| Legal entities (canonical) | 9,433 (9,328 retailers + 80 RJ-only + 18 industries + 7 competitors) |
-| Entity roles | 9,353 (retailer / industry / competitor) |
-| Entity mentions (graph edges) | 120 (118 RJ + 2 agro_news, algorithm-matched) |
+| Architecture | 4 verticals, 14 modules |
+| Data sources | 176 catalogued (~120 active) |
+| Live cron pipeline | 14 jobs via `sync-all` |
+| Supabase tables | 50 tables, 34 SQL migrations, 5-entity model live |
+| Legal entities (canonical) | 9,674 (9,328 retailers + 274 industries + 80 RJ-only + 7 competitors) |
+| Entity roles | 9,609 (9,328 retailer / 274 industry / others) |
+| Entity mentions (graph edges) | 130 (118 RJ + 12 agro_news, algorithm-matched) |
 | Retailers | 9,328 channels / 24,275 locations (geocoded), all linked to entity_uid |
+| Industries | 274 (18 curated AGROFIT brands + 256 imported via Phase 24A2 CSV — 163 inpEV members) |
 | Recuperação Judicial | 118 records, all linked to entity_uid |
 | Risk signals | 38 channels in distress, R$ 582.6M exposed (cross-ref view) |
-| Live data | BCB SGS, NA prices/news (regional + futures), AgroAgenda, ClimAPI, Embrapa AgroAPI, Yahoo Finance intl futures |
+| Live data | BCB SGS, NA prices/news (regional + futures), AgroAgenda + AgroAdvance events, ClimAPI, Embrapa AgroAPI, Yahoo Finance intl futures, FAOSTAT macro, Reading Room ingest |
 | Auth | Supabase Auth + SSR middleware |
-| Deployment | Vercel (production) |
+| Deployment | Vercel (production, single Hobby cron) |
 
 ---
 
@@ -233,14 +234,33 @@ The current Diretório de Canais shows retailers from a static Excel import. The
 
 ### Phase 24A — Industries split-out + CRM indicator row ✅ COMPLETE (2026-04-07)
 
-- [x] **Split out Industries** into a new top-level chapter `Diretório de Indústrias` with its own sidebar entry, KPI strip (industries / products / linked retailers / segments), search, and drill-down to `IndustryProfile`. Removed the channels/industries tab toggle from `RetailersDirectory.tsx` — each chapter is now single-purpose.
+- [x] **Split out Industries** into a new top-level chapter `Diretório de Indústrias` with its own sidebar entry, KPI strip, search, and drill-down to `IndustryProfile`. Removed the channels/industries tab toggle from `RetailersDirectory.tsx` — each chapter is now single-purpose.
 - [x] **New CRM-focused indicator row** at the top of `RetailersDirectory.tsx` (replaces the old static Total/Distribuidores/Cooperativas/Estados):
-  1. **Total Channels** + horizontal mini-bar by `grupo_acesso` (DISTRIBUIDOR / COOPERATIVA / CANAL RD / PLATAFORMA) with color legend
-  2. **Cities** with channels + top 5 by share (deduped on cnpj_raiz so a multi-branch retailer counts once per city)
+  1. **Total Channels** + horizontal mini-bar by `grupo_acesso` with color legend
+  2. **Cities** with channels + top 5 by share (deduped on cnpj_raiz)
   3. **In Recuperação Judicial** → click opens modal with full `RiskSignals` expanded view (38 channels, R$ 582mi exposure)
-  4. **Mentioned in News** → click opens `NewsMentionsModal` with retailer + headline + source + date list. Currently shows 0 (entity_mentions for retailers is empty until the matcher cron runs)
+  4. **Mentioned in News** → click opens `NewsMentionsModal` with retailer + headline + source + date list (3 retailers, 9 articles after the 24A1 matcher fix)
 - [x] New API route `/api/retailers/kpi-summary` returning all 4 KPIs in a single fetch. Uses the existing 5-entity model: `retailers.entity_uid` (mig 024) → `entity_mentions.entity_uid` (Phase 17E pattern) → `agro_news`. RJ count comes from `v_retailers_in_rj` (mig 023). 30-min ISR cache.
 - [x] Esc-to-close + click-overlay-to-close on the new modals.
+- [x] **Sortable column headers** on the channels list table (Empresa / Grupo / Class. / Faturamento / Porte). Server-side via Supabase `.order(field, ascending)`, resets to page 0 on sort change.
+
+### Phase 24A1 — News mentions matcher fix ✅ COMPLETE (2026-04-07, commit `e07416a`)
+
+- [x] **`SHORT_NAME_ALLOWLIST`** added to `src/lib/entity-matcher.ts` — bypasses the 10-char minimum for ~25 audited iconic agribusiness brands (cooperatives: COMIGO/COCAMAR/COAMO/C.VALE/COPLACANA/LAR; industries: BASF/BAYER/FMC/CORTEVA/SYNGENTA/AMVAC/YARA/NUTRIEN/BUNGE/CARGILL/ADM/LOUIS DREYFUS; agencies: EMBRAPA/CONAB/IBGE/BNDES/ABAG/ANDEF/...). Each entry is a deliberate audit decision — distinctive enough that false positives are unlikely.
+- [x] **Inverted join in `/api/retailers/kpi-summary`** — the old code fetched ALL retailer entity_uids first (~9,328) and filtered the mention set in JS, but the unbounded retailer query was silently truncated by PostgREST's 1000-row default cap, so any retailer ranked beyond 1000 (including COMIGO) was invisible. The fix fetches the small mention set first then looks up retailers via `.in()`.
+- [x] After running `backfill-news-mentions.ts`: 12 mentions (was 2), 3 distinct retailers in card #4 (COMIGO + CAPAL + SPACO AGRICOLA), 9 Tecnoshow COMIGO 2026 articles surfaced. Zero false positives.
+
+### Phase 24A2 — Industries CSV backfill ✅ COMPLETE (2026-04-07, commit `4fdf773`)
+
+- [x] **`src/scripts/backfill-industries-from-csv.js`** loads `local files/26-0407 industrias.csv` (cp1252-encoded) into the 5-entity model. Skips 17 rows marked `apagar` in the Comentários column. Idempotent SELECT-then-INSERT for `legal_entities` (works around the partial unique INDEX on `legal_entities.tax_id`). Writes RF metadata (capital_social, porte, CNAE, # filiais, inpEV membership, natureza_jurídica) into `entity_roles.metadata` jsonb because `company_enrichment.cnpj_basico` has an FK to `retailers.cnpj_raiz` (industries aren't retailers). **Result: 256 industries imported, 163 inpEV members, 0 failures.** Top by capital: SYNGENTA (R$ 9.18 bi), BASF (R$ 8.28 bi), CORTEVA (R$ 3.86 bi), SUMITOMO (R$ 3.12 bi), UPL (R$ 2.87 bi).
+- [x] **`/api/industries`** now returns the union of (a) curated 18 from the `industries` slug catalog plus (b) the 256 entity-role-based imports — **274 total**. Each item carries a `kind` discriminator. Includes a deterministic `cnaeToSegment()` regex helper that maps RF CNAE descriptions to segment buckets (defensivos / fertilizantes / sementes / biológicos / químicos / etc.) — pure regex, guardrail #1.
+- [x] **`IndustriesDirectory.tsx`** rewritten:
+  - KPI tiles: Industries / inpEV members / Segments / Linked retailers
+  - Filter row: segment dropdown, source filter (curated/imported), inpEV-only toggle
+  - Sort dropdown: Name A→Z / Z→A / Capital ↓↑ / Branches ↓
+  - Search matches name, CNPJ, CNAE description, segment
+  - Card render branches on `kind`: curated keeps the rich layout with drill-down; imported shows CNAE + CNPJ + capital + branch count + green inpEV badge
+- [x] Phase 22 source-registry additions merged into `src/data/source-registry.json` (was sitting in scratch `phase22-registry-additions.json` at the project root since 2026-04-07). Empty `phase21-registry-additions.json` deleted.
 
 ### Phase 24B (deferred) — Per-company enrichment expansion
 

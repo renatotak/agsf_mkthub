@@ -4,25 +4,26 @@ Executive market intelligence platform for [AgriSafe Tecnologia](https://agrisaf
 
 ## What This Is
 
-Market Hub is the **knowledge engine** of the AgriSafe ecosystem. It captures public market data from 166+ catalogued sources, organizes it using a 4-tier knowledge hierarchy, and enables executives to generate proprietary insights for content creation, strategic planning, and client intelligence.
+Market Hub is the **knowledge engine** of the AgriSafe ecosystem. It captures public market data from 176 catalogued sources, organizes it around the **5-entity model** of Brazilian agribusiness (legal entities, farms, assets, commercial activities, AgriSafe services), and enables executives to generate proprietary insights for content creation, strategic planning, and client intelligence.
 
 **Platform flow:** Ingest → Analyze → Create → Comply
 
 ## Architecture: Four Verticals
 
 | Vertical | Modules | Purpose |
-|----------|---------|---------| 
-| **Ingestão de Dados** | Fontes de Dados, Registro de Fontes (166 sources) | Monitor and control all data pipelines |
-| **Inteligência de Mercado** | Pulso do Mercado (BeefPoint + NA), Radar Competitivo, Notícias Agro, Eventos, Dashboard Map (Weather layer) | Capture and analyze market signals |
+|----------|---------|---------|
+| **Ingestão de Dados** | Fontes de Dados (with Scraper Health tab), Registro de Fontes (176 sources) | Monitor and control all data pipelines |
+| **Inteligência de Mercado** | Pulso do Mercado (BCB + NA + FAOSTAT macro), Radar Competitivo, Notícias Agro (Reading Room ingest), Eventos Agro (AgroAgenda + AgroAdvance), Diretório de Canais (CRM-style), Diretório de Indústrias, Dashboard Map | Capture and analyze market signals |
 | **Marketing & Conteúdo** | Central de Conteúdo (articles, topic pipeline, calendar, campaigns) | Create proprietary content from intelligence |
-| **Regulatório** | Marco Regulatório, Recuperação Judicial, AgInput Intelligence (SmartSolos + Agrofit) | Legal compliance & input intelligence |
+| **Regulatório** | Marco Regulatório, Recuperação Judicial, AgInput Intelligence (SmartSolos + AGROFIT + Bioinsumos) | Legal compliance & input intelligence |
 
 ## Tech Stack
 
-- **Next.js 16** (App Router) + TypeScript + Tailwind CSS 4
-- **Supabase** (PostgreSQL + RLS + pgvector) — 13 tables, 33K+ records
-- **Recharts** for Bloomberg-style data visualization
-- **Vercel** deployment with daily cron pipeline (6 sync jobs)
+- **Next.js 16** (App Router) + TypeScript strict + Tailwind CSS 4
+- **Supabase** (PostgreSQL + RLS + pgvector) — 50 tables, 34 SQL migrations, 5-entity model live
+- **Recharts** + `@vis.gl/react-google-maps` for Bloomberg-style data visualization
+- **Vercel** deployment with daily cron pipeline (consolidated via `/api/cron/sync-all` — single Hobby-plan cron)
+- **Reading Room Chrome extension** at `chrome-extensions/reading-room/` auto-syncs saved articles to `/api/reading-room/ingest`
 
 ## Quick Start
 
