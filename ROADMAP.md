@@ -1,7 +1,7 @@
 # AgriSafe Market Hub — Roadmap
 
 > **Last updated:** 2026-04-07
-> **Status:** Phase 17 complete (5-entity foundation). Phase 19A complete (scraper resilience foundation: `scraper_registry`, `scraper_runs`, `scraper_knowledge`, `runScraper()` wrapper, `/api/scraper-health` endpoint, DataSources Scraper Health tab, Dashboard KPI surfacing). Phase 19B partial (FAOSTAT live in Pulso do Mercado → Contexto Macro for soja/milho/café/trigo/algodão). Phase 20A complete (federal AGROFIT bulk + Inteligência de Insumos Oracle UX). Phase 21 complete (Radar Competitivo CRUD + Harvey Ball matrix + web enrichment). Phase 22 complete (Notícias Agro CRUD + news_sources table + reading-room ingest endpoint). Phase 23A complete (Eventos Agro: AgroAdvance scraper, source provenance badges, AI enrichment button, EventTracker refactored to read from Supabase). 4-vertical architecture, 13+ modules, 38 Supabase tables, 34 SQL migrations.
+> **Status:** Phase 17 complete (5-entity foundation). Phase 19A complete (scraper resilience foundation: `scraper_registry`, `scraper_runs`, `scraper_knowledge`, `runScraper()` wrapper, `/api/scraper-health` endpoint, DataSources Scraper Health tab, Dashboard KPI surfacing). Phase 19B partial (FAOSTAT live in Pulso do Mercado → Contexto Macro for soja/milho/café/trigo/algodão). Phase 20A complete (federal AGROFIT bulk + Inteligência de Insumos Oracle UX). Phase 21 complete (Radar Competitivo CRUD + Harvey Ball matrix + web enrichment). Phase 22 complete (Notícias Agro CRUD + news_sources table + reading-room ingest endpoint, extension v3.0 auto-sync). Phase 23A complete (Eventos Agro: AgroAdvance scraper, source provenance badges, AI enrichment button, EventTracker refactored to read from Supabase). Phase 24A complete (Diretório de Indústrias split-out, CRM-focused indicator row with RJ + News-mentions modals, /api/retailers/kpi-summary). 4-vertical architecture, 14+ modules, 38 Supabase tables, 34 SQL migrations.
 > **For the latest user-defined task list, see** `documentation/TODO_2026-04-06.md`.
 
 ---
@@ -231,22 +231,29 @@ The Eventos Agro chapter previously read from `/api/events-na` (a live AgroAgend
 
 The current Diretório de Canais shows retailers from a static Excel import. The user wants it to become AgriSafe's **CRM**.
 
-- [ ] **Split out Industries** into a new chapter `Diretório de Indústrias` with the same UX as channels
-- [ ] **New main indicators row** (4 cards):
-  1. Total Channels + horizontal bar chart by category
-  2. Cities with channels + concentration in top cities (bar chart)
-  3. Channels in Recuperação Judicial → modal with all distress data
-  4. Channels appearing in any news portal → modal with company / portal / publication date
+### Phase 24A — Industries split-out + CRM indicator row ✅ COMPLETE (2026-04-07)
+
+- [x] **Split out Industries** into a new top-level chapter `Diretório de Indústrias` with its own sidebar entry, KPI strip (industries / products / linked retailers / segments), search, and drill-down to `IndustryProfile`. Removed the channels/industries tab toggle from `RetailersDirectory.tsx` — each chapter is now single-purpose.
+- [x] **New CRM-focused indicator row** at the top of `RetailersDirectory.tsx` (replaces the old static Total/Distribuidores/Cooperativas/Estados):
+  1. **Total Channels** + horizontal mini-bar by `grupo_acesso` (DISTRIBUIDOR / COOPERATIVA / CANAL RD / PLATAFORMA) with color legend
+  2. **Cities** with channels + top 5 by share (deduped on cnpj_raiz so a multi-branch retailer counts once per city)
+  3. **In Recuperação Judicial** → click opens modal with full `RiskSignals` expanded view (38 channels, R$ 582mi exposure)
+  4. **Mentioned in News** → click opens `NewsMentionsModal` with retailer + headline + source + date list. Currently shows 0 (entity_mentions for retailers is empty until the matcher cron runs)
+- [x] New API route `/api/retailers/kpi-summary` returning all 4 KPIs in a single fetch. Uses the existing 5-entity model: `retailers.entity_uid` (mig 024) → `entity_mentions.entity_uid` (Phase 17E pattern) → `agro_news`. RJ count comes from `v_retailers_in_rj` (mig 023). 30-min ISR cache.
+- [x] Esc-to-close + click-overlay-to-close on the new modals.
+
+### Phase 24B (deferred) — Per-company enrichment expansion
+
 - [ ] **Highlights**:
   - Companies in Recuperação Judicial (already done — `RiskSignals.tsx`)
   - Companies **expanding operations** — query Receita Federal (`crawlers.cnpj_estabelecimentos`) for recently opened CNPJs in agribusiness CNAEs by region
-  - Companies mentioned in main news portals (NA, Agribiz, neofeed, Bloomberg Línea/agro, Globo Rural, etc.)
+  - Companies mentioned in main news portals (NA, Agribiz, neofeed, Bloomberg Línea/agro, Globo Rural, etc.) — populates entity_mentions which then powers KPI card #4
 - [ ] **Per-company enrichment**:
   - Inpev cross-reference (defensive container recycling membership)
   - Google Maps Street View / Places photo of the POS
   - AgriSafe data imported from OneNote meeting files
   - Key persons, interests, meeting history, lead status
-- [ ] **3-tier confidentiality model** enforced via the new `confidentiality` enum
+- [ ] **3-tier confidentiality model** enforced via the existing `confidentiality` column (mig 022 added the column to 20+ tables; queries don't yet filter on it)
 - [ ] **Knowledge Base integration** — chat / RAG queries respect tier permissions
 - [ ] **CRM workflow**: schedule meetings, find leads, push leads to **Central de Conteúdo** for newsletter / WhatsApp / email outreach
 

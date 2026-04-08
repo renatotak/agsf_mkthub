@@ -15,7 +15,8 @@ export const translations = {
       contentHub: "Central de Conteúdo",
       regulatory: "Marco Regulatório",
       recuperacao: "Recuperação Judicial",
-      retailers: "Diretório de Revendas",
+      retailers: "Diretório de Canais",
+      industries: "Diretório de Indústrias",
       finance: "Inteligência Financeira",
     },
     dataSources: {
@@ -432,7 +433,8 @@ export const translations = {
       contentHub: "Content Hub",
       regulatory: "Regulatory Framework",
       recuperacao: "Judicial Recovery",
-      retailers: "Retailers Directory",
+      retailers: "Channels Directory",
+      industries: "Industries Directory",
       finance: "Financial Intelligence",
     },
     dataSources: {

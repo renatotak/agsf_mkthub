@@ -6,15 +6,15 @@ import { createPortal } from "react-dom";
 import { Lang, t } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import {
-  Store, Search, ChevronDown, ChevronUp, MapPin, Building2, Factory,
+  Store, Search, ChevronDown, ChevronUp, MapPin, Building2,
   Loader2, ChevronLeft, ChevronRight, Filter, X, Map as MapIcon, LayoutList,
   Users, FileSearch, ExternalLink, Calendar, Briefcase, Shield, CheckCircle2, XCircle,
   Pencil, Save, Globe, Lock, MessageSquareText, Phone, Mail,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { RetailerExpandedPanel } from "@/components/RetailerExpandedPanel";
-import { IndustryProfile } from "@/components/IndustryProfile";
 import { RiskSignals } from "@/components/RiskSignals";
+import { RetailerKpiRow } from "@/components/RetailerKpiRow";
 import { APIProvider, Map as GMap, AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
 
 const PAGE_SIZE = 25;
@@ -129,10 +129,8 @@ export function RetailersDirectory({ lang }: { lang: Lang }) {
   const [mapLoading, setMapLoading] = useState(false);
   const [activeMapMarker, setActiveMapMarker] = useState<string | null>(null);
 
-  // KPI stats
+  // KPI stats — kept for the header subtitle ("X canais mapeados em Y estados")
   const [stats, setStats] = useState({ total: 0, distribuidores: 0, cooperativas: 0, estados: 0 });
-  const [activeTab, setActiveTab] = useState<"channels" | "industries">("channels");
-  const [selectedIndustryId, setSelectedIndustryId] = useState<string | null>(null);
 
   useEffect(() => { fetchRetailers(); fetchFilterOptions(); fetchStats(); }, []);
   useEffect(() => { setPage(0); }, [search, ufFilter, grupoFilter, classificacaoFilter]);
@@ -231,63 +229,20 @@ export function RetailersDirectory({ lang }: { lang: Lang }) {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center bg-white border border-neutral-200 rounded-lg p-0.5">
-            <button onClick={() => { setActiveTab("channels"); setSelectedIndustryId(null); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${activeTab === "channels" ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-500 hover:text-neutral-700"}`}>
-              <Store size={14} /> {lang === "pt" ? "Canais" : "Channels"}
+            <button onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${viewMode === "list" ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-500 hover:text-neutral-700"}`}>
+              <LayoutList size={14} /> {lang === "pt" ? "Lista" : "List"}
             </button>
-            <button onClick={() => { setActiveTab("industries"); setSelectedIndustryId(null); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${activeTab === "industries" ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-500 hover:text-neutral-700"}`}>
-              <Factory size={14} /> {lang === "pt" ? "Indústrias" : "Industries"}
+            <button onClick={() => setViewMode("map")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${viewMode === "map" ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-500 hover:text-neutral-700"}`}>
+              <MapIcon size={14} /> Mapa
             </button>
           </div>
-          {activeTab === "channels" && (
-            <div className="flex items-center bg-white border border-neutral-200 rounded-lg p-0.5">
-              <button onClick={() => setViewMode("list")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${viewMode === "list" ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-500 hover:text-neutral-700"}`}>
-                <LayoutList size={14} /> {lang === "pt" ? "Lista" : "List"}
-              </button>
-              <button onClick={() => setViewMode("map")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-semibold transition-colors ${viewMode === "map" ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-500 hover:text-neutral-700"}`}>
-                <MapIcon size={14} /> Mapa
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
-      {activeTab === "industries" ? (
-        selectedIndustryId ? (
-          <IndustryProfile
-            industryId={selectedIndustryId}
-            lang={lang}
-            onBack={() => setSelectedIndustryId(null)}
-          />
-        ) : (
-          <IndustriesList lang={lang} onSelect={setSelectedIndustryId} />
-        )
-      ) : (<>
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div className="bg-white rounded-lg p-4 border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase">{lang === "pt" ? "Total Canais" : "Total Channels"}</p>
-          <p className="text-[24px] font-bold text-neutral-900 mt-1">{stats.total.toLocaleString()}</p>
-        </div>
-        <div className="bg-white rounded-lg p-4 border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase">{lang === "pt" ? "Distribuidores" : "Distributors"}</p>
-          <p className="text-[24px] font-bold text-neutral-900 mt-1">{stats.distribuidores.toLocaleString()}</p>
-        </div>
-        <div className="bg-white rounded-lg p-4 border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase">{lang === "pt" ? "Cooperativas" : "Cooperatives"}</p>
-          <p className="text-[24px] font-bold text-neutral-900 mt-1">{stats.cooperativas.toLocaleString()}</p>
-        </div>
-        <div className="bg-white rounded-lg p-4 border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <p className="text-[11px] font-semibold text-neutral-500 uppercase">{lang === "pt" ? "Estados" : "States"}</p>
-          <p className="text-[24px] font-bold text-neutral-900 mt-1">{stats.estados}</p>
-        </div>
-      </div>
-
-      {/* Risk Signals — cross-reference with Recuperação Judicial */}
-      <RiskSignals lang={lang} />
+      {/* KPIs — Phase 24A CRM-focused indicator row */}
+      <RetailerKpiRow lang={lang} />
 
       {/* Search & Filters */}
       <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-4 mb-6">
@@ -399,54 +354,6 @@ export function RetailersDirectory({ lang }: { lang: Lang }) {
           activeId={activeMapMarker} onMarkerClick={setActiveMapMarker} totalCount={totalCount}
           grupoColors={GRUPO_COLORS} />
       )}
-      </>)}
-    </div>
-  );
-}
-
-// ─── Industries List (mini-component for the Industries tab) ──────────────────
-
-function IndustriesList({ lang, onSelect }: { lang: Lang; onSelect: (id: string) => void }) {
-  const [industries, setIndustries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/industries")
-      .then(r => r.json())
-      .then(d => setIndustries(d.industries || []))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-neutral-400">
-        <Loader2 size={20} className="animate-spin mr-2" />
-        {lang === "pt" ? "Carregando indústrias..." : "Loading industries..."}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {industries.map((ind: any) => (
-        <button
-          key={ind.id}
-          onClick={() => onSelect(ind.id)}
-          className="bg-white rounded-lg border border-neutral-200 shadow-sm p-4 text-left hover:border-brand-primary hover:shadow-md transition-all"
-        >
-          <h3 className="text-[14px] font-bold text-neutral-900">{ind.name_display || ind.name}</h3>
-          <div className="flex items-center gap-2 mt-1">
-            {ind.segment?.slice(0, 3).map((s: string) => (
-              <span key={s} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-green-50 text-green-700">{s}</span>
-            ))}
-          </div>
-          <div className="flex items-center gap-4 mt-3 text-[11px] text-neutral-500">
-            <span>{ind.product_count || 0} {lang === "pt" ? "produtos" : "products"}</span>
-            <span>{ind.retailer_count || 0} {lang === "pt" ? "revendas" : "retailers"}</span>
-            {ind.headquarters_country && <span>{ind.headquarters_country}</span>}
-          </div>
-        </button>
-      ))}
     </div>
   );
 }

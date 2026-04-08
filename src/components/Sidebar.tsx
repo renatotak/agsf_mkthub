@@ -5,7 +5,7 @@ import { Lang, t } from "@/lib/i18n";
 import { AgriSafeLogo } from "@/components/AgriSafeLogo";
 import {
   BarChart3, Radar, Newspaper, Calendar,
-  PenTool, BookOpen, Scale, Store,
+  PenTool, BookOpen, Scale, Store, Factory,
   LayoutDashboard, ChevronDown, X, Database, Brain, TestTube, HelpCircle,
   PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
@@ -19,7 +19,7 @@ export type Module =
   | "dataSources"
   | "market" | "inputs" | "competitors" | "news" | "events"
   | "contentHub"
-  | "regulatory" | "recuperacao" | "retailers"
+  | "regulatory" | "recuperacao" | "retailers" | "industries"
   | "knowledgeBase"
   | "settings";
 
@@ -50,6 +50,7 @@ const sections: SidebarSection[] = [
       { id: "news", icon: Newspaper, labelKey: "news" },
       { id: "events", icon: Calendar, labelKey: "events" },
       { id: "retailers", icon: Store, labelKey: "retailers" },
+      { id: "industries", icon: Factory, labelKey: "industries" },
     ],
   },
   {
@@ -273,6 +274,7 @@ export function getModuleTitle(module: Module, lang: Lang): string {
     regulatory: "regulatory",
     recuperacao: "recuperacao",
     retailers: "retailers",
+    industries: "industries",
     knowledgeBase: "knowledgeBase",
   };
   return tr.modules[keyMap[module]];
