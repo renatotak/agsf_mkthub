@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
+import { logActivity } from '@/lib/activity-log'
 import Parser from 'rss-parser'
 
 export const dynamic = 'force-dynamic'
@@ -155,6 +156,7 @@ export async function GET(request: Request) {
       }
     }
 
+    const runStatus = errors.length === 0 ? 'success' : totalNew > 0 ? 'partial' : 'error'
     await logSync(supabase, {
       source: 'sync-regulatory',
       started_at: startedAt,
@@ -162,8 +164,19 @@ export async function GET(request: Request) {
       records_fetched: totalNew + totalFiltered,
       records_inserted: totalNew,
       errors: errors.length,
-      status: errors.length === 0 ? 'success' : totalNew > 0 ? 'partial' : 'error',
+      status: runStatus,
       error_message: errors.length > 0 ? errors.join('; ') : undefined,
+    })
+
+    // Phase 24G2 — activity feed (fail-soft)
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'regulatory_norms',
+      source: 'sync-regulatory',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `RSS jurídico: ${totalNew} norma(s) novas, ${totalFiltered} item(s) filtrados`,
+      metadata: { status: runStatus, new: totalNew, filtered: totalFiltered, errors: errors.length },
     })
 
     return NextResponse.json({
@@ -184,6 +197,15 @@ export async function GET(request: Request) {
         records_fetched: 0, records_inserted: 0, errors: 1,
         status: 'error',
         error_message: error.message,
+      })
+      await logActivity(supabase, {
+        action: 'upsert',
+        target_table: 'regulatory_norms',
+        source: 'sync-regulatory',
+        source_kind: 'cron',
+        actor: 'cron',
+        summary: `sync-regulatory falhou: ${error.message}`.slice(0, 200),
+        metadata: { status: 'error', error: error.message },
       })
     } catch {}
     return NextResponse.json(

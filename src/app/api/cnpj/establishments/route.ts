@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { geocodeAddress } from "@/lib/geocode";
+import { logActivity } from "@/lib/activity-log";
 
 /**
  * GET /api/cnpj/establishments?cnpj_raiz=XXXXXXXX
@@ -192,8 +193,29 @@ export async function GET(req: NextRequest) {
 
   if (upsertError) {
     // Non-fatal: still return the rows we fetched
+    await logActivity(supabaseAdmin, {
+      action: "upsert",
+      target_table: "cnpj_establishments",
+      target_id: root,
+      source: "manual:cnpj_establishments",
+      source_kind: "manual",
+      summary: `BrasilAPI ${root}: ${found.length} estabelecimento(s) — cache upsert falhou: ${upsertError.message}`.slice(0, 200),
+      metadata: { count: found.length, warning: upsertError.message },
+    });
     return NextResponse.json({ source: "BrasilAPI", count: found.length, establishments: found, warning: upsertError.message });
   }
+
+  // Phase 24G2 — activity feed (fail-soft)
+  const geocoded = found.filter((r) => r.latitude != null && r.longitude != null).length;
+  await logActivity(supabaseAdmin, {
+    action: "upsert",
+    target_table: "cnpj_establishments",
+    target_id: root,
+    source: "manual:cnpj_establishments",
+    source_kind: "manual",
+    summary: `BrasilAPI ${root}: ${found.length} estabelecimento(s) sincronizado(s), ${geocoded} geocodificado(s)`,
+    metadata: { count: found.length, geocoded, source: "BrasilAPI" },
+  });
 
   return NextResponse.json({ source: "BrasilAPI", count: found.length, establishments: found });
 }

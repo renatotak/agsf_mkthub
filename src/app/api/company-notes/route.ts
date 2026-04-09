@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ensureLegalEntityUid } from "@/lib/entities";
+import { logActivity } from "@/lib/activity-log";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -54,5 +55,19 @@ export async function POST(req: NextRequest) {
     .upsert(rows, { onConflict: "cnpj_basico,field_key" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Phase 24G2 — activity feed (fail-soft). Notes are AgriSafe-internal
+  // observations on a CNPJ; default tier is agrisafe_confidential.
+  await logActivity(supabaseAdmin, {
+    action: "upsert",
+    target_table: "company_notes",
+    target_id: root,
+    source: "manual:company_notes",
+    source_kind: "manual",
+    summary: `Notas da empresa ${root}: ${rows.length} campo(s) salvo(s) (${Object.keys(updates).join(", ")})`,
+    metadata: { entity_uid: entityUid, fields: Object.keys(updates) },
+    confidentiality: "agrisafe_confidential",
+  });
+
   return NextResponse.json({ saved: rows.length });
 }

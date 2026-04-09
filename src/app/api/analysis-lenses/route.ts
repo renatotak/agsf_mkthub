@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logActivity } from "@/lib/activity-log";
 
 /**
  * /api/analysis-lenses — read/write the analysis lens registry (Phase 24B).
@@ -96,6 +97,18 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  // Phase 24G2 — activity feed (fail-soft)
+  await logActivity(supabaseAdmin, {
+    action: "update",
+    target_table: "analysis_lenses",
+    target_id: id,
+    source: "manual:analysis_lens_edit",
+    source_kind: "manual",
+    summary: `Lente "${data.label_pt || id}" atualizada — campos: ${Object.keys(updates).join(", ")}`,
+    metadata: { fields: Object.keys(updates), is_builtin: data.is_builtin },
+  });
+
   return NextResponse.json({ lens: data });
 }
 
@@ -135,6 +148,18 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Phase 24G2 — activity feed (fail-soft)
+  await logActivity(supabaseAdmin, {
+    action: "insert",
+    target_table: "analysis_lenses",
+    target_id: id,
+    source: "manual:analysis_lens_create",
+    source_kind: "manual",
+    summary: `Lente nova criada: "${row.label_pt}" (${id})`,
+    metadata: { model: row.model, temperature: row.temperature, max_tokens: row.max_tokens },
+  });
+
   return NextResponse.json({ lens: data });
 }
 
@@ -159,5 +184,17 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabaseAdmin.from("analysis_lenses").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Phase 24G2 — activity feed (fail-soft)
+  await logActivity(supabaseAdmin, {
+    action: "delete",
+    target_table: "analysis_lenses",
+    target_id: id,
+    source: "manual:analysis_lens_delete",
+    source_kind: "manual",
+    summary: `Lente "${id}" removida`,
+    metadata: {},
+  });
+
   return NextResponse.json({ ok: true });
 }

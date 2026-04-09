@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { isGeminiConfigured, generateEmbedding, summarizeText } from '@/lib/gemini'
+import { logActivity } from '@/lib/activity-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -160,6 +161,30 @@ export async function GET(request: Request) {
       }
     }
 
+    // Phase 24G2 — activity feed (fail-soft). Archive runs both INSERT into
+    // news_knowledge AND DELETE from agro_news, so we log two events to
+    // surface both sides of the trade.
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'news_knowledge',
+      source: 'archive-old-news',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `Arquivo: ${groups.size} grupo(s) resumido(s) cobrindo ${archived} artigo(s)`,
+      metadata: { status: errors.length === 0 ? 'success' : 'partial', groups: groups.size, archived, errors: errors.length },
+    })
+    if (deleted > 0) {
+      await logActivity(supabase, {
+        action: 'delete',
+        target_table: 'agro_news',
+        source: 'archive-old-news',
+        source_kind: 'cron',
+        actor: 'cron',
+        summary: `Arquivo: ${deleted} notícia(s) antigas removidas após resumo`,
+        metadata: { deleted },
+      })
+    }
+
     return NextResponse.json({
       success: true,
       message: 'News archival completed',
@@ -174,6 +199,18 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     console.error('Error archiving news:', error)
+    try {
+      const supabase = createAdminClient()
+      await logActivity(supabase, {
+        action: 'upsert',
+        target_table: 'news_knowledge',
+        source: 'archive-old-news',
+        source_kind: 'cron',
+        actor: 'cron',
+        summary: `archive-old-news falhou: ${error.message}`.slice(0, 200),
+        metadata: { status: 'error', error: error.message },
+      })
+    } catch {}
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to archive news' },
       { status: 500 }

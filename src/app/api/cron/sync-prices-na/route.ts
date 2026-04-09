@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/utils/supabase/admin';
+import { logActivity } from '@/lib/activity-log';
 
 // Helper to fetch and parse Notícias Agrícolas (NA) prices
 export async function GET(request: Request) {
@@ -59,15 +60,39 @@ export async function GET(request: Request) {
     // Ideally, we'd insert this into Supabase:
     // await supabase.from('commodity_prices_regional').insert(formattedData)
     // For now, logging and returning to ensure the cron works
-    
-    return NextResponse.json({ 
-      success: true, 
-      message: `Scraped ${count} price records from Notícias Agrícolas`, 
+
+    // Phase 24G2 — activity feed (fail-soft). This cron currently scrapes
+    // without persisting, so we log it as a probe so the operator can see
+    // it ran and what selector yield it produced.
+    await logActivity(createAdminClient(), {
+      action: 'upsert',
+      target_table: 'commodity_prices_regional',
+      source: 'sync-prices-na',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `NA cotações: ${count} linha(s) extraídas (não persistido — stub)`,
+      metadata: { status: 'success', scraped: count, persisted: 0, note: 'scraper stub — does not write' },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Scraped ${count} price records from Notícias Agrícolas`,
       data: scrapedData.slice(0, 50) // Return sample
     });
 
   } catch (error: any) {
     console.error('Error syncing prices from NA:', error);
+    try {
+      await logActivity(createAdminClient(), {
+        action: 'upsert',
+        target_table: 'commodity_prices_regional',
+        source: 'sync-prices-na',
+        source_kind: 'cron',
+        actor: 'cron',
+        summary: `sync-prices-na falhou: ${error.message}`.slice(0, 200),
+        metadata: { status: 'error', error: error.message },
+      });
+    } catch {}
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

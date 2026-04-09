@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { isGeminiConfigured, analyzeRetailer, generateEmbedding } from '@/lib/gemini'
+import { logActivity } from '@/lib/activity-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -198,6 +199,17 @@ export async function GET(request: Request) {
       }
     }
 
+    // Phase 24G2 — activity feed (fail-soft)
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'retailer_intelligence',
+      source: 'sync-retailer-intelligence',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `Inteligência de revendas: ${analyzed} analisada(s) (lote ${toAnalyze.length}, ${recentlyAnalyzed.size} já recente)`,
+      metadata: { status: errors.length === 0 ? 'success' : 'partial', analyzed, batch_size: toAnalyze.length, errors: errors.length },
+    })
+
     return NextResponse.json({
       success: true,
       message: 'Retailer intelligence sync completed',
@@ -207,6 +219,18 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     console.error('Error in sync-retailer-intelligence:', error)
+    try {
+      const supabase = createAdminClient()
+      await logActivity(supabase, {
+        action: 'upsert',
+        target_table: 'retailer_intelligence',
+        source: 'sync-retailer-intelligence',
+        source_kind: 'cron',
+        actor: 'cron',
+        summary: `sync-retailer-intelligence falhou: ${error.message}`.slice(0, 200),
+        metadata: { status: 'error', error: error.message },
+      })
+    } catch {}
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to sync retailer intelligence' },
       { status: 500 }

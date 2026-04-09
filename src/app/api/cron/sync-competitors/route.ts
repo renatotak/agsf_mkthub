@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
+import { logActivity } from '@/lib/activity-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,6 +111,7 @@ export async function GET(request: Request) {
     }
 
     // 5. Log and respond
+    const runStatus = errors.length === 0 ? 'success' : 'partial'
     await logSync(supabase, {
       source: 'sync-competitors',
       started_at: startedAt,
@@ -117,8 +119,19 @@ export async function GET(request: Request) {
       records_fetched: recentNews?.length || 0,
       records_inserted: signalsInserted,
       errors: errors.length,
-      status: errors.length === 0 ? 'success' : 'partial',
+      status: runStatus,
       error_message: errors.length > 0 ? errors.join('; ') : undefined,
+    })
+
+    // Phase 24G2 — activity feed (fail-soft)
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'competitor_signals',
+      source: 'sync-competitors',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `Concorrentes: ${signalsInserted} sinal(is) gerado(s) a partir de ${recentNews?.length || 0} notícias`,
+      metadata: { status: runStatus, signals: signalsInserted, news_scanned: recentNews?.length || 0, errors: errors.length },
     })
 
     return NextResponse.json({
@@ -139,6 +152,15 @@ export async function GET(request: Request) {
       errors: 1,
       status: 'error',
       error_message: error.message,
+    })
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'competitor_signals',
+      source: 'sync-competitors',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `sync-competitors falhou: ${error.message}`.slice(0, 200),
+      metadata: { status: 'error', error: error.message },
     })
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }

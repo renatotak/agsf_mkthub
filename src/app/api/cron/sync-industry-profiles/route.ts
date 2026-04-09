@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { logActivity } from '@/lib/activity-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -134,6 +135,17 @@ export async function GET(request: Request) {
       }
     }
 
+    // Phase 24G2 — activity feed (fail-soft)
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'industry_products',
+      source: 'sync-industry-profiles',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `Indústrias: ${industries.length} processada(s), ${totalProducts} produto(s) AGROFIT sincronizados`,
+      metadata: { status: errors.length === 0 ? 'success' : 'partial', industries: industries.length, products: totalProducts, errors: errors.length },
+    })
+
     return NextResponse.json({
       success: true,
       message: 'Industry profiles sync completed',
@@ -146,6 +158,18 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     console.error('Error in sync-industry-profiles:', error)
+    try {
+      const supabase = createAdminClient()
+      await logActivity(supabase, {
+        action: 'upsert',
+        target_table: 'industry_products',
+        source: 'sync-industry-profiles',
+        source_kind: 'cron',
+        actor: 'cron',
+        summary: `sync-industry-profiles falhou: ${error.message}`.slice(0, 200),
+        metadata: { status: 'error', error: error.message },
+      })
+    } catch {}
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to sync industry profiles' },
       { status: 500 }

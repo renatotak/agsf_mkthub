@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
+import { logActivity } from '@/lib/activity-log'
 import { writeEntityMentions } from '@/lib/entity-matcher'
 import Parser from 'rss-parser'
 import { RJ_NEWS_SOURCES, RJ_KEYWORDS } from '@/data/recuperacao'
@@ -143,6 +144,7 @@ export async function GET(request: Request) {
       }
     }
 
+    const runStatus = errors.length === 0 ? 'success' : totalNew > 0 ? 'partial' : 'error'
     await logSync(supabase, {
       source: 'sync-recuperacao-judicial',
       started_at: startedAt,
@@ -150,8 +152,19 @@ export async function GET(request: Request) {
       records_fetched: totalNew + totalFiltered,
       records_inserted: totalNew,
       errors: errors.length,
-      status: errors.length === 0 ? 'success' : totalNew > 0 ? 'partial' : 'error',
+      status: runStatus,
       error_message: errors.length > 0 ? errors.join('; ') : undefined,
+    })
+
+    // Phase 24G2 — activity feed (fail-soft)
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'recuperacao_judicial',
+      source: 'sync-recuperacao-judicial',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `RJ RSS: ${totalNew} caso(s) novos, ${totalFiltered} item(s) filtrados`,
+      metadata: { status: runStatus, new: totalNew, filtered: totalFiltered, errors: errors.length },
     })
 
     return NextResponse.json({
@@ -172,6 +185,15 @@ export async function GET(request: Request) {
         records_fetched: 0, records_inserted: 0, errors: 1,
         status: 'error',
         error_message: error.message,
+      })
+      await logActivity(supabase, {
+        action: 'upsert',
+        target_table: 'recuperacao_judicial',
+        source: 'sync-recuperacao-judicial',
+        source_kind: 'cron',
+        actor: 'cron',
+        summary: `sync-recuperacao-judicial falhou: ${error.message}`.slice(0, 200),
+        metadata: { status: 'error', error: error.message },
       })
     } catch {}
     return NextResponse.json(

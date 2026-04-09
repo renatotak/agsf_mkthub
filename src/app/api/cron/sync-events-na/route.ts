@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import * as cheerio from 'cheerio'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { logSync } from '@/lib/sync-logger'
+import { logActivity } from '@/lib/activity-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -220,6 +221,17 @@ export async function GET(request: Request) {
       status: 'success',
     })
 
+    // Phase 24G2 — activity feed (fail-soft)
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'events',
+      source: 'sync-events-na',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `AgroAgenda (NA): ${events.length} evento(s) sincronizados`,
+      metadata: { status: 'success', upserted: events.length, fetched: eventItems.length },
+    })
+
     return NextResponse.json({
       success: true,
       message: `Scraped ${events.length} events from Notícias Agrícolas`,
@@ -237,6 +249,16 @@ export async function GET(request: Request) {
       errors: 1,
       status: 'error',
       error_message: error.message,
+    })
+
+    await logActivity(supabase, {
+      action: 'upsert',
+      target_table: 'events',
+      source: 'sync-events-na',
+      source_kind: 'cron',
+      actor: 'cron',
+      summary: `sync-events-na falhou: ${error.message}`.slice(0, 200),
+      metadata: { status: 'error', error: error.message },
     })
 
     return NextResponse.json(
