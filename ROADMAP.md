@@ -1,20 +1,21 @@
 # AgriSafe Market Hub — Roadmap
 
-> **Last updated:** 2026-04-08
-> 4 verticals · 14 modules · 51 Supabase tables · 39 SQL migrations · 17 cron routes · 9 registered scrapers (all healthy) · 9,674 legal entities · 5-entity model live.
+> **Last updated:** 2026-04-09
+> 4 verticals · 14 modules · 55 Supabase tables · 43 SQL migrations · 17 cron routes · 9 registered scrapers (all healthy) · 9,674 legal entities · 5-entity model live · tier-aware chat · CRM tables · activity log.
 > Latest user task list: `documentation/TODO_2026-04-06.md`
 
 ---
 
-## Status Snapshot (2026-04-08)
+## Status Snapshot (2026-04-09)
 
 | Area | Live |
 |---|---|
 | **Architecture** | 4 verticals (Ingest → Analyze → Create → Comply), 14 modules |
 | **5-entity model** | 9,674 legal_entities · 9,609 entity_roles · 143 entity_mentions |
-| **Diretório de Canais** | 9,328 retailers · 24,275 retailer_locations (geocoded) · CRM-style 4-card KPI row · sortable columns · RJ + News-mention modals |
-| **Diretório de Indústrias** | 274 (18 curated + 256 imported via CSV) · 1,699 cnpj_establishments (100% geocoded via Nominatim) · list+map+expandable rows · 4-button row actions (RF data / Web search / AI analysis / Buscar filiais) |
-| **Marco Regulatório** | 16 norms (CVM 6 · BCB 6 · CONGRESSO 3 · CNJ 1) · "Inserir Norma" + "Fontes" modals · CNJ JSON daily · CVM curated daily + historical backfill done · BCB curated · key agro laws (CPR, Falências, Nova Lei do Agro) seeded · news norm-citation extractor inline in sync-agro-news |
+| **Diretório de Canais** | 9,328 retailers · 24,275 retailer_locations (geocoded) · CRM-style 4-card KPI row · sortable columns · RJ + News-mention modals · **CRM panel + Street View tile per row (Phase 24G)** |
+| **Diretório de Indústrias** | 274 (18 curated + 256 imported via CSV) · 1,699 cnpj_establishments (100% geocoded via Nominatim) · list+map+expandable rows · 4-button row actions (RF data / Web search / AI analysis / Buscar filiais) · **CRM panel + Street View tile per row (Phase 24G)** |
+| **CRM (Phase 24G)** | `key_persons` + `meetings` + `leads` tables (all `agrisafe_confidential`) · `EntityCrmPanel` mounted in both directories · `/api/crm/*` CRUD endpoints · leads can link to existing `campaigns` table |
+| **Marco Regulatório** | 16 norms with **CNAE classification** (CVM 6 with **correct historical dates**, BCB 6, CONGRESSO 3, CNJ 1) · "Inserir Norma" + "Fontes" modals · CNJ JSON daily · CVM curated daily + historical backfill done · BCB curated · key agro laws seeded · news norm-citation extractor inline in sync-agro-news |
 | **Recuperação Judicial** | 131 cases (118 RJ + 13 manual) · "Adicionar CNPJ" modal with BrasilAPI lookup + DDG debt scrape |
 | **Pulso de Mercado** | BCB SGS · NA prices (regional + futures) · Yahoo intl futures · FAOSTAT macro (5 cultures) · World Bank Pink Sheet annual prices (6 commodities × 15 years) |
 | **Notícias Agro** | 203 articles · 5 RSS feeds + Reading Room v3.0 Chrome extension · CRUD modal · entity-mention matcher + norm-citation extractor inline |
@@ -22,7 +23,8 @@
 | **Ingestão de Dados** | 176 sources catalogued (125 active / 25 inactive / 24 error / 2 unchecked) · 9 scrapers in `scraper_registry` · Saúde dos Scrapers tab · source→tables mapping |
 | **Inteligência de Insumos** | Oracle UX with culture+pest filter · molecule-grouped brand alternatives sorted by competitiveness (patented → commodity) · federal AGROFIT bulk catalog |
 | **Radar Competitivo** | CRUD modal · Harvey Ball matrix · web enrichment per company |
-| **Configurações** | Editable analysis lenses (DB-backed prompts via `analysis_lenses` table) · Reading Room install guide |
+| **Base de Conhecimento** | Semantic search + RAG chat · **tier-aware filtering (Phase 24G)** — chat respects caller tier, defaults to `public` for unauthenticated sessions |
+| **Configurações** | Editable analysis lenses (DB-backed prompts) · Reading Room install guide · **Activity Log panel (Phase 24G2)** — every cron run + manual insert + extension push surfaced with filter chips |
 | **Auth + deploy** | Supabase Auth + SSR middleware · Vercel Hobby (single daily cron at 08:00 UTC) |
 
 ---
@@ -60,6 +62,9 @@ Every shipped phase in chronological order. For deeper detail on a specific phas
 | **24F** | **CNJ atos + news norm-citation extractor.** Migration 039. `sync-cnj-atos` walks atos.cnj.jus.br/api/atos JSON daily, regex-filters by agro keywords, upserts hits with body=CNJ. `src/lib/extract-norms-from-news.ts` 11-pattern extractor hooked into sync-agro-news inline. `backfill-norms-from-news.js` for historical reprocessing. **First run found Provimento 216/2026 in the live DB.** | 2026-04-08 |
 | **24D-historical** | **Full CVM walk.** `backfill-cvm-historical.js` walked all 868 docs (inst001..627 + resol001..241), surfaced 5 additional historical agro-relevant CVM Resoluções (165, 175, 184, 214 + Instrução 422 + 600). CVM body count: 1 → 6. | 2026-04-08 |
 | **27 (UI)** | **Source registry health check.** `check-source-registry.js` probed all 176 entries. Result: 125 active / 25 inactive / 24 error / 2 unchecked. Ingestão de Dados KPI strip now reflects real data instead of "166 unchecked". | 2026-04-08 |
+| **24G** | **Diretório CRM build-out.** Migrations 040 + 041. **Slice 1 — Confidentiality enforcement:** new `src/lib/confidentiality.ts` (`ConfidentialityTier` type, `visibleTiers()`, `resolveCallerTier()`, `tierFilter()`). Migration 040 drops + recreates `match_knowledge_items` RPC with `filter_confidentiality text[] DEFAULT ['public']` arg (fail-closed). `/api/knowledge/chat` resolves caller tier and passes visible tiers to the RPC — chat can no longer leak `agrisafe_confidential` rows to anonymous sessions. **Slice 2 — CRM tables:** migration 041 adds `key_persons` (16 cols), `meetings` (14 cols), `leads` (15 cols), all defaulting to `agrisafe_confidential`, anchored to `legal_entities.entity_uid`, with updated_at triggers + RLS. `leads.linked_campaign_id` FKs to existing `campaigns` so a lead generated by Central de Conteúdo can be tracked. New `/api/crm/key-persons`, `/api/crm/meetings`, `/api/crm/leads` CRUD endpoints. New `EntityCrmPanel.tsx` (collapsible 3-section panel: Pessoas-chave / Reuniões / Pipeline with inline add forms + stage progression dropdown). Mounted in both directories. **Slice 3 — Street View tile:** new `StreetViewTile.tsx` probes Google Street View Metadata API first (free, never burns Static API quota on rural addresses with no panorama coverage), then renders 480×260 static image. Mounted in both directories for any matriz with lat/lng. Smoke-tested all 3 endpoints + chat tier filter against live DB. | 2026-04-08 |
+| **24G2** | **Marco Reg fixes + Activity Log.** **Marco Reg slice:** (a) tightened `BODY_AGRO_PATTERN` in `sync-cvm-agro` — dropped loose `fundo.*agro` clause and required precise FIAGRO/CRA/agro-context matches. (b) Fixed CVM date extractor — was returning `today` for `cvm-422`/`cvm-175` because the regex only knew "DD de MONTH de YYYY" and ISO formats, but CVM legacy HTML uses `DD/MM/YYYY` right after the title. New 3-pass extractor cuts the body at footer markers first, then DD/MM/YYYY → "DD de MONTH de YYYY" → ISO with year-range validation. Reran the historical backfill — all 6 CVM rows now have correct dates (cvm-422 → 2005-09-08, cvm-175 → 2022-12-23, etc). (c) Migration 042 adds `regulatory_norms.affected_cnaes text[]` + GIN index. New `src/lib/cnae-classifier.ts` (18 deterministic regex rules → IBGE 7-digit CNAE codes). Wired into 6 paths: `regulatory/upload`, `sync-cvm-agro`, `sync-cnj-atos`, `sync-bcb-rural`, `sync-key-agro-laws`, `extract-norms-from-news`. Backfilled 11/16 existing rows. **Activity Log slice:** Migration 043 adds `activity_log` table (`action`, `target_table`, `target_id`, `source`, `source_kind`, `actor`, `summary`, `metadata` jsonb, `confidentiality`). New `src/lib/activity-log.ts` fail-soft helper (`logActivity` + `logActivityBatch`). Hooked into 8 write paths: `regulatory/upload`, `rj-add`, `crm/key-persons`, `crm/meetings`, `crm/leads`, **`runScraper()` wrapper** (covers all 9 scrapers in one shot), `sync-agro-news` norm extractor, `reading-room/ingest`. New `/api/activity` read endpoint (filter by `source_kind`/`target_table`/`source`, tier-aware). New `ActivityLogPanel.tsx` mounted in Settings — three filter chip rows (origem/tabela/ação) with active-filter pills, paginated feed, color-coded by source_kind, relative time stamps. Smoke-tested end-to-end: regulatory upload + activity feed both green. | 2026-04-09 |
+| **27 (UI)** | **Source registry health check.** `check-source-registry.js` probed all 176 entries. Result: 125 active / 25 inactive / 24 error / 2 unchecked. Ingestão de Dados KPI strip now reflects real data instead of "166 unchecked". | 2026-04-08 |
 
 ---
 
@@ -69,9 +74,10 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 
 ### Marco Regulatório / Compliance
 
-- **CNAE classifier on insert** — when a norm is inserted (manually or via CNJ scraper), run an algorithmic CNAE classifier to populate an `affected_companies` array. The norm-extractor lib already tags `affected_areas`; mapping those to CNAEs is the missing step.
-- **CVM date-extractor fix** — `cvm-422` and `cvm-175` get `published_at = today` because the date regex picks up CVM's "last updated" footer instead of the original publication date in `<p>` body. Look in the first body paragraph, not the page footer.
-- **Tighten CVM agro pattern** — `fundo.{0,30}agro` clause causes 2/6 false positives (cvm-165, cvm-600). Consider dropping it; the FIAGRO matches don't need it.
+- **CNAE classifier on insert** — ✅ **DONE 2026-04-09** (Phase 24G2). Mig 042 + `src/lib/cnae-classifier.ts` wired into 6 paths.
+- **CVM date-extractor fix** — ✅ **DONE 2026-04-09** (Phase 24G2). 3-pass extractor (DD/MM/YYYY → "DD de MONTH de YYYY" → ISO) + footer-marker cut.
+- **Tighten CVM agro pattern** — ✅ **DONE 2026-04-09** (Phase 24G2). Dropped `fundo.*agro`; required precise FIAGRO/CRA/agro-context matches.
+- **`affected_cnaes` → `legal_entities` JOIN view** — once CNAE classifier has been running for a while and the column is dense, build a `v_norms_affecting_entity` view that surfaces "this norm affects N companies in your portfolio" in the Marco Regulatório UI.
 
 ### Ingestão de Dados
 
@@ -95,18 +101,22 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 - **Real price data** — v0 Oracle uses `holder_count` as a proxy for "cheaper alternative". A real price comparison needs scraping retailer price tables.
 - **Region awareness** — kicks in once state secretariat scrapers ship.
 
-### Diretório (CRM build-out — Phase 24G)
+### Diretório (CRM build-out — Phase 24G shipped, follow-ups remain)
 
-- **Companies expanding operations** — query Receita Federal `crawlers.cnpj_estabelecimentos` for recently opened CNPJs in agribusiness CNAEs by region.
-- **Per-company enrichment** — Google Maps Street View / Places photo of POS, OneNote meeting file imports, key persons, lead pipeline.
-- **3-tier confidentiality enforcement at query level** — column exists on 20+ tables (mig 022); reads don't filter on it yet.
-- **Knowledge Base + chat tier-aware filtering** — chat must never leak `agrisafe_confidential` content to a `public`-tier session.
-- **CRM workflow** — schedule meetings, find leads, push leads to Central de Conteúdo for newsletter / WhatsApp / email outreach.
+- **Companies expanding operations** — query Receita Federal `crawlers.cnpj_estabelecimentos` for recently opened CNPJs in agribusiness CNAEs by region. **DEFERRED** — needs `CRAWLERS_DATABASE_URL` env var design + user authorization for Vercel pulling from external DB on a schedule.
+- **OneNote import for meetings** — `meetings.source = 'onenote_import'` enum value already reserved. Needs MS Graph API auth flow + file format reverse-engineering. **DEFERRED** to its own session.
+- **Newsletter / WhatsApp / email send-out** — `leads.linked_campaign_id` FK to `campaigns` already in place; lead can be tagged with a campaign. Actual channel send-out needs WhatsApp Business API / SendGrid integration. **DEFERRED**.
+- **Per-company enrichment basics** — ✅ **DONE 2026-04-08** (Phase 24G slice 2 + 3): `key_persons`, `meetings`, `leads` tables + `EntityCrmPanel` + `StreetViewTile` mounted in both directories.
+- **3-tier confidentiality enforcement at query level** — ✅ **PARTIAL** (Phase 24G slice 1): chat / RAG path is filtered via mig 040 + `src/lib/confidentiality.ts`. CRM endpoints still service-role for now (UI is the gate). Add tier filtering to `/api/crm/*` reads when multi-user RBAC ships.
+- **Knowledge Base + chat tier-aware filtering** — ✅ **DONE 2026-04-08** (Phase 24G slice 1).
+- **CRM update/delete activity logging** — POST is hooked into `activity_log` (Phase 24G2); PATCH and DELETE on `/api/crm/*` not yet. Quick follow-up.
+- **Backfill scripts log to activity_log** — `backfill-cvm-historical.js`, `backfill-cnpj-establishments.js`, etc. write directly to DB without calling `logActivity()`. Each could call the helper at end of batch. Quick follow-up.
+- **`client_confidential` tier rollout** — defined in the enum and helper but unused. Activate when partner-NDA workflow lands.
 
 ### Knowledge / RAG / Webapp
 
 - **MCP server** that exposes the knowledge base to Claude / GPT / other LLM agents.
-- **RAG endpoint with confidentiality-tier-aware filtering** — pgvector retrieval respecting the user's tier permissions.
+- **RAG endpoint with confidentiality-tier-aware filtering** — ✅ **DONE 2026-04-08** (Phase 24G slice 1). Mig 040 added `filter_confidentiality` to `match_knowledge_items` RPC; `/api/knowledge/chat` resolves caller tier and passes visible tiers.
 - **Daily executive briefing** generated from the knowledge base.
 - **Anomaly narratives** when MarketPulse detects rupture (`Math.abs(change) > 2 * stddev`).
 - **Webapp build** — same UI as the Next.js app but with a permanent chat panel always available.
@@ -171,12 +181,13 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 - Industries: `industries` (18 curated, 256 imported via entity_roles) · `industry_products` (growing) · `retailer_industries` (392) · `active_ingredients` · `industry_product_uses` · `industry_product_ingredients`
 - Risk: `recuperacao_judicial` (131)
 - News + content: `agro_news` (203) · `news_sources` (6+) · `news_knowledge` · `knowledge_items` · `published_articles` (6) · `content_topics` (5) · `competitors` (7) · `competitor_signals` (13)
-- Regulatory: `regulatory_norms` (16: CVM 6 + BCB 6 + CONGRESSO 3 + CNJ 1)
+- Regulatory: `regulatory_norms` (16 with `affected_cnaes` from Phase 24G2: CVM 6 + BCB 6 + CONGRESSO 3 + CNJ 1)
 - Macro: `commodity_prices` (6) · `commodity_price_history` · `market_indicators` (6) · `macro_statistics` (96: WB 90 + USDA 6) · `commodity_prices_regional`
 - Events: `events`
 - Enrichment: `company_enrichment` · `company_notes` · `company_research` (with `analysis_type` column from Phase 24B)
+- **CRM (Phase 24G):** `key_persons` · `meetings` · `leads` (all default `agrisafe_confidential`, FK → legal_entities)
 - Config: `analysis_lenses` (3: retailer, industry, generic)
-- Telemetry: `scraper_registry` (9 healthy) · `scraper_runs` · `scraper_knowledge` · `sync_logs`
+- Telemetry: `scraper_registry` (9 healthy) · `scraper_runs` · `scraper_knowledge` · `sync_logs` · **`activity_log` (Phase 24G2 — every write across the system)**
 
 **Views (rebuilt in Phase 17B/17E with `security_invoker=on`)**
 - `v_retailer_profile` — retailer + RF enrichment + intelligence in one row
