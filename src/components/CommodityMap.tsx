@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { Component, useState, useEffect } from "react";
 import { APIProvider, Map as GMap, AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
 import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
 
@@ -16,6 +16,25 @@ interface RegionalPrice {
   direction: "up" | "down" | "stable";
   lat: number | null;
   lng: number | null;
+}
+
+// ─── Map error boundary ───────────────────────────────────────────────────
+
+class MapErrorBoundary extends Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
 }
 
 const COMMODITY_TABS = [
@@ -214,9 +233,11 @@ export function CommodityMap({ lang, slug }: { lang: string; slug?: string }) {
         </div>
       )}
 
+      <MapErrorBoundary fallback={<div className="flex items-center justify-center h-full text-neutral-500 text-sm">Google Maps failed to load. The API key may be expired.</div>}>
       <APIProvider apiKey={apiKey}>
         <MapContent slug={activeSlug} lang={lang} />
       </APIProvider>
+      </MapErrorBoundary>
     </div>
   );
 }

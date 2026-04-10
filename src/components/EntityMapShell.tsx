@@ -22,12 +22,31 @@
  *     retailer_locations rows.
  */
 
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { Component, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { APIProvider, Map as GMap, AdvancedMarker, InfoWindow, useMap } from "@vis.gl/react-google-maps";
 import {
   MapPin, Search, X, RefreshCw, Home, Maximize, Eye, EyeOff, Loader2,
 } from "lucide-react";
 import type { Lang } from "@/lib/i18n";
+
+// ─── Map error boundary ───────────────────────────────────────────────────
+
+class MapErrorBoundary extends Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
 
 // ─── UF coords (subset for centering — full list in DashboardMap) ──────────
 
@@ -396,6 +415,7 @@ export function EntityMapShell({
 
       {/* ── Map ── */}
       <div id={containerId} className="relative w-full bg-neutral-100" style={{ height }}>
+        <MapErrorBoundary fallback={<div className="flex items-center justify-center h-full text-neutral-500 text-sm">Google Maps failed to load. The API key may be expired.</div>}>
         <APIProvider apiKey={MAP_KEY}>
           <GMap
             defaultCenter={mapCenter}
@@ -510,6 +530,7 @@ export function EntityMapShell({
             />
           </GMap>
         </APIProvider>
+        </MapErrorBoundary>
       </div>
 
       {/* ── Optional bottom strip ── */}
