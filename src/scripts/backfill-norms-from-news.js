@@ -170,6 +170,27 @@ async function main() {
   }
   console.log(`Upserted: ${inserted}/${upserts.length}`);
 
+  // Phase 25 — log to activity_log via the same pg client
+  try {
+    await c.query(
+      `insert into activity_log (action, target_table, target_id, source, source_kind, actor, summary, metadata, confidentiality)
+       values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,
+      [
+        'upsert',
+        'regulatory_norms',
+        null,
+        'backfill:norms-from-news',
+        'backfill',
+        'manual',
+        `Backfill norms-from-news: scaneou ${scanned} artigos, ${withHits} com hits, ${inserted} normas upsertadas`,
+        JSON.stringify({ scanned, with_hits: withHits, candidates: upserts.length, upserted: inserted }),
+        'public',
+      ],
+    );
+  } catch (e) {
+    console.warn(`[activity_log] insert failed (non-fatal): ${e.message}`);
+  }
+
   await c.end();
 }
 

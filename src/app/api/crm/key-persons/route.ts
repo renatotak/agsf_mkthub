@@ -127,6 +127,18 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 })
+
+  await logActivity(supabaseAdmin, {
+    action: "update",
+    target_table: "key_persons",
+    target_id: id,
+    source: "manual:crm_key_person",
+    source_kind: "manual",
+    summary: `${data.full_name || id}: ${Object.keys(updates).join(", ")}`.slice(0, 200),
+    confidentiality: "agrisafe_confidential",
+    metadata: { entity_uid: data.entity_uid, fields: Object.keys(updates) },
+  })
+
   return NextResponse.json({ key_person: data })
 }
 
@@ -136,11 +148,25 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
 
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("key_persons")
     .update({ active: false })
     .eq("id", id)
+    .select("entity_uid, full_name")
+    .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logActivity(supabaseAdmin, {
+    action: "delete",
+    target_table: "key_persons",
+    target_id: id,
+    source: "manual:crm_key_person",
+    source_kind: "manual",
+    summary: `Pessoa-chave desativada: ${data?.full_name || id}`.slice(0, 200),
+    confidentiality: "agrisafe_confidential",
+    metadata: { entity_uid: data?.entity_uid, soft_delete: true },
+  })
+
   return NextResponse.json({ ok: true })
 }

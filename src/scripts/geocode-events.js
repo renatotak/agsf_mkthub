@@ -174,6 +174,30 @@ async function main() {
   console.log(`  cache hits:    ${stats.cached}`);
   console.log(`  skipped (no real location): ${stats.skipped}`);
   console.log(`  failed:        ${stats.failed}`);
+
+  // Phase 25 — log to activity_log so the Settings panel surfaces this
+  // backfill the same way it surfaces crons. Fail-soft.
+  if (!dryRun) {
+    try {
+      await supaFetch('activity_log', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'update',
+          target_table: 'events',
+          target_id: null,
+          source: 'backfill:geocode-events',
+          source_kind: 'backfill',
+          actor: 'manual',
+          summary: `Geocoded ${stats.geocoded} de ${stats.total} eventos sem lat/lng (${stats.skipped} skip, ${stats.failed} fail)`,
+          metadata: stats,
+          confidentiality: 'public',
+        }),
+        prefer: 'return=minimal',
+      });
+    } catch (err) {
+      console.warn(`[activity_log] insert failed (non-fatal): ${err.message}`);
+    }
+  }
 }
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {

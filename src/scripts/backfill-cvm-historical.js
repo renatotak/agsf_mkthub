@@ -320,6 +320,27 @@ async function main() {
     }
   }
 
+  // Phase 25 — log to activity_log
+  try {
+    await c.query(
+      `insert into activity_log (action, target_table, target_id, source, source_kind, actor, summary, metadata, confidentiality)
+       values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,
+      [
+        'upsert',
+        'regulatory_norms',
+        null,
+        'backfill:cvm-historical',
+        'backfill',
+        'manual',
+        `Backfill CVM histórico: ${stats.upserted}/${hits.length} norma(s) CVM agro upsertadas`,
+        JSON.stringify({ upserted: stats.upserted, total_hits: hits.length }),
+        'public',
+      ],
+    );
+  } catch (e) {
+    console.warn(`[activity_log] insert failed (non-fatal): ${e.message}`);
+  }
+
   await c.end();
 
   console.log(`Upserted: ${stats.upserted}/${hits.length}`);

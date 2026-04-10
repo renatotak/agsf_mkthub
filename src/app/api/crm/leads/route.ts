@@ -102,6 +102,18 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 })
+
+  await logActivity(supabaseAdmin, {
+    action: "update",
+    target_table: "leads",
+    target_id: id,
+    source: "manual:crm_lead",
+    source_kind: "manual",
+    summary: `Lead [${data.stage || "?"}]${updates.stage ? " → " + updates.stage : ""}: ${Object.keys(updates).join(", ")}`.slice(0, 200),
+    confidentiality: "agrisafe_confidential",
+    metadata: { entity_uid: data.entity_uid, fields: Object.keys(updates), new_stage: updates.stage },
+  })
+
   return NextResponse.json({ lead: data })
 }
 
@@ -109,7 +121,25 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
 
+  const { data: existing } = await supabaseAdmin
+    .from("leads")
+    .select("entity_uid, stage, service_interest")
+    .eq("id", id)
+    .maybeSingle()
+
   const { error } = await supabaseAdmin.from("leads").delete().eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logActivity(supabaseAdmin, {
+    action: "delete",
+    target_table: "leads",
+    target_id: id,
+    source: "manual:crm_lead",
+    source_kind: "manual",
+    summary: `Lead removido [${existing?.stage || "?"}]${existing?.service_interest ? ": " + existing.service_interest : ""}`.slice(0, 200),
+    confidentiality: "agrisafe_confidential",
+    metadata: { entity_uid: existing?.entity_uid },
+  })
+
   return NextResponse.json({ ok: true })
 }

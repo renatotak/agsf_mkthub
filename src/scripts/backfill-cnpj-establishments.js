@@ -343,6 +343,35 @@ async function main() {
   console.log(`skipped (cached): ${skipped}`);
   console.log(`establishments:   ${totalEstablishments}`);
   console.log(`geocoded:         ${geoHits} (${totalEstablishments > 0 ? Math.round((geoHits / totalEstablishments) * 100) : 0}%)`);
+
+  // Phase 25 — write a single activity_log row summarizing the run, so the
+  // Settings → Registro de Atividade panel surfaces backfills the same way
+  // it surfaces crons. Fail-soft.
+  if (!DRY) {
+    try {
+      await sb.from("activity_log").insert({
+        action: "upsert",
+        target_table: "cnpj_establishments",
+        target_id: null,
+        source: "backfill:cnpj-establishments",
+        source_kind: "backfill",
+        actor: "manual",
+        summary: `Backfill cnpj_establishments: ${totalEstablishments} estab(s) para role=${ROLE}, ${geoHits} geocodificados`,
+        metadata: {
+          role: ROLE,
+          processed: targets.length - skipped,
+          skipped_cached: skipped,
+          establishments: totalEstablishments,
+          geocoded: geoHits,
+          skip_google: SKIP_GOOGLE,
+          refresh: REFRESH,
+        },
+        confidentiality: "public",
+      });
+    } catch (e) {
+      console.warn(`[activity_log] insert failed (non-fatal): ${e.message}`);
+    }
+  }
 }
 
 main().catch((e) => {

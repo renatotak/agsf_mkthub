@@ -112,6 +112,18 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 })
+
+  await logActivity(supabaseAdmin, {
+    action: "update",
+    target_table: "meetings",
+    target_id: id,
+    source: "manual:crm_meeting",
+    source_kind: "manual",
+    summary: `Reunião ${data.meeting_date || id}: ${Object.keys(updates).join(", ")}`.slice(0, 200),
+    confidentiality: "agrisafe_confidential",
+    metadata: { entity_uid: data.entity_uid, fields: Object.keys(updates) },
+  })
+
   return NextResponse.json({ meeting: data })
 }
 
@@ -119,7 +131,25 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
 
+  const { data: existing } = await supabaseAdmin
+    .from("meetings")
+    .select("entity_uid, meeting_date")
+    .eq("id", id)
+    .maybeSingle()
+
   const { error } = await supabaseAdmin.from("meetings").delete().eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logActivity(supabaseAdmin, {
+    action: "delete",
+    target_table: "meetings",
+    target_id: id,
+    source: "manual:crm_meeting",
+    source_kind: "manual",
+    summary: `Reunião removida: ${existing?.meeting_date || id}`.slice(0, 200),
+    confidentiality: "agrisafe_confidential",
+    metadata: { entity_uid: existing?.entity_uid },
+  })
+
   return NextResponse.json({ ok: true })
 }
