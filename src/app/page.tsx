@@ -80,6 +80,7 @@ export default function Home() {
 
 import { DashboardMap } from "@/components/DashboardMap";
 import { ChapterModal, type ChapterTarget } from "@/components/ChapterModal";
+import { ExecutiveBriefingWidget } from "@/components/ExecutiveBriefingWidget";
 
 // ─── Executive Dashboard Overview ───
 
@@ -280,6 +281,9 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
         </div>
         <DashboardMap lang={lang} />
       </div>
+
+      {/* Phase 27 — Executive Briefing */}
+      <ExecutiveBriefingWidget lang={lang} />
 
       {/* Notícias Agrícolas — News only (cotações moved to Pulso do Mercado) */}
       <NANoticiasWidget lang={lang} />
