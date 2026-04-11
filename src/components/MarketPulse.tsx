@@ -1113,19 +1113,20 @@ const MOCK_MACRO_STATS = [
   { period: "30/31 (p)", br_prod: 185.0, world_prod: 470.0, br_export: 130.0, world_stock: 145.0 },
 ];
 
-// Phase 19B — Map Pulso do Mercado culture slugs to FAOSTAT commodity slugs
-// (the values written by /api/cron/sync-faostat into macro_statistics.commodity).
-// Cultures absent here have no live FAOSTAT data yet — UI falls back to mock.
-// boi-gordo lives in FAOSTAT QL (livestock) domain — needs a separate scraper.
-const FAOSTAT_COMMODITY_BY_SLUG: Record<string, string> = {
+// Phase 26 — Map Pulso do Mercado culture slugs to macro_statistics commodity slugs.
+// Multiple sources can write the same commodity slug (e.g. FAOSTAT, USDA, CONAB all
+// write "soybean"); the API returns all of them and the UI separates by source_id.
+const MACRO_COMMODITY_BY_SLUG: Record<string, string> = {
   soja: "soybean",
   milho: "corn",
   cafe: "coffee",
   trigo: "wheat",
   algodao: "cotton",
+  "boi-gordo": "cattle_meat",
 };
 
 interface MacroStatRow {
+  source_id: string;
   period: string;
   region: string;
   indicator: string;
@@ -1141,20 +1142,55 @@ interface MacroChartPoint {
   world_stock?: number;
 }
 
+// Phase 26 — CONAB chart point (Brazilian production/area/yield by safra)
+interface ConabChartPoint {
+  period: string;
+  production?: number;
+  area?: number;
+  yield_val?: number;
+}
+
+// Phase 26 — USDA PSD country comparison point
+interface UsdaCountryPoint {
+  period: string;
+  [country: string]: number | string | undefined;
+}
+
+// Phase 26 — MDIC export point (volume + FOB value)
+interface MdicExportPoint {
+  period: string;
+  volume?: number;
+  value_usd?: number;
+}
+
+function round(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+const TONNES_TO_MMT = 1 / 1_000_000;
+
+function toMmt(value: number, unit: string): number {
+  if (unit === "tonnes") return value * TONNES_TO_MMT;
+  if (unit === "kg") return value / 1_000_000_000; // kg → MMT
+  return value;
+}
+
 /**
  * Pivot long-format macro_statistics rows into the wide chart shape.
- * FAOSTAT delivers tonnes; charts expect million metric tons.
+ * Accepts rows from any source — FAOSTAT, USDA, CONAB all use
+ * the same (region, indicator) space for production/exports/stocks.
  */
 function pivotMacroRows(rows: MacroStatRow[]): MacroChartPoint[] {
   const byPeriod = new Map<string, MacroChartPoint>();
-  const TONNES_TO_MMT = 1 / 1_000_000;
 
   for (const r of rows) {
     if (typeof r.value !== "number") continue;
+    // Only use FAOSTAT + USDA for the main supply-demand chart (avoid double-counting with CONAB)
+    if (r.source_id !== "faostat" && r.source_id !== "faostat_livestock" && r.source_id !== "usda_psd") continue;
     const period = r.period;
     if (!byPeriod.has(period)) byPeriod.set(period, { period });
     const point = byPeriod.get(period)!;
-    const valMmt = r.unit === "tonnes" ? r.value * TONNES_TO_MMT : r.value;
+    const valMmt = toMmt(r.value, r.unit);
 
     if (r.indicator === "production" && r.region === "Brazil") point.br_prod = round(valMmt);
     else if (r.indicator === "production" && r.region === "World") point.world_prod = round(valMmt);
@@ -1165,8 +1201,54 @@ function pivotMacroRows(rows: MacroStatRow[]): MacroChartPoint[] {
   return Array.from(byPeriod.values()).sort((a, b) => a.period.localeCompare(b.period));
 }
 
-function round(n: number): number {
-  return Math.round(n * 10) / 10;
+/**
+ * Phase 26 — Pivot CONAB rows into production/area/yield by safra period.
+ * Only uses source_id=conab, region=Brazil.
+ */
+function pivotConabRows(rows: MacroStatRow[]): ConabChartPoint[] {
+  const byPeriod = new Map<string, ConabChartPoint>();
+  for (const r of rows) {
+    if (r.source_id !== "conab" || !r.region.startsWith("Brazil")) continue;
+    // Only country-level, skip state/region granularity
+    if (r.region !== "Brazil") continue;
+    if (!byPeriod.has(r.period)) byPeriod.set(r.period, { period: r.period });
+    const p = byPeriod.get(r.period)!;
+    if (r.indicator === "production") p.production = round(toMmt(r.value, r.unit));
+    else if (r.indicator === "area_planted") p.area = round(r.unit === "hectares" ? r.value / 1_000_000 : r.value);
+    else if (r.indicator === "yield") p.yield_val = round(r.value);
+  }
+  return Array.from(byPeriod.values()).sort((a, b) => a.period.localeCompare(b.period));
+}
+
+/**
+ * Phase 26 — Pivot USDA PSD rows into a country-comparison table for production.
+ */
+function pivotUsdaCountries(rows: MacroStatRow[]): { data: UsdaCountryPoint[]; countries: string[] } {
+  const countrySet = new Set<string>();
+  const byPeriod = new Map<string, UsdaCountryPoint>();
+  for (const r of rows) {
+    if (r.source_id !== "usda_psd" || r.indicator !== "production") continue;
+    countrySet.add(r.region);
+    if (!byPeriod.has(r.period)) byPeriod.set(r.period, { period: r.period });
+    byPeriod.get(r.period)![r.region] = round(toMmt(r.value, r.unit));
+  }
+  const countries = Array.from(countrySet).sort();
+  return { data: Array.from(byPeriod.values()).sort((a, b) => a.period.localeCompare(b.period)), countries };
+}
+
+/**
+ * Phase 26 — Pivot MDIC ComexStat rows into export volume + FOB value by year.
+ */
+function pivotMdicExports(rows: MacroStatRow[]): MdicExportPoint[] {
+  const byPeriod = new Map<string, MdicExportPoint>();
+  for (const r of rows) {
+    if (r.source_id !== "mdic_comexstat") continue;
+    if (!byPeriod.has(r.period)) byPeriod.set(r.period, { period: r.period });
+    const p = byPeriod.get(r.period)!;
+    if (r.indicator === "exports_volume") p.volume = round(toMmt(r.value, r.unit));
+    else if (r.indicator === "exports_value") p.value_usd = round(r.value / 1_000_000_000); // USD → billions
+  }
+  return Array.from(byPeriod.values()).sort((a, b) => a.period.localeCompare(b.period));
 }
 
 // Phase 24E — World Bank Pink Sheet annual price series.
@@ -1190,7 +1272,7 @@ function MacroAnalysis({
   const tr = t(lang);
   const culture = CULTURES.find(c => c.slug === activeCulture) || CULTURES[0];
 
-  // Phase 19B — live FAOSTAT data via /api/macro-stats
+  // Phase 26 — live macro data from all sources via /api/macro-stats
   const [liveRows, setLiveRows] = useState<MacroStatRow[]>([]);
   const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
   const [scraperCadence, setScraperCadence] = useState<string | null>(null);
@@ -1202,13 +1284,13 @@ function MacroAnalysis({
   const [wbUnit, setWbUnit] = useState<string>("");
 
   useEffect(() => {
-    const faostatCommodity = FAOSTAT_COMMODITY_BY_SLUG[activeCulture];
-    if (!faostatCommodity) {
+    const commodity = MACRO_COMMODITY_BY_SLUG[activeCulture];
+    if (!commodity) {
       setLiveRows([]);
       return;
     }
     setLoading(true);
-    fetch(`/api/macro-stats?commodity=${faostatCommodity}&limit=200`)
+    fetch(`/api/macro-stats?commodity=${commodity}&limit=500`)
       .then(r => r.json())
       .then(json => {
         if (json.success && Array.isArray(json.rows)) {
@@ -1249,10 +1331,20 @@ function MacroAnalysis({
   }, [activeCulture]);
 
   const liveChartData = useMemo(() => pivotMacroRows(liveRows), [liveRows]);
+  const conabData = useMemo(() => pivotConabRows(liveRows), [liveRows]);
+  const usdaCountry = useMemo(() => pivotUsdaCountries(liveRows), [liveRows]);
+  const mdicData = useMemo(() => pivotMdicExports(liveRows), [liveRows]);
 
   // We have usable live data when at least one period carries production for both Brazil and World.
   const hasLiveData = liveChartData.some(p => p.br_prod !== undefined && p.world_prod !== undefined);
   const chartData: MacroChartPoint[] = hasLiveData ? liveChartData : MOCK_MACRO_STATS;
+
+  // Phase 26 — detect which sources have data for this commodity
+  const liveSources = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of liveRows) s.add(r.source_id);
+    return s;
+  }, [liveRows]);
 
   // Stale = older than 2x cadence (60d for monthly). We surface MockBadge in that case.
   const isStale = (() => {
@@ -1264,15 +1356,19 @@ function MacroAnalysis({
 
   const showMockBadge = !hasLiveData || isStale;
 
+  const sourceLabels = Array.from(liveSources).map(s => {
+    const map: Record<string, string> = { faostat: "FAOSTAT", faostat_livestock: "FAOSTAT", usda_psd: "USDA PSD", conab: "CONAB", mdic_comexstat: "MDIC ComexStat", worldbank_pinksheet: "World Bank" };
+    return map[s] || s;
+  });
   const sourceFootnote = lastSuccessAt
-    ? tr.marketPulse.macroSourceFootnote.replace(
-        "{date}",
-        new Date(lastSuccessAt).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })
-      )
+    ? (lang === "pt" ? "Fontes: " : "Sources: ") +
+      (sourceLabels.length > 0 ? [...new Set(sourceLabels)].join(", ") : "FAOSTAT") +
+      (lang === "pt" ? " — última atualização " : " — last update ") +
+      new Date(lastSuccessAt).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
     : tr.marketPulse.macroNeverFetched;
 
   return (
@@ -1432,6 +1528,148 @@ function MacroAnalysis({
                   </div>
                 </div>
               )}
+
+              {/* Phase 26 — CONAB Safra: production + area + yield (Brazil only) */}
+              {conabData.length > 0 && (
+                <div>
+                  <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <BarChart3 size={14} className="text-emerald-600" />
+                    {lang === "pt" ? "Safra Brasileira" : "Brazilian Crop Season"} (CONAB)
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                      <span className="w-1 h-1 rounded-full bg-emerald-500" />
+                      LIVE
+                    </span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase mb-2">
+                        {lang === "pt" ? "Produção (Mt)" : "Production (Mt)"}
+                      </p>
+                      <div className="h-[140px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={conabData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: "10px" }} />
+                            <Bar dataKey="production" name={lang === "pt" ? "Produção" : "Production"} fill="#5B7A2F" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase mb-2">
+                        {lang === "pt" ? "Área Plantada (Mha)" : "Planted Area (Mha)"}
+                      </p>
+                      <div className="h-[140px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={conabData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: "10px" }} />
+                            <Bar dataKey="area" name={lang === "pt" ? "Área" : "Area"} fill="#7FA02B" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase mb-2">
+                        {lang === "pt" ? "Produtividade (kg/ha)" : "Yield (kg/ha)"}
+                      </p>
+                      <div className="h-[140px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={conabData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: "10px" }} />
+                            <Line type="monotone" dataKey="yield_val" name={lang === "pt" ? "Produtividade" : "Yield"} stroke="#E8722A" strokeWidth={2} dot={{ r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Phase 26 — USDA PSD country production comparison */}
+              {usdaCountry.data.length > 0 && usdaCountry.countries.length > 1 && (
+                <div>
+                  <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <Globe size={14} className="text-blue-600" />
+                    {lang === "pt" ? "Produção por País" : "Production by Country"} (USDA PSD)
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">
+                      <span className="w-1 h-1 rounded-full bg-blue-500" />
+                      LIVE
+                    </span>
+                  </h4>
+                  <div className="h-[220px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={usdaCountry.data}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                        <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip contentStyle={{ borderRadius: "8px", fontSize: "11px" }} />
+                        {usdaCountry.countries.slice(0, 6).map((country, i) => {
+                          const colors = ["#5B7A2F", "#E8722A", "#3B82F6", "#9333EA", "#EF4444", "#F59E0B"];
+                          return (
+                            <Bar key={country} dataKey={country} name={country} fill={colors[i % colors.length]} radius={[2, 2, 0, 0]} stackId={undefined} />
+                          );
+                        })}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Phase 26 — MDIC ComexStat Brazilian exports (volume + FOB value) */}
+              {mdicData.length > 0 && (
+                <div>
+                  <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <TrendingUp size={14} className="text-teal-600" />
+                    {lang === "pt" ? "Exportações Brasileiras" : "Brazilian Exports"} (MDIC)
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-full">
+                      <span className="w-1 h-1 rounded-full bg-teal-500" />
+                      LIVE
+                    </span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase mb-2">
+                        {lang === "pt" ? "Volume (Mt)" : "Volume (Mt)"}
+                      </p>
+                      <div className="h-[160px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={mdicData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                            <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: "10px" }} />
+                            <Bar dataKey="volume" name={lang === "pt" ? "Volume" : "Volume"} fill="#0D9488" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase mb-2">
+                        {lang === "pt" ? "Valor FOB (US$ bi)" : "FOB Value (US$ bn)"}
+                      </p>
+                      <div className="h-[160px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={mdicData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                            <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: "10px" }} formatter={(v: any) => [`US$ ${Number(v).toFixed(1)} bi`, lang === "pt" ? "Valor" : "Value"]} />
+                            <Bar dataKey="value_usd" name={lang === "pt" ? "Valor FOB" : "FOB Value"} fill="#14B8A6" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Sidebar macro context */}
@@ -1496,7 +1734,7 @@ function MacroAnalysis({
           {/* Phase 19B — source provenance footer */}
           <div className="mt-4 pt-4 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-500">
             <span>{sourceFootnote}</span>
-            {!FAOSTAT_COMMODITY_BY_SLUG[activeCulture] && (
+            {!MACRO_COMMODITY_BY_SLUG[activeCulture] && (
               <span className="italic">{tr.marketPulse.macroNoData}</span>
             )}
             {loading && (

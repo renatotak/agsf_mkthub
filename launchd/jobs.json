@@ -63,6 +63,18 @@
       "comment": "Daily 02:00 local"
     },
     {
+      "name": "sync-faostat-livestock",
+      "description": "FAOSTAT livestock production (cattle/chicken/swine)",
+      "schedule": { "calendar": { "Hour": 2, "Minute": 30 } },
+      "comment": "Daily 02:30 local — closes the boi-gordo gap"
+    },
+    {
+      "name": "sync-mdic-comexstat",
+      "description": "MDIC ComexStat — Brazilian agro export volumes/values",
+      "schedule": { "calendar": { "Hour": 3, "Minute": 30 } },
+      "comment": "Daily 03:30 local"
+    },
+    {
       "name": "sync-scraper-healthcheck",
       "description": "GitHub /zen probe — runScraper smoke test",
       "schedule": { "calendar": { "Hour": 23, "Minute": 0 } },
@@ -115,6 +127,18 @@
       "description": "World Bank Pink Sheet annual prices",
       "schedule": { "calendar": { "Hour": 9, "Minute": 0, "Weekday": 0 } },
       "comment": "Sunday 09:00 local"
+    },
+    {
+      "name": "sync-usda-psd",
+      "description": "USDA PSD crop supply/demand (oilseeds + grains + cotton)",
+      "schedule": { "calendar": { "Hour": 9, "Minute": 30, "Weekday": 0 } },
+      "comment": "Sunday 09:30 local — large CSV ZIPs, weekly is enough"
+    },
+    {
+      "name": "sync-conab-safra",
+      "description": "CONAB Série Histórica de Safras (Brazil grain production)",
+      "schedule": { "calendar": { "Hour": 1, "Minute": 30 } },
+      "comment": "Daily 01:30 local — CONAB updates monthly but cheap to re-fetch"
     },
     {
       "name": "sync-source-registry-healthcheck",

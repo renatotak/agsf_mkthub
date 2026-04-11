@@ -45,6 +45,10 @@ import { runSyncKeyAgroLaws } from '@/jobs/sync-key-agro-laws'
 import { runSyncWorldbankPrices } from '@/jobs/sync-worldbank-prices'
 import { runSyncEventsAgroadvance } from '@/jobs/sync-events-agroadvance'
 import { runSyncFaostat } from '@/jobs/sync-faostat'
+import { runSyncFaostatLivestock } from '@/jobs/sync-faostat-livestock'
+import { runSyncUsdaPsd } from '@/jobs/sync-usda-psd'
+import { runSyncConabSafra } from '@/jobs/sync-conab-safra'
+import { runSyncMdicComexstat } from '@/jobs/sync-mdic-comexstat'
 import { runSyncAgrofitBulk } from '@/jobs/sync-agrofit-bulk'
 import { runSyncScraperHealthcheck } from '@/jobs/sync-scraper-healthcheck'
 import { runSyncSourceRegistryHealthcheck } from '@/jobs/sync-source-registry-healthcheck'
@@ -71,6 +75,10 @@ const JOB_REGISTRY: Record<string, JobFn> = {
   'sync-worldbank-prices':    runSyncWorldbankPrices,
   'sync-events-agroadvance':  runSyncEventsAgroadvance,
   'sync-faostat':             runSyncFaostat,
+  'sync-faostat-livestock':   runSyncFaostatLivestock,
+  'sync-usda-psd':            runSyncUsdaPsd,
+  'sync-conab-safra':         runSyncConabSafra,
+  'sync-mdic-comexstat':      runSyncMdicComexstat,
   'sync-agrofit-bulk':        runSyncAgrofitBulk,
   'sync-scraper-healthcheck': runSyncScraperHealthcheck,
   'sync-source-registry-healthcheck': runSyncSourceRegistryHealthcheck,

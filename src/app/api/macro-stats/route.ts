@@ -41,21 +41,29 @@ export async function GET(request: Request) {
     const { data, error, count } = await query
     if (error) throw error
 
-    // Pull the FAOSTAT scraper's last_success_at so the UI can show
-    // MockBadge when data is stale (>2x cadence = 60d for monthly).
-    const { data: scraperRow } = await supabase
+    // Phase 26 — pull the most recent last_success_at across all macro scrapers
+    // so the UI can show MockBadge when data is stale.
+    const MACRO_SCRAPERS = [
+      'sync-faostat-prod', 'sync-faostat-livestock',
+      'sync-usda-psd', 'sync-conab-safra', 'sync-mdic-comexstat',
+      'sync-worldbank-prices',
+    ]
+    const { data: scraperRows } = await supabase
       .from('scraper_registry')
       .select('last_success_at, status, cadence')
-      .eq('scraper_id', 'sync-faostat-prod')
-      .maybeSingle()
+      .in('scraper_id', MACRO_SCRAPERS)
+      .order('last_success_at', { ascending: false })
+      .limit(1)
+
+    const latestScraper = scraperRows?.[0] ?? null
 
     return NextResponse.json({
       success: true,
       rows: data || [],
       total: count ?? 0,
-      last_success_at: scraperRow?.last_success_at ?? null,
-      scraper_status: scraperRow?.status ?? null,
-      scraper_cadence: scraperRow?.cadence ?? null,
+      last_success_at: latestScraper?.last_success_at ?? null,
+      scraper_status: latestScraper?.status ?? null,
+      scraper_cadence: latestScraper?.cadence ?? null,
       fetched_at: new Date().toISOString(),
     })
   } catch (error) {
