@@ -1,7 +1,7 @@
 # AgriSafe Market Hub — Roadmap
 
-> **Last updated:** 2026-04-09 (Phase 25 + post-25 batches)
-> 4 verticals · 14 modules · 57 Supabase tables · 45 SQL migrations · **20 cron routes (now Mac-as-server via launchd, Phase 25)** · 9 registered scrapers (all healthy) · 9,674 legal entities · 5-entity model live · tier-aware chat · CRM tables · activity log · **Source CRUD UI** · **norms × entities view**.
+> **Last updated:** 2026-04-09 (Phases 26–27)
+> 4 verticals · 14 modules · 58 Supabase tables · 47 SQL migrations · **25 cron routes (now Mac-as-server via launchd, Phase 25)** · 13 registered scrapers · 9,674 legal entities · 5-entity model live · tier-aware chat · CRM tables · activity log · **Source CRUD UI** · **norms × entities view** · **MCP server** · **daily executive briefing**.
 > Latest user task list: `documentation/TODO_2026-04-06.md`
 
 ---
@@ -15,18 +15,20 @@
 | **Diretório de Canais** | 9,328 retailers · 24,275 retailer_locations (geocoded) · CRM-style 4-card KPI row · sortable columns · RJ + News-mention modals · **CRM panel + Street View tile per row (Phase 24G)** |
 | **Diretório de Indústrias** | 274 (18 curated + 256 imported via CSV) · 1,699 cnpj_establishments (100% geocoded via Nominatim) · list+map+expandable rows · 4-button row actions (RF data / Web search / AI analysis / Buscar filiais) · **CRM panel + Street View tile per row (Phase 24G)** |
 | **CRM (Phase 24G)** | `key_persons` + `meetings` + `leads` tables (all `agrisafe_confidential`) · `EntityCrmPanel` mounted in both directories · `/api/crm/*` CRUD endpoints · leads can link to existing `campaigns` table |
-| **Marco Regulatório** | 16 norms with **CNAE classification** (CVM 6, BCB 6, CONGRESSO 3, CNJ 1) · "Inserir Norma" + "Fontes" modals · CNJ JSON daily · CVM curated daily + historical backfill done · BCB curated · key agro laws seeded · news norm-citation extractor inline in sync-agro-news · **`v_norms_affecting_entity` view + `/api/regulatory/affected-entities` (Phase 25)** — joins `regulatory_norms.affected_cnaes` × `legal_entities.primary_cnae` to surface "X empresas afetadas" per norm |
+| **Marco Regulatório** | 16 norms with **CNAE classification** (CVM 6, BCB 6, CONGRESSO 3, CNJ 1) · "Inserir Norma" + "Fontes" modals · CNJ JSON daily · CVM curated daily + historical backfill done · BCB curated · key agro laws seeded · news norm-citation extractor inline in sync-agro-news · **`v_norms_affecting_entity` view + `/api/regulatory/affected-entities` (Phase 25)** — joins `regulatory_norms.affected_cnaes` × `legal_entities.primary_cnae` to surface "X empresas afetadas" per norm · **UI badge for `affected_entity_count` in list rows + drilldown modal (Phase 26)** |
 | **Recuperação Judicial** | 131 cases (118 RJ + 13 manual) · "Adicionar CNPJ" modal with BrasilAPI lookup + DDG debt scrape |
-| **Pulso de Mercado** | BCB SGS · NA prices (regional + futures) · Yahoo intl futures · FAOSTAT macro (5 cultures) · World Bank Pink Sheet annual prices (6 commodities × 15 years) |
+| **Pulso de Mercado** | BCB SGS · NA prices (regional + futures) · Yahoo intl futures · FAOSTAT macro (5 cultures) · World Bank Pink Sheet annual prices (6 commodities × 15 years) · **CONAB Safra (987 rows) + USDA PSD (1560 rows) + MDIC ComexStat (100 rows) + FAOSTAT livestock (code ready, API down) — Phase 26** |
 | **Notícias Agro** | 203 articles · 5 RSS feeds + Reading Room v3.0 Chrome extension · CRUD modal · entity-mention matcher + norm-citation extractor inline |
 | **Eventos Agro** | AgroAgenda + AgroAdvance unified into events table · per-event AI enrichment · source provenance badges |
 | **Ingestão de Dados** | 176 sources in `data_sources` table (125 active / 25 inactive / 24 error / 2 unchecked) · **Source CRUD UI in DataSources tab (Phase 25)** — Add / Edit / Delete via `SourceFormModal`, soft-delete by default, hard-delete only for manual entries · `/api/data-sources` REST endpoint · weekly Sunday `sync-source-registry-healthcheck` cron updates `url_status` / `http_status` / `last_checked_at` and flags newly-broken sources in `activity_log` · 9 scrapers in `scraper_registry` · Saúde dos Scrapers tab · source→tables mapping |
 | **Inteligência de Insumos** | Oracle UX with culture+pest filter · molecule-grouped brand alternatives sorted by competitiveness (patented → commodity) · federal AGROFIT bulk catalog |
 | **Radar Competitivo** | CRUD modal · Harvey Ball matrix · web enrichment per company |
-| **Base de Conhecimento** | Semantic search + RAG chat · **tier-aware filtering (Phase 24G)** — chat respects caller tier, defaults to `public` for unauthenticated sessions |
+| **Base de Conhecimento** | Semantic search + RAG chat · **tier-aware filtering (Phase 24G)** — chat respects caller tier, defaults to `public` for unauthenticated sessions · **KnowledgeMindMap refreshed (Phase 27)** — merged Future into Current view, 45 nodes / 42 edges, all Phase 17 entity model nodes live with real counts, 20+ missing tables from Phases 19–26 added |
 | **Configurações** | Editable analysis lenses (DB-backed prompts) · Reading Room install guide · **Activity Log panel (Phase 24G2)** — every cron run + manual insert + extension push surfaced with filter chips |
-| **Auth + deploy** | Supabase Auth + SSR middleware · **Hybrid: Vercel hosts Next.js webapp + cron route fallbacks; 20 cron jobs run on Mac mini via launchd (Phase 25)**, each with its own schedule, no Vercel cron-count limit |
-| **Cron pipeline (Phase 25)** | **20 cron routes** ported to `src/jobs/*.ts` framework-agnostic modules + `runScraperJob` adapter + generic `run-job.ts` dispatcher + `launchd/jobs.json` schedule config + `generate-plists.js` + `install.sh`. Both the Next.js cron route AND the Mac CLI dispatcher call the same job module — logic lives in exactly one place. Settings → Activity Log surfaces Mac and Vercel runs identically. See [launchd/README.md](launchd/README.md). |
+| **Auth + deploy** | Supabase Auth + SSR middleware · **Hybrid: Vercel hosts Next.js webapp + cron route fallbacks; 25 cron jobs run on Mac mini via launchd**, each with its own schedule, no Vercel cron-count limit |
+| **Cron pipeline (Phase 25→26)** | **25 cron routes** ported to `src/jobs/*.ts` framework-agnostic modules + `runScraperJob` adapter + generic `run-job.ts` dispatcher + `launchd/jobs.json` schedule config + `generate-plists.js` + `install.sh`. Both the Next.js cron route AND the Mac CLI dispatcher call the same job module — logic lives in exactly one place. Settings → Activity Log surfaces Mac and Vercel runs identically. See [launchd/README.md](launchd/README.md). |
+| **MCP server (Phase 27)** | `src/mcp/server.ts` — stdio-based MCP server with 6 tools (knowledge_search, entity_lookup, commodity_prices, regulatory_norms, agro_news, database_stats). `@modelcontextprotocol/sdk` dep. `npm run mcp`. |
+| **Executive briefing (Phase 27)** | `executive_briefings` table (mig 047). `sync-daily-briefing` aggregates 24h data + Gemini summary → `/api/executive-briefing` read endpoint. `ExecutiveBriefingWidget` on Dashboard. Daily 08:00 local via launchd. |
 
 ---
 
@@ -69,6 +71,8 @@ Every shipped phase in chronological order. For deeper detail on a specific phas
 | **25 backlog** | **Close-the-loop batch.** (a) **CRM PATCH/DELETE → activity_log.** All 6 mutation paths in `/api/crm/{key-persons,meetings,leads}` now log to activity_log; POST was already wired in 24G2. (b) **Backfill scripts → activity_log.** 4 backfill scripts (`backfill-cnpj-establishments.js`, `backfill-norms-from-news.js`, `backfill-cvm-historical.js`, `geocode-events.js`) now write a single summary row at end of run via supabase JS client (cnpj) / pg client (others) / PostgREST (geocode-events). (c) **Migration 044: norms × entities view.** New `v_norms_affecting_entity` (per-row) + `v_norm_entity_counts` (aggregated) joining `regulatory_norms.affected_cnaes` ANY-OF `legal_entities.primary_cnae`, both `security_invoker=on`, plus a partial btree index on `legal_entities.primary_cnae`. New `/api/regulatory/affected-entities` read endpoint with `?norm_id=` drilldown. | 2026-04-09 |
 | **25 source CRUD** | **Ingestão de Dados — full Source CRUD UI.** The last open item from `documentation/TODO_2026-04-06.md`. (a) **Migration 045** adds `data_sources` table mirroring the JSON shape 1:1 + 4 new columns (`active`, `confidentiality`, `created_at`, `updated_at`). CHECK constraint on `url_status` enum, indexes on category/url_status/active/used_in_app, RLS public read, updated_at trigger. (b) **`seed-data-sources.js`** one-shot upsert from `source-registry.json` (176 entries) → `data_sources` table, idempotent, logs to activity_log. (c) **`/api/data-sources`** full CRUD: GET (list with filters + paging past PostgREST 1000-cap), POST (auto-generates id for manual entries), PATCH (with `_cron_update` flag for the healthcheck), DELETE (soft by default; hard-delete only for `origin_file='manual'`). All mutations log to activity_log. (d) **`SourceFormModal.tsx`** bilingual add/edit modal with name/url/category/frequency/data_type/description/notes + 3 toggles. (e) **`DataSources.tsx`** surgical refactor (1348 → 1452 lines): top-level const → `STATIC_REGISTRY_FALLBACK`, lifted into `useState`, fetched from `/api/data-sources` on mount, threaded as a prop into `RegistryTab` + `QualityTab`. New "Adicionar Fonte" button + "Live table"/"Static fallback" badge + refresh button. Pencil + Trash icons appear on row hover in `EndpointDetail`. Modal mounted at the bottom of RegistryTab. (f) **`sync-source-registry-healthcheck`** — new 20th launchd cron (Sunday 10:00 local). Probes all 176 URLs at 8 concurrent workers, updates `url_status`/`http_status`/`last_checked_at` per row via the supabase client (skipping per-row activity_log noise), then writes ONE summary row with newly-broken count. The JSON file stays as the seed-data audit trail and as the static fallback if the API errors out. | 2026-04-09 |
 | **27 (UI)** | **Source registry health check (one-shot).** `check-source-registry.js` probed all 176 entries. Result: 125 active / 25 inactive / 24 error / 2 unchecked. Ingestão de Dados KPI strip now reflects real data instead of "166 unchecked". (Superseded by the Phase 25 weekly cron, but the script is still used for one-shot dev runs.) | 2026-04-08 |
+| **26** | **Macro Pulse expansion + regulatory badge.** (a) 4 new macro scrapers: `sync-conab-safra` (987 rows), `sync-usda-psd` (1560 rows), `sync-mdic-comexstat` (100 rows), `sync-faostat-livestock` (code ready, FAOSTAT API was down). Migration 046 registers all 4 in `scraper_registry`. (b) MarketPulse UI: boi-gordo mapped to `cattle_meat`, fetches all sources per commodity, 3 new chart sections (CONAB Safra, USDA PSD country comparison, MDIC exports). (c) 4 new cron routes + launchd plists + dispatcher registration. (d) Bug fix: USDA PSD grains URL renamed from `psd_grains_csv.zip` to `psd_grains_pulses_csv.zip`. (e) Dependencies: +adm-zip, +xlsx. (f) UI badge for `affected_entity_count` in Marco Regulatório list rows + drilldown modal. | 2026-04-09 |
+| **27** | **KnowledgeMindMap refresh + MCP server + daily executive briefing.** (a) MindMap: merged Future into Current view (45 nodes, 42 edges), removed Current/Future toggle, all Phase 17 entity model nodes now live with real counts, added 20+ missing tables from Phases 19–26. (b) MCP server: `src/mcp/server.ts` — stdio-based MCP server with 6 tools (knowledge_search, entity_lookup, commodity_prices, regulatory_norms, agro_news, database_stats). `@modelcontextprotocol/sdk` dep. `npm run mcp`. (c) Daily executive briefing: migration 047 (`executive_briefings` table), `src/jobs/sync-daily-briefing.ts` aggregates 24h data + Gemini summary, `/api/cron/sync-daily-briefing` + `/api/executive-briefing` read endpoint, launchd daily 08:00 local, `ExecutiveBriefingWidget` on Dashboard (between map and news). | 2026-04-09 |
 
 ---
 
@@ -82,7 +86,7 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 - **CVM date-extractor fix** — ✅ **DONE 2026-04-09** (Phase 24G2). 3-pass extractor (DD/MM/YYYY → "DD de MONTH de YYYY" → ISO) + footer-marker cut.
 - **Tighten CVM agro pattern** — ✅ **DONE 2026-04-09** (Phase 24G2). Dropped `fundo.*agro`; required precise FIAGRO/CRA/agro-context matches.
 - **`affected_cnaes` → `legal_entities` JOIN view** — ✅ **DONE 2026-04-09** (Phase 25 backlog). Migration 044 adds `v_norms_affecting_entity` + `v_norm_entity_counts`. Read endpoint `/api/regulatory/affected-entities`. UI badge wiring still pending — surface "X empresas afetadas" in the Marco Reg list.
-- **UI badge for `affected_entity_count`** — surface the new view's count in the Marco Regulatório list rows + drilldown modal.
+- **UI badge for `affected_entity_count`** — ✅ **DONE 2026-04-09** (Phase 26). Badge in Marco Regulatório list rows + drilldown modal.
 
 ### Ingestão de Dados
 
@@ -93,11 +97,11 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 
 ### Pulso de Mercado
 
-- **USDA PSD scrapers** — oilseeds (3.7 MB) + grains_pulses (2.7 MB) + cotton (459 KB) ZIPs all alive. Need a ZIP-CSV parser dep (`yauzl` or equivalent). Marginal value over FAOSTAT but adds country-level production/exports forecasts.
+- **USDA PSD scrapers** — ✅ **DONE 2026-04-09** (Phase 26). `sync-usda-psd` fetches grains_pulses + oilseeds + cotton ZIPs → 1560 rows. Bug fix: grains URL renamed from `psd_grains_csv.zip` to `psd_grains_pulses_csv.zip`. Dep: +adm-zip.
 - **OECD-FAO Agricultural Outlook xlsx** — URL changes annually, data is forward-projection. Skip until/unless the user explicitly asks for forecast data.
-- **MDIC ComexStat scraper** — Brazilian export volumes/values by HS code. The probe in Phase 24E showed comexstat.mdic.gov.br is alive but layout needs analysis.
-- **CONAB safra monthly reports** — Brazilian production by state and crop.
-- **FAOSTAT QL livestock domain** — boi-gordo coverage (currently mock).
+- **MDIC ComexStat scraper** — ✅ **DONE 2026-04-09** (Phase 26). `sync-mdic-comexstat` → 100 rows. Brazilian export volumes/values by HS code.
+- **CONAB safra monthly reports** — ✅ **DONE 2026-04-09** (Phase 26). `sync-conab-safra` → 987 rows. Brazilian production by state and crop. Dep: +xlsx.
+- **FAOSTAT QL livestock domain** — ✅ **DONE 2026-04-09** (Phase 26). `sync-faostat-livestock` code ready; FAOSTAT API was down at ship time. Registered in scraper_registry via mig 046.
 
 ### Inteligência de Insumos
 
@@ -120,9 +124,9 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 
 ### Knowledge / RAG / Webapp
 
-- **MCP server** that exposes the knowledge base to Claude / GPT / other LLM agents.
+- **MCP server** — ✅ **DONE 2026-04-09** (Phase 27). `src/mcp/server.ts` — stdio-based MCP server with 6 tools. `@modelcontextprotocol/sdk` dep. `npm run mcp`.
 - **RAG endpoint with confidentiality-tier-aware filtering** — ✅ **DONE 2026-04-08** (Phase 24G slice 1). Mig 040 added `filter_confidentiality` to `match_knowledge_items` RPC; `/api/knowledge/chat` resolves caller tier and passes visible tiers.
-- **Daily executive briefing** generated from the knowledge base.
+- **Daily executive briefing** — ✅ **DONE 2026-04-09** (Phase 27). Migration 047 (`executive_briefings`). `sync-daily-briefing` job + cron route + `/api/executive-briefing` read endpoint + `ExecutiveBriefingWidget` on Dashboard. Launchd daily 08:00.
 - **Anomaly narratives** when MarketPulse detects rupture (`Math.abs(change) > 2 * stddev`).
 - **Webapp build** — same UI as the Next.js app but with a permanent chat panel always available.
 - **Cron-driven LLM agents** — scan news/events for entity mentions and enrich the knowledge base.
@@ -138,7 +142,7 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 
 - **Drop legacy `cnpj_raiz` / `cnpj_basico` text columns** once nothing reads them.
 - **Wire entity-matcher into 3 more cron paths** — ✅ **PARTIAL** (Phase 25 bundled scope). `sync-events-na`, `sync-regulatory`, `sync-recuperacao-judicial` job modules now load matchable entities once + write entity_mentions per row. `archive-old-news` is still pending — but its source rows in agro_news already have mentions written by sync-agro-news, so this is low priority.
-- **Refresh `KnowledgeMindMap.tsx` "current state" view** — the future-state nodes shown there are now real, not aspirational.
+- **Refresh `KnowledgeMindMap.tsx` "current state" view** — ✅ **DONE 2026-04-09** (Phase 27). Merged Future into Current (45 nodes, 42 edges), removed toggle, all Phase 17 entity model nodes live with real counts, added 20+ missing tables from Phases 19–26.
 - **Migrate the remaining `cnpj_raiz` reads** in RetailersDirectory.tsx, RegulatoryFramework.tsx, RecuperacaoJudicial.tsx, CompetitorRadar.tsx to `entity_uid`.
 - **Migrate `sync-events-na` to `runScraper()`** — currently still on `logSync()` + `logActivity` direct calls. Lower priority now that the job module pattern from Phase 25 already gives uniform telemetry via the dispatcher.
 
@@ -150,7 +154,7 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 
 ## Reference
 
-### Cron pipeline (Phase 25: 20 jobs, Mac launchd primary + Vercel fallback)
+### Cron pipeline (Phase 25→26: 25 jobs, Mac launchd primary + Vercel fallback)
 
 Each cron route is **also** a launchd job on the Mac mini server (Phase 25). The Mac runs each job on its own schedule via [`launchd/jobs.json`](launchd/jobs.json); the Vercel `/api/cron/X` endpoints stay alive as manual triggers and as a fallback. Both call the same `src/jobs/X.ts` module — see [launchd/README.md](launchd/README.md) for the install path.
 
@@ -169,16 +173,21 @@ Each cron route is **also** a launchd job on the Mac mini server (Phase 25). The
 10. `sync-faostat` — FAOSTAT macro production → `macro_statistics` — daily 02:00
 11. `archive-old-news` — OpenAI summaries + pgvector → `news_knowledge` — daily 04:00
 12. `sync-scraper-healthcheck` — GitHub /zen probe for `runScraper()` wiring — daily 23:00
+13. `sync-conab-safra` — CONAB safra reports → `macro_statistics` (987 rows) — daily 03:00 (Phase 26)
+14. `sync-usda-psd` — USDA PSD ZIP-CSVs → `macro_statistics` (1560 rows) — daily 03:30 (Phase 26)
+15. `sync-mdic-comexstat` — MDIC ComexStat exports → `macro_statistics` (100 rows) — daily 04:00 (Phase 26)
+16. `sync-faostat-livestock` — FAOSTAT QL livestock → `macro_statistics` — daily 02:30 (Phase 26, code ready, API was down)
+17. `sync-daily-briefing` — 24h data aggregation + Gemini summary → `executive_briefings` — daily 08:00 (Phase 27)
 
 **Weekly (Sunday):**
-13. `sync-industry-profiles` — industry profile enrichment — Sunday 03:00
-14. `sync-agrofit-bulk` — federal AGROFIT crawl → `industry_products` — Sunday 04:00
-15. `sync-events-agroadvance` — annual AgroAdvance list → `events` — Sunday 05:00
-16. `sync-cvm-agro` — CVM legislacao walker → `regulatory_norms` — Sunday 06:00
-17. `sync-bcb-rural` — curated BCB landing-page catalog → `regulatory_norms` — Sunday 07:00
-18. `sync-key-agro-laws` — Lei CPR / Falências / Nova Lei do Agro seed → `regulatory_norms` — Sunday 08:00
-19. `sync-worldbank-prices` — World Bank Pink Sheet xlsx → `macro_statistics` — Sunday 09:00
-20. **`sync-source-registry-healthcheck`** — Phase 25 source CRUD. Probes all 176 entries in `data_sources`, updates per-row status, summarizes newly-broken in activity_log — Sunday 10:00
+18. `sync-industry-profiles` — industry profile enrichment — Sunday 03:00
+19. `sync-agrofit-bulk` — federal AGROFIT crawl → `industry_products` — Sunday 04:00
+20. `sync-events-agroadvance` — annual AgroAdvance list → `events` — Sunday 05:00
+21. `sync-cvm-agro` — CVM legislacao walker → `regulatory_norms` — Sunday 06:00
+22. `sync-bcb-rural` — curated BCB landing-page catalog → `regulatory_norms` — Sunday 07:00
+23. `sync-key-agro-laws` — Lei CPR / Falências / Nova Lei do Agro seed → `regulatory_norms` — Sunday 08:00
+24. `sync-worldbank-prices` — World Bank Pink Sheet xlsx → `macro_statistics` — Sunday 09:00
+25. **`sync-source-registry-healthcheck`** — Phase 25 source CRUD. Probes all 176 entries in `data_sources`, updates per-row status, summarizes newly-broken in activity_log — Sunday 10:00
 
 The legacy `/api/cron/sync-all` orchestrator still works as a "run everything now" Vercel trigger but is no longer the only cron entry — the Mac handles the schedule.
 
@@ -200,7 +209,8 @@ The legacy `/api/cron/sync-all` orchestrator still works as a "run everything no
 - Enrichment: `company_enrichment` · `company_notes` · `company_research` (with `analysis_type` column from Phase 24B)
 - **CRM (Phase 24G):** `key_persons` · `meetings` · `leads` (all default `agrisafe_confidential`, FK → legal_entities)
 - Config: `analysis_lenses` (3: retailer, industry, generic) · **`data_sources` (176 entries — Phase 25 source CRUD)**
-- Telemetry: `scraper_registry` (9 healthy) · `scraper_runs` · `scraper_knowledge` · `sync_logs` · **`activity_log` (Phase 24G2 — every write across the system, ~100% coverage after Phase 25 backlog batch)**
+- Briefing: **`executive_briefings` (Phase 27, mig 047)**
+- Telemetry: `scraper_registry` (13 — Phase 26 added 4 macro scrapers via mig 046) · `scraper_runs` · `scraper_knowledge` · `sync_logs` · **`activity_log` (Phase 24G2 — every write across the system, ~100% coverage after Phase 25 backlog batch)**
 
 **Views (rebuilt in Phase 17B/17E with `security_invoker=on`)**
 - `v_retailer_profile` — retailer + RF enrichment + intelligence in one row

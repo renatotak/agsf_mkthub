@@ -95,7 +95,7 @@ Never store client PII, financial records, or proprietary data in the public-dom
 
 - **Bilingual always** — Every UI string must exist in PT-BR + EN via `src/lib/i18n.ts`
 - **MockBadge required** — Any non-live section must display the MOCKED DATA watermark
-- **Cron pipeline** — Phase 25 lifted the Vercel Hobby single-cron limit. The 20 cron routes now run on a Mac mini via launchd (each job has its own schedule in `launchd/jobs.json`). The Vercel `/api/cron/X` endpoints are kept as manual triggers / fallback. Both call the same `src/jobs/X.ts` module — never duplicate logic between the route and the job. See `launchd/README.md`.
+- **Cron pipeline** — Phase 25 lifted the Vercel Hobby single-cron limit. The 25 cron routes now run on a Mac mini via launchd (each job has its own schedule in `launchd/jobs.json`). The Vercel `/api/cron/X` endpoints are kept as manual triggers / fallback. Both call the same `src/jobs/X.ts` module — never duplicate logic between the route and the job. See `launchd/README.md`.
 - **Activity log everything** — Every write path (cron, manual API endpoint, backfill script, Chrome extension) must call `logActivity()` from `src/lib/activity-log.ts`. The Settings → Registro de Atividade panel reads from this. POST/PATCH/DELETE all log; coverage is ~100% as of Phase 25 backlog batch.
 - **Knowledge hierarchy** — Follow the 4-tier model in `documentation/KNOWLEDGE_ARCHITECTURE.md`
 - **Google API free tier** — Verify Google APIs stay within free tier (Maps, Custom Search 100/day)
@@ -111,7 +111,7 @@ Never store client PII, financial records, or proprietary data in the public-dom
 - **Charts:** Recharts. **Icons:** Lucide React + Material Icons Outlined
 - **Maps:** @vis.gl/react-google-maps (terrain + satellite views)
 - **Path alias:** `@/*` → `./src/*`
-- **Deployment:** **Hybrid** — Vercel hosts the Next.js webapp + cron route fallbacks; **20 cron jobs run on a 24/7 Mac mini via launchd (Phase 25)**. Each job has its own schedule in `launchd/jobs.json`. See `launchd/README.md` for the install path.
+- **Deployment:** **Hybrid** — Vercel hosts the Next.js webapp + cron route fallbacks; **25 cron jobs run on a 24/7 Mac mini via launchd**. Each job has its own schedule in `launchd/jobs.json`. See `launchd/README.md` for the install path.
 - **Scrapers:** Cheerio (server-side) + Python scripts in `src/scripts/` for heavy crawls. **No LLM-based scraping.**
 
 ## Commands
@@ -120,6 +120,7 @@ Never store client PII, financial records, or proprietary data in the public-dom
 npm run dev                                      # Dev server
 npm run build                                    # Production build
 npm run cron <job-name>                          # Phase 25 — run any cron job locally via the dispatcher
+npm run mcp                                      # Phase 27 — start the MCP server (stdio-based, 6 tools)
 node src/scripts/build-source-registry.js        # Rebuild 176-source seed JSON
 node --env-file=.env.local src/scripts/seed-data-sources.js  # Phase 25 — seed data_sources table from JSON
 node --env-file=.env.local src/scripts/seed-content.js       # Seed articles + topics to Supabase
@@ -146,7 +147,7 @@ bash launchd/install.sh --uninstall              # remove every agrisafe agent
 | Base de Conhecimento | `KnowledgeBase.tsx` (search + AgroTermos), `KnowledgeMindMap.tsx` (table-graph viz) — chat is **tier-aware** (Phase 24G slice 1) |
 | Configurações | `Settings.tsx` with **`AnalysisLensesEditor` + `ActivityLogPanel`** (Phase 24G2 — every cron / manual / extension write surfaced with filter chips) |
 
-**Cron pipeline (Phase 25 — 20 jobs on Mac launchd, each with its own schedule):**
+**Cron pipeline (Phase 25→26 — 25 jobs on Mac launchd, each with its own schedule):**
 
 Every cron route is also a `src/jobs/X.ts` module callable from BOTH the Next.js `/api/cron/X` endpoint AND the launchd CLI dispatcher (`npm run cron <name>`). Logic lives in exactly one place. The Vercel cron route is kept as a manual trigger / fallback. Each job module owns its own `logSync` + `logActivity` calls so the Settings panel surfaces Mac and Vercel runs identically.
 
@@ -165,16 +166,21 @@ Every cron route is also a `src/jobs/X.ts` module callable from BOTH the Next.js
 10. `sync-faostat` — FAOSTAT macro production → `macro_statistics` — daily 02:00
 11. `archive-old-news` — OpenAI summaries + pgvector → `news_knowledge` — daily 04:00
 12. `sync-scraper-healthcheck` — GitHub /zen probe for `runScraper()` wiring — daily 23:00
+13. `sync-conab-safra` — CONAB safra reports → `macro_statistics` (987 rows) — daily 03:00 (Phase 26)
+14. `sync-usda-psd` — USDA PSD ZIP-CSVs → `macro_statistics` (1560 rows) — daily 03:30 (Phase 26)
+15. `sync-mdic-comexstat` — MDIC ComexStat exports → `macro_statistics` (100 rows) — daily 04:00 (Phase 26)
+16. `sync-faostat-livestock` — FAOSTAT QL livestock → `macro_statistics` — daily 02:30 (Phase 26)
+17. `sync-daily-briefing` — 24h data aggregation + Gemini summary → `executive_briefings` — daily 08:00 (Phase 27)
 
 **Weekly (Sunday):**
-13. `sync-industry-profiles` — industry profile enrichment — Sunday 03:00
-14. `sync-agrofit-bulk` — federal AGROFIT crawl → `industry_products` — Sunday 04:00
-15. `sync-events-agroadvance` — AgroAdvance Cheerio scraper → `events` — Sunday 05:00
-16. `sync-cvm-agro` — CVM legislacao walker → `regulatory_norms` — Sunday 06:00
-17. `sync-bcb-rural` — curated BCB landing-page catalog → `regulatory_norms` — Sunday 07:00
-18. `sync-key-agro-laws` — Lei CPR / Falências / Nova Lei do Agro seed → `regulatory_norms` — Sunday 08:00
-19. `sync-worldbank-prices` — World Bank Pink Sheet xlsx → `macro_statistics` — Sunday 09:00
-20. **`sync-source-registry-healthcheck`** — Phase 25. Probes all 176 entries in `data_sources`, updates per-row status, summarizes newly-broken in activity_log — Sunday 10:00
+18. `sync-industry-profiles` — industry profile enrichment — Sunday 03:00
+19. `sync-agrofit-bulk` — federal AGROFIT crawl → `industry_products` — Sunday 04:00
+20. `sync-events-agroadvance` — AgroAdvance Cheerio scraper → `events` — Sunday 05:00
+21. `sync-cvm-agro` — CVM legislacao walker → `regulatory_norms` — Sunday 06:00
+22. `sync-bcb-rural` — curated BCB landing-page catalog → `regulatory_norms` — Sunday 07:00
+23. `sync-key-agro-laws` — Lei CPR / Falências / Nova Lei do Agro seed → `regulatory_norms` — Sunday 08:00
+24. `sync-worldbank-prices` — World Bank Pink Sheet xlsx → `macro_statistics` — Sunday 09:00
+25. **`sync-source-registry-healthcheck`** — Phase 25. Probes all 176 entries in `data_sources`, updates per-row status, summarizes newly-broken in activity_log — Sunday 10:00
 
 **Live API routes (ISR cached or on-demand):**
 - `/api/prices-na` — Notícias Agrícolas commodity prices (revalidate 10min)
@@ -199,6 +205,12 @@ Every cron route is also a `src/jobs/X.ts` module callable from BOTH the Next.js
 - `/api/activity` — **Phase 24G2** read endpoint for `activity_log` with `?source_kind` / `?target_table` / `?source` filters, tier-aware. Backs `ActivityLogPanel` in Settings
 - `/api/crm/{key-persons,meetings,leads}` — **Phase 24G** CRUD endpoints for the new CRM tables (all default `agrisafe_confidential`). POST/PATCH/DELETE all log to `activity_log`
 - `/api/knowledge/chat` — RAG chat over `knowledge_items` with **tier-aware filtering** (Phase 24G slice 1). Resolves caller tier and passes visible tiers to the `match_knowledge_items` RPC; defaults to `public` for unauthenticated sessions
+- `/api/executive-briefing` — **Phase 27** read endpoint for `executive_briefings` table (latest briefing)
+- `/api/cron/sync-daily-briefing` — **Phase 27** cron route for daily executive briefing generation
+- `/api/cron/sync-conab-safra` — **Phase 26** CONAB safra reports → `macro_statistics`
+- `/api/cron/sync-usda-psd` — **Phase 26** USDA PSD ZIP-CSVs → `macro_statistics`
+- `/api/cron/sync-mdic-comexstat` — **Phase 26** MDIC ComexStat exports → `macro_statistics`
+- `/api/cron/sync-faostat-livestock` — **Phase 26** FAOSTAT QL livestock → `macro_statistics`
 
 **Logging stack:**
 - `sync_logs` (legacy flat per-run row) — every cron via `src/lib/sync-logger.ts`
@@ -224,15 +236,18 @@ Every cron route is also a `src/jobs/X.ts` module callable from BOTH the Next.js
 | `src/lib/confidentiality.ts` | **Phase 24G slice 1** — `ConfidentialityTier` type, `visibleTiers()`, `resolveCallerTier()`, `tierFilter()`. Used by `/api/knowledge/chat` and the `match_knowledge_items` RPC (mig 040). |
 | `src/lib/geocode.ts` | **Phase 24B** — reusable 3-tier geocoder (Google → AwesomeAPI CEP → Nominatim) |
 | `src/lib/entities.ts` | `ensureLegalEntityUid()` helper — idempotent, race-safe |
-| **`src/jobs/`** | **Phase 25** — 19 framework-agnostic cron job modules + `types.ts` (shared `JobResult`). Each exports `runX(supabase): Promise<JobResult>`. Both the Next.js cron route AND the launchd CLI dispatcher call the same module. |
+| **`src/jobs/`** | **Phase 25→27** — 24 framework-agnostic cron job modules + `types.ts` (shared `JobResult`). Each exports `runX(supabase): Promise<JobResult>`. Both the Next.js cron route AND the launchd CLI dispatcher call the same module. |
 | `src/components/EntityMapShell.tsx` | **Phase 24B** — reusable Painel-style map shell shared by both directories |
 | `src/components/AnalysisLensesEditor.tsx` | **Phase 24B** — Settings panel for editing `analysis_lenses` |
 | `src/components/EntityCrmPanel.tsx` | **Phase 24G** — collapsible 3-section panel (Pessoas-chave / Reuniões / Pipeline) mounted in both directories |
 | `src/components/StreetViewTile.tsx` | **Phase 24G slice 3** — probes Street View Metadata API first, then renders 480×260 static image. Mounted per matriz with lat/lng. |
 | `src/components/ActivityLogPanel.tsx` | **Phase 24G2** — Settings panel reading from `/api/activity`. Three filter chip rows + paginated feed |
 | `src/components/SourceFormModal.tsx` | **Phase 25** — bilingual add/edit modal for `data_sources` rows. Self-contained POST/PATCH. |
-| `src/app/api/cron/` | **20 cron routes** + `sync-all` orchestrator (still alive as a Vercel manual trigger). All 20 are now thin HTTP wrappers calling `src/jobs/X.ts`. |
-| **`src/scripts/cron/run-job.ts`** | **Phase 25** — generic launchd CLI dispatcher: `npm run cron <job-name>`. JOB_REGISTRY has all 20 jobs. |
+| `src/mcp/server.ts` | **Phase 27** — stdio-based MCP server with 6 tools (knowledge_search, entity_lookup, commodity_prices, regulatory_norms, agro_news, database_stats). `@modelcontextprotocol/sdk` dep. |
+| `src/components/ExecutiveBriefingWidget.tsx` | **Phase 27** — Dashboard widget showing the latest daily executive briefing (between map and news). |
+| `src/jobs/sync-daily-briefing.ts` | **Phase 27** — aggregates 24h data + Gemini summary → `executive_briefings` table. |
+| `src/app/api/cron/` | **25 cron routes** + `sync-all` orchestrator (still alive as a Vercel manual trigger). All 25 are now thin HTTP wrappers calling `src/jobs/X.ts`. |
+| **`src/scripts/cron/run-job.ts`** | **Phase 25** — generic launchd CLI dispatcher: `npm run cron <job-name>`. JOB_REGISTRY has all 25 jobs. |
 | `src/app/api/data-sources/` | **Phase 25** Source CRUD (table-backed, replaces the JSON-only catalog from the UI side) |
 | `src/app/api/regulatory/affected-entities/` | **Phase 25** read endpoint backed by `v_norms_affecting_entity` + `v_norm_entity_counts` views |
 | `src/app/api/cnpj/establishments/` | **Phase 24B** generic RF establishment fetcher with inline geocoding |
@@ -241,8 +256,8 @@ Every cron route is also a `src/jobs/X.ts` module callable from BOTH the Next.js
 | `src/app/api/rj-add/` | **Phase 24C** manual RJ insert by CNPJ + BrasilAPI + DDG debt scrape |
 | `src/app/api/crm/` | **Phase 24G** — `/key-persons`, `/meetings`, `/leads` CRUD endpoints. All POST/PATCH/DELETE log to `activity_log`. |
 | `src/app/api/activity/` | **Phase 24G2** — read endpoint for the activity log feed |
-| `src/db/migrations/` | **45 SQL migrations.** 035=`cnpj_establishments`, 036=`analysis_lenses`, 037=Phase 24D scrapers, 038=World Bank, 039=CNJ, 040=tier-aware knowledge search, 041=CRM tables, 042=`affected_cnaes` + GIN, 043=`activity_log`, **044=`v_norms_affecting_entity`**, **045=`data_sources` table** |
-| **`launchd/`** | **Phase 25** Mac launchd cron infrastructure. `jobs.json` (source of truth for schedules), `generate-plists.js` (jobs.json → plists/), `install.sh` (idempotent installer with `--reload`/`--uninstall`/`--dry-run`), `README.md` (full ops manual: Quickstart, sleep prevention, Tailscale, troubleshooting), `plists/` (20 generated `.plist` files with REPLACE_ME placeholders) |
+| `src/db/migrations/` | **47 SQL migrations.** 035=`cnpj_establishments`, 036=`analysis_lenses`, 037=Phase 24D scrapers, 038=World Bank, 039=CNJ, 040=tier-aware knowledge search, 041=CRM tables, 042=`affected_cnaes` + GIN, 043=`activity_log`, **044=`v_norms_affecting_entity`**, **045=`data_sources` table**, **046=4 macro scrapers in scraper_registry (Phase 26)**, **047=`executive_briefings` (Phase 27)** |
+| **`launchd/`** | **Phase 25→26** Mac launchd cron infrastructure. `jobs.json` (source of truth for schedules), `generate-plists.js` (jobs.json → plists/), `install.sh` (idempotent installer with `--reload`/`--uninstall`/`--dry-run`), `README.md` (full ops manual: Quickstart, sleep prevention, Tailscale, troubleshooting), `plists/` (25 generated `.plist` files with REPLACE_ME placeholders) |
 | `src/scripts/apply-migration.js` | **Phase 24B** — applies a single migration via `DATABASE_URL` Postgres pooler |
 | `src/scripts/seed-data-sources.js` | **Phase 25** — one-shot upsert from `source-registry.json` → `data_sources` table |
 | `src/scripts/backfill-cnpj-establishments.js` | **Phase 24B** — walks every entity with `role_type='industry'`, fetches all ordens via BrasilAPI, geocodes, upserts. Logs to `activity_log` (Phase 25 backlog). 1,699 establishments cached. |
