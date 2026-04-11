@@ -52,6 +52,7 @@ import { runSyncMdicComexstat } from '@/jobs/sync-mdic-comexstat'
 import { runSyncAgrofitBulk } from '@/jobs/sync-agrofit-bulk'
 import { runSyncScraperHealthcheck } from '@/jobs/sync-scraper-healthcheck'
 import { runSyncSourceRegistryHealthcheck } from '@/jobs/sync-source-registry-healthcheck'
+import { runSyncDailyBriefing } from '@/jobs/sync-daily-briefing'
 
 import type { JobResult } from '@/jobs/types'
 
@@ -82,6 +83,7 @@ const JOB_REGISTRY: Record<string, JobFn> = {
   'sync-agrofit-bulk':        runSyncAgrofitBulk,
   'sync-scraper-healthcheck': runSyncScraperHealthcheck,
   'sync-source-registry-healthcheck': runSyncSourceRegistryHealthcheck,
+  'sync-daily-briefing':    runSyncDailyBriefing,
 }
 
 async function main() {

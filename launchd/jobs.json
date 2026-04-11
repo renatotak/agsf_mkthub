@@ -145,6 +145,12 @@
       "description": "Re-check 176 entries in source-registry.json (read-only)",
       "schedule": { "calendar": { "Hour": 10, "Minute": 0, "Weekday": 0 } },
       "comment": "Sunday 10:00 local — flags newly broken sources in activity_log"
+    },
+    {
+      "name": "sync-daily-briefing",
+      "description": "Generate daily executive briefing from 24h data aggregation + Gemini",
+      "schedule": { "calendar": { "Hour": 8, "Minute": 0 } },
+      "comment": "Daily 08:00 local — after market data is fresh, before team standup"
     }
   ]
 }
