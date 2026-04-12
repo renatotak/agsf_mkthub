@@ -34,8 +34,8 @@ export const RJ_STATUS = {
 } as const;
 
 export const RJ_NEWS_SOURCES = [
-  { id: 'conjur', name: 'ConJur', rss: 'https://www.conjur.com.br/rss.xml' },
-  { id: 'migalhas', name: 'Migalhas', rss: 'https://www.migalhas.com.br/rss/quentes.xml' },
+  { id: 'conjur', name: 'ConJur', rss: 'https://www.conjur.com.br/feed/' },
+  // Migalhas RSS discontinued (404 since ~Apr 2026).
 ] as const;
 
 // Keywords used to filter relevant articles

@@ -16,9 +16,9 @@ const parser = new Parser({
 })
 
 const REGULATORY_SOURCES = [
-  { name: 'ConJur', rss: 'https://www.conjur.com.br/rss.xml' },
-  { name: 'Migalhas', rss: 'https://www.migalhas.com.br/rss/quentes.xml' },
+  { name: 'ConJur', rss: 'https://www.conjur.com.br/feed/' },
   { name: 'JOTA', rss: 'https://www.jota.info/feed' },
+  // Migalhas RSS discontinued (404 since ~Apr 2026). Replaced by ConJur /feed/.
 ]
 
 const BODY_PATTERN = /\b(CMN|CVM|BCB|Banco Central|BACEN|Conselho Monetário|MAPA|Ministério da Agricultura)\b/i
