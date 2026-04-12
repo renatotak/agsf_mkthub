@@ -20,9 +20,9 @@ Market Hub is the **knowledge engine** of the AgriSafe ecosystem. It captures pu
 ## Tech Stack
 
 - **Next.js 16** (App Router) + TypeScript strict + Tailwind CSS 4
-- **Supabase** (PostgreSQL + RLS + pgvector) — 57 tables, 45 SQL migrations, 5-entity model live
+- **Supabase** (PostgreSQL + RLS + pgvector) — 60 tables, 51 SQL migrations, 5-entity model live
 - **Recharts** + `@vis.gl/react-google-maps` for Bloomberg-style data visualization
-- **Hybrid deployment** — Vercel hosts the Next.js webapp + manual cron triggers; **20 cron jobs run on a 24/7 Mac mini via launchd** (Phase 25), each with its own schedule. See [launchd/README.md](launchd/README.md) for the install path. Vercel Hobby's single-cron limit is now history.
+- **Hybrid deployment** — Vercel hosts the Next.js webapp + manual cron triggers; **25 cron jobs run on a 24/7 Mac mini** via a **smart orchestrator** (Phase 28) that probes sources and skips unchanged — 2 launchd agents replace the prior 25. See [launchd/README.md](launchd/README.md). **MCP server** (`npm run mcp`) exposes 9 tools for AI agent integration.
 - **Reading Room Chrome extension** at `chrome-extensions/reading-room/` auto-syncs saved articles to `/api/reading-room/ingest`
 
 ## Quick Start

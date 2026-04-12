@@ -1,7 +1,7 @@
 # AgriSafe Market Hub — Roadmap
 
-> **Last updated:** 2026-04-09 (Phases 26–27)
-> 4 verticals · 14 modules · 58 Supabase tables · 47 SQL migrations · **25 cron routes (now Mac-as-server via launchd, Phase 25)** · 13 registered scrapers · 9,674 legal entities · 5-entity model live · tier-aware chat · CRM tables · activity log · **Source CRUD UI** · **norms × entities view** · **MCP server** · **daily executive briefing**.
+> **Last updated:** 2026-04-12 (Phase 28 + entity UID migration + AGROFIT fix + smart orchestrator)
+> 4 verticals · 14 modules · 60 Supabase tables · 51 SQL migrations · **25 cron jobs via smart orchestrator (2 launchd agents)** · 9 MCP tools · 13 registered scrapers · ~9,818 legal entities · 800 industry products · 5-entity model live · tier-aware chat · CRM tables · activity log · **Source CRUD UI** · **norms × entities view** · **MCP server (9 tools)** · **daily executive briefing** · **price anomaly detection**.
 > Latest user task list: `documentation/TODO_2026-04-06.md`
 
 ---
@@ -11,7 +11,7 @@
 | Area | Live |
 |---|---|
 | **Architecture** | 4 verticals (Ingest → Analyze → Create → Comply), 14 modules |
-| **5-entity model** | 9,674 legal_entities · 9,609 entity_roles · 143 entity_mentions |
+| **5-entity model** | ~9,818 legal_entities · 9,609 entity_roles · 143 entity_mentions |
 | **Diretório de Canais** | 9,328 retailers · 24,275 retailer_locations (geocoded) · CRM-style 4-card KPI row · sortable columns · RJ + News-mention modals · **CRM panel + Street View tile per row (Phase 24G)** |
 | **Diretório de Indústrias** | 274 (18 curated + 256 imported via CSV) · 1,699 cnpj_establishments (100% geocoded via Nominatim) · list+map+expandable rows · 4-button row actions (RF data / Web search / AI analysis / Buscar filiais) · **CRM panel + Street View tile per row (Phase 24G)** |
 | **CRM (Phase 24G)** | `key_persons` + `meetings` + `leads` tables (all `agrisafe_confidential`) · `EntityCrmPanel` mounted in both directories · `/api/crm/*` CRUD endpoints · leads can link to existing `campaigns` table |
@@ -27,8 +27,10 @@
 | **Configurações** | Editable analysis lenses (DB-backed prompts) · Reading Room install guide · **Activity Log panel (Phase 24G2)** — every cron run + manual insert + extension push surfaced with filter chips |
 | **Auth + deploy** | Supabase Auth + SSR middleware · **Hybrid: Vercel hosts Next.js webapp + cron route fallbacks; 25 cron jobs run on Mac mini via launchd**, each with its own schedule, no Vercel cron-count limit |
 | **Cron pipeline (Phase 25→26)** | **25 cron routes** ported to `src/jobs/*.ts` framework-agnostic modules + `runScraperJob` adapter + generic `run-job.ts` dispatcher + `launchd/jobs.json` schedule config + `generate-plists.js` + `install.sh`. Both the Next.js cron route AND the Mac CLI dispatcher call the same job module — logic lives in exactly one place. Settings → Activity Log surfaces Mac and Vercel runs identically. See [launchd/README.md](launchd/README.md). |
-| **MCP server (Phase 27)** | `src/mcp/server.ts` — stdio-based MCP server with 6 tools (knowledge_search, entity_lookup, commodity_prices, regulatory_norms, agro_news, database_stats). `@modelcontextprotocol/sdk` dep. `npm run mcp`. |
-| **Executive briefing (Phase 27)** | `executive_briefings` table (mig 047). `sync-daily-briefing` aggregates 24h data + Gemini summary → `/api/executive-briefing` read endpoint. `ExecutiveBriefingWidget` on Dashboard. Daily 08:00 local via launchd. |
+| **MCP server (Phase 27→28)** | `src/mcp/server.ts` — stdio-based MCP server with **9 tools** (knowledge_search, entity_lookup, commodity_prices, regulatory_norms, agro_news, database_stats, executive_briefing, price_anomalies, events_upcoming). `@modelcontextprotocol/sdk` dep. `npm run mcp`. |
+| **Executive briefing (Phase 27)** | `executive_briefings` table (mig 047). `sync-daily-briefing` aggregates 24h data + Gemini summary → `/api/executive-briefing` read endpoint. `ExecutiveBriefingWidget` on Dashboard (now with anomaly badges). Daily 08:00 local via launchd. |
+| **Price anomaly detection (Phase 28)** | Migration 048: `v_commodity_price_stats` view (rolling stddev) + `executive_briefings.price_ruptures` column. `backfill-price-history.js` seeded 150 BCB SGS CEPEA rows (25 months × 6 commodities). `sync-daily-briefing` detects \|change\| > 2σ anomalies → `price_ruptures`. `/api/price-anomalies` endpoint (ISR 10min). MarketPulse "Destaques do Mercado" uses data-driven σ detection instead of hardcoded 2%. First detection: coffee at 2.5σ. |
+| **Smart orchestrator (Phase 28)** | Migration 051: `cron_freshness` table for probe caching. `src/jobs/sync-orchestrator.ts` probes all 25 sources, skips unchanged (ETag/Last-Modified/rss_count/weekly_only/always strategies). Launchd simplified: 25 agents → 2 (`sync-market-data` every 30min + `sync-orchestrator` daily 3am). Second run skipped 5 unchanged sources automatically. |
 
 ---
 
@@ -73,6 +75,7 @@ Every shipped phase in chronological order. For deeper detail on a specific phas
 | **27 (UI)** | **Source registry health check (one-shot).** `check-source-registry.js` probed all 176 entries. Result: 125 active / 25 inactive / 24 error / 2 unchecked. Ingestão de Dados KPI strip now reflects real data instead of "166 unchecked". (Superseded by the Phase 25 weekly cron, but the script is still used for one-shot dev runs.) | 2026-04-08 |
 | **26** | **Macro Pulse expansion + regulatory badge.** (a) 4 new macro scrapers: `sync-conab-safra` (987 rows), `sync-usda-psd` (1560 rows), `sync-mdic-comexstat` (100 rows), `sync-faostat-livestock` (code ready, FAOSTAT API was down). Migration 046 registers all 4 in `scraper_registry`. (b) MarketPulse UI: boi-gordo mapped to `cattle_meat`, fetches all sources per commodity, 3 new chart sections (CONAB Safra, USDA PSD country comparison, MDIC exports). (c) 4 new cron routes + launchd plists + dispatcher registration. (d) Bug fix: USDA PSD grains URL renamed from `psd_grains_csv.zip` to `psd_grains_pulses_csv.zip`. (e) Dependencies: +adm-zip, +xlsx. (f) UI badge for `affected_entity_count` in Marco Regulatório list rows + drilldown modal. | 2026-04-09 |
 | **27** | **KnowledgeMindMap refresh + MCP server + daily executive briefing.** (a) MindMap: merged Future into Current view (45 nodes, 42 edges), removed Current/Future toggle, all Phase 17 entity model nodes now live with real counts, added 20+ missing tables from Phases 19–26. (b) MCP server: `src/mcp/server.ts` — stdio-based MCP server with 6 tools (knowledge_search, entity_lookup, commodity_prices, regulatory_norms, agro_news, database_stats). `@modelcontextprotocol/sdk` dep. `npm run mcp`. (c) Daily executive briefing: migration 047 (`executive_briefings` table), `src/jobs/sync-daily-briefing.ts` aggregates 24h data + Gemini summary, `/api/cron/sync-daily-briefing` + `/api/executive-briefing` read endpoint, launchd daily 08:00 local, `ExecutiveBriefingWidget` on Dashboard (between map and news). | 2026-04-09 |
+| **28** | **Price anomaly detection + entity UID migration + AGROFIT fix + MCP expansion + smart orchestrator + bug fixes.** (a) **Price anomaly detection:** Migration 048 adds `v_commodity_price_stats` view (rolling stddev) + `executive_briefings.price_ruptures` column. `backfill-price-history.js` seeded 150 BCB SGS CEPEA rows (25 months × 6 commodities). `sync-daily-briefing` now detects \|change\| > 2σ anomalies and stores in `price_ruptures`. `/api/price-anomalies` endpoint (ISR 10min). `ExecutiveBriefingWidget` shows anomaly badges + expanded detail. MarketPulse "Destaques do Mercado" uses data-driven σ detection instead of hardcoded 2%. First detection: coffee at 2.5σ. (b) **Entity UID migration:** `RetailersDirectory.tsx` React keys, expand state, API calls switched to `entity_uid`. 5 APIs updated (`/api/company-enrichment`, `/api/company-research`, `/api/retailers/update`, `/api/company-notes`, `/api/retailer-intelligence/analyze`) to accept `entity_uid` param and resolve via `legal_entities`. (c) **AGROFIT fix + manufacturer FK:** Migration 049 adds UNIQUE on `agrofit_registro` + nullable `industry_id`. Migration 050 adds `titular_registro` + `manufacturer_entity_uid` on `industry_products`, Oracle view rebuilt with COALESCE fallback. `sync-agrofit-bulk` now persists `titular_registro` (800 products seeded). `backfill-agrofit-manufacturers.js` matched/created 145 holders → 785/800 products linked. Oracle view shows real manufacturer names. (d) **MCP expansion:** MCP server expanded from 6 to 9 tools (+executive_briefing, +price_anomalies, +events_upcoming). `database_stats` now includes `executive_briefings` table. (e) **Feed fixes:** Migalhas RSS discontinued (404), removed from `sync-regulatory` + `RJ_NEWS_SOURCES`. ConJur URL fixed: `/rss.xml` (302) → `/feed/` (200). (f) **Smart orchestrator:** Migration 051 adds `cron_freshness` table for probe caching. `src/jobs/sync-orchestrator.ts` probes all 25 sources, skips unchanged (strategies: head ETag/Last-Modified, rss_count, weekly_only, always). Launchd simplified: 25 agents → 2 (`sync-market-data` every 30min + `sync-orchestrator` daily 3am). Second run skipped 5 unchanged sources automatically. (g) **Bug fixes:** `sync-key-agro-laws` fixed `scraper_registry.schema_check` (removed stale `law` field). `sync-source-registry-healthcheck` applied missing migration 045 + seeded 176 `data_sources` rows. | 2026-04-12 |
 
 ---
 
@@ -106,7 +109,7 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 ### Inteligência de Insumos
 
 - **State sources** — per-state secretaria de agricultura lists for products approved at state level. Schema is ready (`industry_products.source_dataset` enum has `state_secretaria_*` slots). Priority states: MT, MS, GO, PR, RS, SP, MG, BA. Needs URL + selector verification per state.
-- **Manufacturer backfill** — walk distinct AGROFIT `titular_registro` values that don't match any pre-existing `industries` row, propose new entries.
+- **Manufacturer backfill** — ✅ **DONE 2026-04-12** (Phase 28). Migrations 049+050 add `titular_registro` + `manufacturer_entity_uid` on `industry_products`. `backfill-agrofit-manufacturers.js` matched/created 145 holders, linked 785/800 products. Oracle view shows real manufacturer names.
 - **Real price data** — v0 Oracle uses `holder_count` as a proxy for "cheaper alternative". A real price comparison needs scraping retailer price tables.
 - **Region awareness** — kicks in once state secretariat scrapers ship.
 
@@ -127,7 +130,7 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 - **MCP server** — ✅ **DONE 2026-04-09** (Phase 27). `src/mcp/server.ts` — stdio-based MCP server with 6 tools. `@modelcontextprotocol/sdk` dep. `npm run mcp`.
 - **RAG endpoint with confidentiality-tier-aware filtering** — ✅ **DONE 2026-04-08** (Phase 24G slice 1). Mig 040 added `filter_confidentiality` to `match_knowledge_items` RPC; `/api/knowledge/chat` resolves caller tier and passes visible tiers.
 - **Daily executive briefing** — ✅ **DONE 2026-04-09** (Phase 27). Migration 047 (`executive_briefings`). `sync-daily-briefing` job + cron route + `/api/executive-briefing` read endpoint + `ExecutiveBriefingWidget` on Dashboard. Launchd daily 08:00.
-- **Anomaly narratives** when MarketPulse detects rupture (`Math.abs(change) > 2 * stddev`).
+- **Anomaly narratives** — ✅ **DONE 2026-04-12** (Phase 28). `v_commodity_price_stats` view computes rolling stddev; `sync-daily-briefing` detects |change| > 2σ → `price_ruptures`; `/api/price-anomalies` endpoint; MarketPulse uses data-driven σ detection; `ExecutiveBriefingWidget` shows anomaly badges.
 - **Webapp build** — same UI as the Next.js app but with a permanent chat panel always available.
 - **Cron-driven LLM agents** — scan news/events for entity mentions and enrich the knowledge base.
 
@@ -143,7 +146,7 @@ Items grouped by intent. Priority order within each group is roughly decreasing.
 - **Drop legacy `cnpj_raiz` / `cnpj_basico` text columns** once nothing reads them.
 - **Wire entity-matcher into 3 more cron paths** — ✅ **PARTIAL** (Phase 25 bundled scope). `sync-events-na`, `sync-regulatory`, `sync-recuperacao-judicial` job modules now load matchable entities once + write entity_mentions per row. `archive-old-news` is still pending — but its source rows in agro_news already have mentions written by sync-agro-news, so this is low priority.
 - **Refresh `KnowledgeMindMap.tsx` "current state" view** — ✅ **DONE 2026-04-09** (Phase 27). Merged Future into Current (45 nodes, 42 edges), removed toggle, all Phase 17 entity model nodes live with real counts, added 20+ missing tables from Phases 19–26.
-- **Migrate the remaining `cnpj_raiz` reads** in RetailersDirectory.tsx, RegulatoryFramework.tsx, RecuperacaoJudicial.tsx, CompetitorRadar.tsx to `entity_uid`.
+- **Migrate the remaining `cnpj_raiz` reads** — ✅ **PARTIAL 2026-04-12** (Phase 28). `RetailersDirectory.tsx` + 5 APIs (`company-enrichment`, `company-research`, `retailers/update`, `company-notes`, `retailer-intelligence/analyze`) switched to `entity_uid`. Remaining: RegulatoryFramework.tsx, RecuperacaoJudicial.tsx, CompetitorRadar.tsx (low priority).
 - **Migrate `sync-events-na` to `runScraper()`** — currently still on `logSync()` + `logActivity` direct calls. Lower priority now that the job module pattern from Phase 25 already gives uniform telemetry via the dispatcher.
 
 ### Polish (Phase 30)
@@ -191,16 +194,18 @@ Each cron route is **also** a launchd job on the Mac mini server (Phase 25). The
 
 The legacy `/api/cron/sync-all` orchestrator still works as a "run everything now" Vercel trigger but is no longer the only cron entry — the Mac handles the schedule.
 
+**Phase 28 smart orchestrator:** `src/jobs/sync-orchestrator.ts` probes all 25 sources before running them, skipping unchanged ones. Probe strategies: `head` (ETag/Last-Modified), `rss_count`, `weekly_only`, `always`. Migration 051 adds `cron_freshness` table for caching probe results. Launchd simplified from 25 agents to just 2: `sync-market-data` (every 30min) + `sync-orchestrator` (daily 3am). Second run skipped 5 unchanged sources automatically.
+
 ### Database tables (live)
 
 **Core 5-entity model (Phase 17A — migrations 018-019)**
-- `legal_entities` (9,674) · `entity_roles` (9,609) · `entity_mentions` (143)
+- `legal_entities` (~9,818) · `entity_roles` (9,609) · `entity_mentions` (143)
 - `farms` · `assets` · `commercial_activities` · `agrisafe_service_contracts` (all 0 — empty until ingestion)
 - `groups` · `group_members` · `farm_ownership` · `asset_parties` · `agrisafe_service_targets` (junctions)
 
 **Public-data layer**
 - Channels: `retailers` (9,328) · `retailer_locations` (24,275) · `cnpj_establishments` (1,699)
-- Industries: `industries` (18 curated, 256 imported via entity_roles) · `industry_products` (growing) · `retailer_industries` (392) · `active_ingredients` · `industry_product_uses` · `industry_product_ingredients`
+- Industries: `industries` (18 curated, 256 imported via entity_roles) · `industry_products` (800 — Phase 28, with `titular_registro` + `manufacturer_entity_uid`) · `retailer_industries` (392) · `active_ingredients` · `industry_product_uses` · `industry_product_ingredients`
 - Risk: `recuperacao_judicial` (131)
 - News + content: `agro_news` (203) · `news_sources` (6+) · `news_knowledge` · `knowledge_items` · `published_articles` (6) · `content_topics` (5) · `competitors` (7) · `competitor_signals` (13)
 - Regulatory: `regulatory_norms` (16 with `affected_cnaes` from Phase 24G2: CVM 6 + BCB 6 + CONGRESSO 3 + CNJ 1)
@@ -209,7 +214,8 @@ The legacy `/api/cron/sync-all` orchestrator still works as a "run everything no
 - Enrichment: `company_enrichment` · `company_notes` · `company_research` (with `analysis_type` column from Phase 24B)
 - **CRM (Phase 24G):** `key_persons` · `meetings` · `leads` (all default `agrisafe_confidential`, FK → legal_entities)
 - Config: `analysis_lenses` (3: retailer, industry, generic) · **`data_sources` (176 entries — Phase 25 source CRUD)**
-- Briefing: **`executive_briefings` (Phase 27, mig 047)**
+- Briefing: **`executive_briefings` (Phase 27, mig 047 — with `price_ruptures` column from Phase 28 mig 048)**
+- Orchestrator: **`cron_freshness` (Phase 28, mig 051)** — probe caching for smart orchestrator
 - Telemetry: `scraper_registry` (13 — Phase 26 added 4 macro scrapers via mig 046) · `scraper_runs` · `scraper_knowledge` · `sync_logs` · **`activity_log` (Phase 24G2 — every write across the system, ~100% coverage after Phase 25 backlog batch)**
 
 **Views (rebuilt in Phase 17B/17E with `security_invoker=on`)**
@@ -218,7 +224,8 @@ The legacy `/api/cron/sync-all` orchestrator still works as a "run everything no
 - `v_entity_profile` — canonical "everything I know about entity X"
 - `v_oracle_brand_alternatives` — Oracle substitution view (Phase 20A)
 - **`v_norms_affecting_entity`** — per-row join of `regulatory_norms.affected_cnaes` × `legal_entities.primary_cnae` (Phase 25 backlog, migration 044)
-- **`v_norm_entity_counts`** — aggregated count per norm; powers the future "X empresas afetadas" badge in Marco Reg
+- **`v_norm_entity_counts`** — aggregated count per norm; powers the "X empresas afetadas" badge in Marco Reg
+- **`v_commodity_price_stats`** — rolling stddev for commodity prices; powers Phase 28 anomaly detection (migration 048)
 
 ### Sidebar structure (current)
 
@@ -281,6 +288,6 @@ See `CLAUDE.md` for the full text.
 1. **Algorithms first, LLMs last** — every "extract from page" or "match a CNPJ" task uses regex/Cheerio/SQL, never an LLM. LLMs are reserved for prose generation and chat.
 2. **Everything links to the 5 entities** — every new table either FKs to one of the 5 nodes or writes to `entity_mentions`.
 3. **Public data only** — client PII / financial records / proprietary data are tagged via the `confidentiality` enum and never live in the public layer.
-4. ~~**Single Vercel cron** (Hobby plan limit) — `sync-all` consolidates all jobs.~~ **Lifted in Phase 25**: 20 cron jobs now run on a Mac mini via launchd, each with its own schedule. The Vercel cron route is kept as a fallback / manual trigger but is no longer the schedule source. See [launchd/README.md](launchd/README.md).
+4. ~~**Single Vercel cron** (Hobby plan limit) — `sync-all` consolidates all jobs.~~ **Lifted in Phase 25**: 25 cron jobs run on a Mac mini via launchd. **Phase 28 smart orchestrator** simplified from 25 launchd agents to 2 (`sync-market-data` every 30min + `sync-orchestrator` daily 3am). The Vercel cron route is kept as a fallback / manual trigger. See [launchd/README.md](launchd/README.md).
 5. **Bilingual always** — every UI string in PT-BR + EN via `src/lib/i18n.ts`.
 6. **MockBadge required** when a section falls back to mock data.
