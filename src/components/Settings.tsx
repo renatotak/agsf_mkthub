@@ -5,12 +5,14 @@ import { Lang, t } from "@/lib/i18n";
 import {
   Download, BarChart3, TestTube, Radar, Newspaper, Calendar, Store,
   PenTool, BookOpen, Scale, Database, Brain, LayoutDashboard,
-  Shield, Server, Workflow, ArrowRight, Puzzle, Copy, Check, FileText,
+  Shield, Server, Workflow, ArrowRight, Puzzle, Check, FileText,
   Folder, Settings as SettingsIcon, Play, Cpu, Loader2,
 } from "lucide-react";
 import { AnalysisLensesEditor } from "@/components/AnalysisLensesEditor";
 import { ActivityLogPanel } from "@/components/ActivityLogPanel";
 import { OneNoteImportWizard } from "@/components/OneNoteImportWizard";
+import { AppCampoPanel } from "@/components/AppCampoPanel";
+import { CopyableCode } from "@/components/ui/CopyableCode";
 
 const EXTENSION_FOLDER_PATH = "chrome-extensions/reading-room";
 const CHROME_EXTENSIONS_URL = "chrome://extensions";
@@ -38,32 +40,6 @@ const MODULE_LIST = [
   { key: "modDataSources" as const, icon: Database },
   { key: "modKnowledge" as const, icon: Brain },
 ];
-
-function CopyableCode({ text, label }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard API requires HTTPS in some browsers; ignore silently
-    }
-  };
-  return (
-    <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-md px-3 py-2 font-mono text-[12px] text-neutral-700">
-      <code className="flex-1 truncate">{text}</code>
-      <button
-        onClick={handleCopy}
-        className="flex items-center gap-1 text-[10px] font-bold text-neutral-500 hover:text-brand-primary transition-colors shrink-0"
-        title={label || "Copy"}
-      >
-        {copied ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
-        {copied ? "Copied" : label || "Copy"}
-      </button>
-    </div>
-  );
-}
 
 // ─── AI Model Selector ────────────────────────────────────────────────
 
@@ -266,6 +242,9 @@ export function Settings({ lang }: { lang: Lang }) {
 
       {/* OneNote Import Wizard */}
       <OneNoteImportWizard lang={lang} />
+
+      {/* App Campo API Integration (Phase 29) */}
+      <AppCampoPanel lang={lang} />
 
       {/* Reading Room Chrome extension install guide (Phase 22 follow-up) */}
       <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6">

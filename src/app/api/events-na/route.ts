@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { verifyApiKey, logApiAccess, extractClientIp } from "@/lib/api-key-auth";
 
 export const revalidate = 3600; // cache 1h
 
@@ -18,7 +20,14 @@ export interface AgroAgendaEvent {
   secao?: string;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const startMs = Date.now();
+  // Phase 29 — optional API key tracking
+  let keyMeta: Awaited<ReturnType<typeof verifyApiKey>> = null;
+  try {
+    const supabase = createAdminClient();
+    keyMeta = await verifyApiKey(supabase, request).catch(() => null);
+  } catch { /* non-blocking */ }
   try {
     const res = await fetch(`${API}/home`, {
       headers: { Accept: "application/json" },
@@ -61,12 +70,28 @@ export async function GET() {
       return a.dataInicio.localeCompare(b.dataInicio);
     });
 
-    return NextResponse.json({
+    const resp = NextResponse.json({
       success: true,
       count: events.length,
       data: events,
       fetched_at: new Date().toISOString(),
     });
+
+    // Phase 29 — log API access if a key was presented
+    if (keyMeta) {
+      const supabase = createAdminClient();
+      logApiAccess(supabase, {
+        apiKeyId: keyMeta.id,
+        endpoint: "/api/events-na",
+        method: "GET",
+        statusCode: 200,
+        ip: extractClientIp(request),
+        userAgent: request.headers.get("user-agent"),
+        responseTimeMs: Date.now() - startMs,
+      }).catch(() => {});
+    }
+
+    return resp;
   } catch (err: any) {
     console.error("AgroAgenda API error:", err);
     return NextResponse.json({ success: false, error: err.message, data: [] }, { status: 502 });

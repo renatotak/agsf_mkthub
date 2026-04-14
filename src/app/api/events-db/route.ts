@@ -19,6 +19,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { verifyApiKey, logApiAccess, extractClientIp } from '@/lib/api-key-auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 600 // 10 min
@@ -94,12 +95,16 @@ function prettyType(t: string): string {
 }
 
 export async function GET(request: Request) {
+  const startMs = Date.now()
   const url = new URL(request.url)
   const sourceFilter = url.searchParams.get('source')
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '500', 10), 1000)
 
   try {
     const supabase = createAdminClient()
+
+    // Phase 29 — optional API key tracking (non-blocking, backwards-compatible)
+    const keyMeta = await verifyApiKey(supabase, request).catch(() => null)
     let query = supabase
       .from('events')
       .select('id, name, date, end_date, location, type, description_pt, description_en, website, source_name, source_url, organizer_cnpj, latitude, longitude, enriched_at, enrichment_summary')
@@ -120,13 +125,28 @@ export async function GET(request: Request) {
       sourceCounts[s] = (sourceCounts[s] || 0) + 1
     }
 
-    return NextResponse.json({
+    const resp = NextResponse.json({
       success: true,
       count: events.length,
       sources: sourceCounts,
       data: events,
       fetched_at: new Date().toISOString(),
     })
+
+    // Phase 29 — log API access if a key was presented
+    if (keyMeta) {
+      logApiAccess(supabase, {
+        apiKeyId: keyMeta.id,
+        endpoint: '/api/events-db',
+        method: 'GET',
+        statusCode: 200,
+        ip: extractClientIp(request),
+        userAgent: request.headers.get('user-agent'),
+        responseTimeMs: Date.now() - startMs,
+      }).catch(() => {})
+    }
+
+    return resp
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('events-db error:', message)
