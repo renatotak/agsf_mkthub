@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { createClient as createSSRClient } from '@/utils/supabase/server'
+import { resolveCallerTier, visibleTiers } from '@/lib/confidentiality'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +15,15 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createAdminClient()
+
+    // Resolve tier via the SSR (cookie-backed) client so authenticated
+    // AgriSafe sessions unlock `agrisafe_confidential` rows (e.g.
+    // industry_financials). Admin client queries reuse `supabase`
+    // because RLS is bypassed by the service role and we apply the
+    // tier filter explicitly via `visibleTiers(...)`.
+    const ssr = await createSSRClient()
+    const callerTier = await resolveCallerTier(ssr, request)
+    const visible = visibleTiers(callerTier)
 
     if (id) {
       // Single industry detail
@@ -32,6 +43,14 @@ export async function GET(request: Request) {
         .select('*')
         .eq('industry_id', id)
         .order('product_name')
+
+      // Financials (AgriSafe proprietary, mig 067) — tier-gated
+      const { data: financials } = await supabase
+        .from('industry_financials')
+        .select('fiscal_year, revenue_usd_millions, market_share_pct, currency, source, source_note')
+        .eq('industry_id', id)
+        .in('confidentiality', visible)
+        .order('fiscal_year', { ascending: true })
 
       // Retailer links
       const { data: retailerLinks } = await supabase
@@ -76,6 +95,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         industry,
         products: products || [],
+        financials: financials || [],
         retailers: (retailerLinks || []).map((r: any) => ({
           entity_uid: r.retailer_entity_uid,
           relationship_type: r.relationship_type,

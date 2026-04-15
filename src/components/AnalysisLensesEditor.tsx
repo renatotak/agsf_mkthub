@@ -14,9 +14,11 @@
  * cache to invalidate.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Lang } from "@/lib/i18n";
-import { Loader2, Save, Plus, Trash2, Sparkles, AlertCircle, Check } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Sparkles, AlertCircle, Check, User } from "lucide-react";
+
+type LensKind = "task" | "viewer";
 
 interface Lens {
   id: string;
@@ -30,6 +32,7 @@ interface Lens {
   max_tokens: number;
   enabled: boolean;
   is_builtin: boolean;
+  kind?: LensKind;   // mig 068 — task (UI action prompts) / viewer (persona viewpoints)
   updated_at?: string;
 }
 
@@ -39,6 +42,7 @@ export function AnalysisLensesEditor({ lang }: { lang: Lang }) {
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [activeTab, setActiveTab] = useState<LensKind>("task");
 
   const load = async () => {
     setLoading(true);
@@ -59,6 +63,8 @@ export function AnalysisLensesEditor({ lang }: { lang: Lang }) {
     load();
   }, []);
 
+  const { counts: tabCounts, visible: visibleLenses } = useTabData(lenses, activeTab);
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6 flex items-center gap-2 text-[13px] text-neutral-500">
@@ -77,12 +83,12 @@ export function AnalysisLensesEditor({ lang }: { lang: Lang }) {
           </div>
           <div>
             <h3 className="text-[17px] font-bold text-neutral-900">
-              {lang === "pt" ? "Lentes de Análise (Pesquisa Web + IA)" : "Analysis Lenses (Web Search + AI)"}
+              {lang === "pt" ? "Lentes de Análise" : "Analysis Lenses"}
             </h3>
             <p className="text-[12px] text-neutral-500 mt-0.5">
               {lang === "pt"
-                ? "Edite os prompts usados pelos botões \"Pesquisar na Web\" e \"Análise IA\" em cada diretório."
-                : "Edit the prompts used by the \"Web Search\" and \"AI Analysis\" buttons in each directory."}
+                ? "Tarefas: prompts dos botões \"Pesquisar na Web\" e \"Análise IA\". Personas: pontos de vista seedados do repo agents/ para uso em briefings e chats."
+                : "Tasks: prompts for Web Search / AI Analysis buttons. Personas: viewpoints seeded from the agents/ repo for briefings and chat."}
             </p>
           </div>
         </div>
@@ -109,9 +115,13 @@ export function AnalysisLensesEditor({ lang }: { lang: Lang }) {
         </div>
       )}
 
+      {/* Tab switcher — task (UI action prompts) vs viewer (personas) */}
+      <TabSwitcher active={activeTab} onChange={setActiveTab} counts={tabCounts} lang={lang} />
+
       {showAddForm && (
         <NewLensForm
           lang={lang}
+          defaultKind={activeTab}
           onCancel={() => setShowAddForm(false)}
           onCreated={() => {
             setShowAddForm(false);
@@ -121,7 +131,7 @@ export function AnalysisLensesEditor({ lang }: { lang: Lang }) {
       )}
 
       <div className="space-y-2">
-        {lenses.map((l) => (
+        {visibleLenses.map((l) => (
           <LensRow
             key={l.id}
             lens={l}
@@ -132,12 +142,77 @@ export function AnalysisLensesEditor({ lang }: { lang: Lang }) {
             lang={lang}
           />
         ))}
-        {lenses.length === 0 && !error && (
+        {visibleLenses.length === 0 && !error && (
           <p className="text-[12px] text-neutral-400 italic py-3">
-            {lang === "pt" ? "Nenhuma lente cadastrada." : "No lenses registered."}
+            {activeTab === "viewer"
+              ? lang === "pt"
+                ? "Nenhuma persona seedada. Rode src/scripts/seed-viewer-lenses.ts."
+                : "No personas seeded. Run src/scripts/seed-viewer-lenses.ts."
+              : lang === "pt"
+                ? "Nenhuma lente cadastrada."
+                : "No lenses registered."}
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+// Counts + filter computed from the full lens list. Extracted via
+// useMemo so re-renders don't repeat work on every keystroke inside
+// an open LensRow.
+function useTabData(lenses: Lens[], activeTab: LensKind) {
+  return useMemo(() => {
+    const task = lenses.filter((l) => (l.kind ?? "task") === "task");
+    const viewer = lenses.filter((l) => l.kind === "viewer");
+    const counts = { task: task.length, viewer: viewer.length };
+    const visible = activeTab === "viewer" ? viewer : task;
+    return { counts, visible };
+  }, [lenses, activeTab]);
+}
+
+function TabSwitcher({
+  active,
+  onChange,
+  counts,
+  lang,
+}: {
+  active: LensKind;
+  onChange: (k: LensKind) => void;
+  counts: { task: number; viewer: number };
+  lang: Lang;
+}) {
+  const tabs: { kind: LensKind; labelPt: string; labelEn: string; Icon: typeof Sparkles }[] = [
+    { kind: "task", labelPt: "Tarefas", labelEn: "Tasks", Icon: Sparkles },
+    { kind: "viewer", labelPt: "Personas", labelEn: "Personas", Icon: User },
+  ];
+  return (
+    <div className="flex items-center gap-1 mb-3 border-b border-neutral-200">
+      {tabs.map((t) => {
+        const isActive = t.kind === active;
+        const label = lang === "pt" ? t.labelPt : t.labelEn;
+        return (
+          <button
+            key={t.kind}
+            onClick={() => onChange(t.kind)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold border-b-2 -mb-px transition-colors ${
+              isActive
+                ? "border-brand-primary text-brand-primary"
+                : "border-transparent text-neutral-500 hover:text-neutral-800"
+            }`}
+          >
+            <t.Icon size={13} />
+            {label}
+            <span
+              className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                isActive ? "bg-brand-primary/10 text-brand-primary" : "bg-neutral-100 text-neutral-500"
+              }`}
+            >
+              {counts[t.kind]}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -378,7 +453,17 @@ function LensRow({
 
 // ─── New lens form ──────────────────────────────────────────────────────────
 
-function NewLensForm({ lang, onCancel, onCreated }: { lang: Lang; onCancel: () => void; onCreated: () => void }) {
+function NewLensForm({
+  lang,
+  defaultKind,
+  onCancel,
+  onCreated,
+}: {
+  lang: Lang;
+  defaultKind: LensKind;
+  onCancel: () => void;
+  onCreated: () => void;
+}) {
   const [id, setId] = useState("");
   const [labelPt, setLabelPt] = useState("");
   const [searchTemplate, setSearchTemplate] = useState("{{name}} Brasil");
@@ -398,6 +483,7 @@ function NewLensForm({ lang, onCancel, onCreated }: { lang: Lang; onCancel: () =
           label_pt: labelPt,
           search_template: searchTemplate,
           system_prompt: systemPrompt,
+          kind: defaultKind,
         }),
       });
       const data = await res.json();

@@ -127,6 +127,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const kind = body.kind === "viewer" ? "viewer" : "task";
+
   const row = {
     id,
     label_pt: body.label_pt,
@@ -139,6 +141,7 @@ export async function POST(req: NextRequest) {
     max_tokens: body.max_tokens ?? 400,
     enabled: body.enabled ?? true,
     is_builtin: false,
+    kind,
   };
 
   const { data, error } = await supabaseAdmin

@@ -974,8 +974,145 @@ function IndustryExpandedPanel({
         );
       })()}
 
+      {/* ── AgriSafe proprietary financials (mig 067) ── */}
+      <IndustryFinancialsBlock industryId={ind.kind === "curated" ? ind.id : null} lang={lang} />
+
       {/* ── Phase 24G — CRM panel (entity_uid only) ── */}
       <EntityCrmPanel entityUid={ind.kind === "imported" ? ind.id : null} lang={lang} context="industry" />
+    </div>
+  );
+}
+
+// ─── Financials block ───────────────────────────────────────────────────────
+// Renders the AgriSafe proprietary revenue + market-share panel for a
+// curated industry. Fetches /api/industries?id=<slug>, which tier-gates
+// the rows server-side (agrisafe_confidential → only authenticated
+// AgriSafe sessions receive them).
+
+type FinRow = {
+  fiscal_year: number;
+  revenue_usd_millions: number | null;
+  market_share_pct: number | null;
+  currency: string | null;
+  source: string | null;
+  source_note: string | null;
+};
+
+function IndustryFinancialsBlock({
+  industryId,
+  lang,
+}: {
+  industryId: string | null;
+  lang: Lang;
+}) {
+  const [rows, setRows] = useState<FinRow[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!industryId) {
+      setRows([]);
+      setLoaded(true);
+      return;
+    }
+    fetch(`/api/industries?id=${encodeURIComponent(industryId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setRows(Array.isArray(d?.financials) ? d.financials : []))
+      .finally(() => setLoaded(true));
+  }, [industryId]);
+
+  if (!loaded) return null;
+  if (!rows || rows.length === 0) return null;
+
+  const maxRev = Math.max(
+    ...rows.map((r) => r.revenue_usd_millions ?? 0),
+    1,
+  );
+  const note = rows.find((r) => r.source_note)?.source_note || null;
+
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Briefcase size={14} className="text-brand-primary" />
+          <h4 className="text-[13px] font-semibold text-neutral-700">
+            {lang === "pt"
+              ? "Faturamento & Market Share — AgriSafe Proprietário"
+              : "Revenue & Market Share — AgriSafe Proprietary"}
+          </h4>
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+            <Lock size={9} />
+            {lang === "pt" ? "Confidencial" : "Confidential"}
+          </span>
+        </div>
+        <span className="text-[10px] text-neutral-400">US$ m</span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="text-neutral-500 border-b border-neutral-100">
+              <th className="text-left py-1.5 pr-3 font-semibold uppercase text-[10px]">
+                {lang === "pt" ? "Ano" : "Year"}
+              </th>
+              <th className="text-right py-1.5 px-3 font-semibold uppercase text-[10px]">
+                {lang === "pt" ? "Receita (US$ m)" : "Revenue (US$ m)"}
+              </th>
+              <th className="text-left py-1.5 px-3 font-semibold uppercase text-[10px] w-[40%]">
+                {lang === "pt" ? "Escala" : "Scale"}
+              </th>
+              <th className="text-right py-1.5 pl-3 font-semibold uppercase text-[10px]">
+                {lang === "pt" ? "Market Share" : "Market Share"}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const pct = r.revenue_usd_millions
+                ? (r.revenue_usd_millions / maxRev) * 100
+                : 0;
+              return (
+                <tr
+                  key={r.fiscal_year}
+                  className="border-b border-neutral-50 last:border-0"
+                >
+                  <td className="py-1.5 pr-3 font-mono text-neutral-700">
+                    {r.fiscal_year}
+                  </td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-neutral-800">
+                    {r.revenue_usd_millions != null
+                      ? r.revenue_usd_millions.toLocaleString(
+                          lang === "pt" ? "pt-BR" : "en-US",
+                          { maximumFractionDigits: 0 },
+                        )
+                      : "—"}
+                  </td>
+                  <td className="py-1.5 px-3">
+                    {r.revenue_usd_millions != null ? (
+                      <div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                        <div
+                          className="h-full bg-brand-primary"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-neutral-300">—</span>
+                    )}
+                  </td>
+                  <td className="py-1.5 pl-3 text-right tabular-nums text-neutral-700">
+                    {r.market_share_pct != null
+                      ? `${r.market_share_pct.toFixed(1).replace(".", lang === "pt" ? "," : ".")}%`
+                      : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {note && (
+        <p className="mt-2 text-[10px] text-neutral-400 italic">{note}</p>
+      )}
     </div>
   );
 }

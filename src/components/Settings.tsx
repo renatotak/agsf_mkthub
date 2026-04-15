@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { AnalysisLensesEditor } from "@/components/AnalysisLensesEditor";
 import { ActivityLogPanel } from "@/components/ActivityLogPanel";
+import { BillingHealthPanel } from "@/components/BillingHealthPanel";
+import { VertexSearchTestPanel } from "@/components/VertexSearchTestPanel";
 import { OneNoteImportWizard } from "@/components/OneNoteImportWizard";
 import { AppCampoPanel } from "@/components/AppCampoPanel";
 import { IndustryDedupePanel } from "@/components/IndustryDedupePanel";
@@ -234,6 +236,12 @@ export function Settings({ lang }: { lang: Lang }) {
 
       {/* AI Model Selector */}
       <AiModelSelector lang={lang} />
+
+      {/* GCP billing budgets */}
+      <BillingHealthPanel lang={lang} />
+
+      {/* Vertex AI Search PoC */}
+      <VertexSearchTestPanel lang={lang} />
 
       {/* Editable Analysis Lenses (Phase 24B) */}
       <AnalysisLensesEditor lang={lang} />
