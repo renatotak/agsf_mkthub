@@ -489,21 +489,42 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
                     </p>
                   )}
 
+                  {/* Expanded detail section */}
+                  {isExpanded && (
+                    <div className="mt-2 mb-3 p-3 rounded-md bg-neutral-50 border border-neutral-100 grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
+                      {item.entity_cnpj && (
+                        <div><span className="font-bold text-neutral-500">CNPJ:</span> <span className="font-mono text-neutral-700">{item.entity_cnpj}</span></div>
+                      )}
+                      {item.court && (
+                        <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Vara:" : "Court:"}</span> <span className="text-neutral-700">{item.court}</span></div>
+                      )}
+                      {item.case_number && (
+                        <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Processo:" : "Case #:"}</span> <span className="font-mono text-neutral-700">{item.case_number}</span></div>
+                      )}
+                      {item.state && (
+                        <div><span className="font-bold text-neutral-500">UF:</span> <span className="text-neutral-700">{item.state}</span></div>
+                      )}
+                      <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Fonte:" : "Source:"}</span> <span className="text-neutral-700">{item.source_name || "—"}</span></div>
+                      <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Indexado em:" : "Indexed:"}</span> <span className="text-neutral-700">{new Date(item.created_at).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US")}</span></div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 text-[11px] text-neutral-400">
                       {item.source_name && <span>{item.source_name}</span>}
-                      {item.court && <span>{item.court}</span>}
-                      {item.case_number && <span className="font-mono">{item.case_number}</span>}
+                      {!item.filing_date && item.created_at && (
+                        <span>{new Date(item.created_at).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US")}</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      {item.summary && item.summary.length > 100 && (
-                        <button
-                          onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                          className="flex items-center gap-1 text-[11px] text-brand-primary hover:text-brand-dark font-medium"
-                        >
-                          {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                        className="flex items-center gap-1 text-[11px] text-brand-primary hover:text-brand-dark font-medium"
+                      >
+                        {isExpanded
+                          ? <><ChevronUp size={12} /> {lang === "pt" ? "Menos" : "Less"}</>
+                          : <><ChevronDown size={12} /> {lang === "pt" ? "Detalhes" : "Details"}</>}
+                      </button>
                       {item.source_url && (
                         <a
                           href={item.source_url}
