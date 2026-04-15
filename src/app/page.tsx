@@ -14,6 +14,7 @@ import { RegulatoryFramework } from "@/components/RegulatoryFramework";
 import { RecuperacaoJudicial } from "@/components/RecuperacaoJudicial";
 import { RetailersDirectory } from "@/components/RetailersDirectory";
 import { IndustriesDirectory } from "@/components/IndustriesDirectory";
+import { FinancialInstitutions } from "@/components/FinancialInstitutions";
 import { MeetingsLog } from "@/components/MeetingsLog";
 import { Settings } from "@/components/Settings";
 import { RiskSignals } from "@/components/RiskSignals";
@@ -73,6 +74,7 @@ export default function Home() {
           {activeModule === "recuperacao"  && <RecuperacaoJudicial lang={lang} />}
           {activeModule === "retailers"    && <RetailersDirectory lang={lang} />}
           {activeModule === "industries"   && <IndustriesDirectory lang={lang} />}
+          {activeModule === "financialInstitutions" && <FinancialInstitutions lang={lang} />}
           {activeModule === "meetings"     && <MeetingsLog lang={lang} />}
           {activeModule === "knowledgeBase"&& <KnowledgeBase lang={lang} />}
           {activeModule === "settings"     && <Settings lang={lang} />}

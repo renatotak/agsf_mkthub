@@ -21,7 +21,7 @@
 import { useEffect, useState } from "react";
 import { Lang } from "@/lib/i18n";
 import {
-  Users, CalendarDays, Target, Plus, Loader2, Trash2, Save, X, Lock, ChevronDown, ChevronUp, Edit3,
+  Users, CalendarDays, Target, Plus, Loader2, Trash2, Save, X, Lock, ChevronDown, ChevronUp, Edit3, MessageCircle,
 } from "lucide-react";
 import { MeetingFormModal, type MeetingRecord } from "@/components/MeetingFormModal";
 import { SimilarTargetsSection } from "@/components/SimilarTargetsSection";
@@ -115,9 +115,11 @@ function fmtBRL(v: number | null): string {
 export function EntityCrmPanel({
   entityUid,
   lang,
+  context = "retailer",
 }: {
   entityUid: string | null | undefined;
   lang: Lang;
+  context?: "retailer" | "industry";
 }) {
   const [open, setOpen] = useState(false);
 
@@ -151,7 +153,7 @@ export function EntityCrmPanel({
 
       {open && (
         <div className="p-4 space-y-5">
-          <ChatSection entityUid={entityUid} lang={lang} />
+          <ChatSection entityUid={entityUid} lang={lang} context={context} />
           <KeyPersonsSection entityUid={entityUid} lang={lang} />
           <MeetingsSection entityUid={entityUid} lang={lang} />
           <LeadsSection entityUid={entityUid} lang={lang} />
@@ -164,11 +166,12 @@ export function EntityCrmPanel({
 
 // ─── Chat section ───────────────────────────────────────────────────────────
 
-function ChatSection({ entityUid, lang }: { entityUid: string; lang: Lang }) {
+function ChatSection({ entityUid, lang, context }: { entityUid: string; lang: Lang; context: "retailer" | "industry" }) {
   const [hasChat, setHasChat] = useState<boolean | null>(null);
   const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
+    if (context === "industry") return;
     (async () => {
       const { data } = await supabase
         .from("entity_features")
@@ -177,7 +180,7 @@ function ChatSection({ entityUid, lang }: { entityUid: string; lang: Lang }) {
         .maybeSingle();
       setHasChat(!!data?.has_chat);
     })();
-  }, [entityUid]);
+  }, [entityUid, context]);
 
   const toggle = async () => {
     setToggling(true);
@@ -188,6 +191,30 @@ function ChatSection({ entityUid, lang }: { entityUid: string; lang: Lang }) {
     setHasChat(next);
     setToggling(false);
   };
+
+  // Industries: point users to the Oracle instead of showing a sales-rep chat
+  if (context === "industry") {
+    return (
+      <div>
+        <div className="flex items-center gap-1.5 mb-2">
+          <MessageCircle size={13} className="text-purple-600" />
+          <span className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+            Chat
+          </span>
+        </div>
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-[12px] text-blue-800">
+          <p className="font-bold mb-1">
+            {lang === "pt" ? "Chat Oracle" : "Oracle Chat"}
+          </p>
+          <p>
+            {lang === "pt"
+              ? "O chat neste contexto serve para buscar informacoes e explorar dados do mercado. Use o Oracle (botao flutuante no canto inferior direito) para tirar duvidas sobre produtos, industrias e inteligencia de mercado."
+              : "Chat in this context is for finding information and exploring market data. Use the Oracle (floating button in the bottom-right corner) to ask questions about products, industries, and market intelligence."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

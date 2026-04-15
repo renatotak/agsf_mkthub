@@ -975,7 +975,7 @@ function IndustryExpandedPanel({
       })()}
 
       {/* ── Phase 24G — CRM panel (entity_uid only) ── */}
-      <EntityCrmPanel entityUid={ind.kind === "imported" ? ind.id : null} lang={lang} />
+      <EntityCrmPanel entityUid={ind.kind === "imported" ? ind.id : null} lang={lang} context="industry" />
     </div>
   );
 }
