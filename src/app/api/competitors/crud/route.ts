@@ -156,6 +156,7 @@ export async function POST(req: NextRequest) {
     id,
     name,
     entity_uid: entityUid,
+    segment: updates.segment || updates.vertical || "N/A",
     confidentiality: "agrisafe_published",
     ...updates,
   };
