@@ -12,7 +12,7 @@ export async function POST(req: Request) {
       }), { status: 400 })
     }
 
-    const { prompt, history = [], lang = 'pt' } = await req.json()
+    const { prompt, history = [], lang = 'pt', module } = await req.json()
     if (!prompt) {
       return new Response(JSON.stringify({
         success: false,
@@ -65,6 +65,7 @@ ${context || 'Nenhuma informação específica encontrada na base de conheciment
 
 HISTÓRICO DA CONVERSA:
 ${history.map((h: any) => `${h.role === 'user' ? 'Usuário' : 'Oráculo'}: ${h.content}`).join('\n')}
+${module ? `\nThe user is currently viewing the "${module}" module. Prioritize information relevant to that context.` : ""}
 `
 
     const answer = await summarizeText(systemPrompt, prompt, 1500)

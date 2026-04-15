@@ -15,7 +15,7 @@ interface Message {
   context?: any[];
 }
 
-export function OracleChat({ lang }: { lang: Lang }) {
+export function OracleChat({ lang, module }: { lang: Lang; module?: string }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,10 +39,11 @@ export function OracleChat({ lang }: { lang: Lang }) {
       const response = await fetch("/api/knowledge/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          prompt: input, 
+        body: JSON.stringify({
+          prompt: input,
           history: messages.slice(-5), // last 5 for context
-          lang: lang 
+          lang: lang,
+          module: module,
         })
       });
 

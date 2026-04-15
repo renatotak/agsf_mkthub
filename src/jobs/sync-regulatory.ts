@@ -18,6 +18,9 @@ const parser = new Parser({
 const REGULATORY_SOURCES = [
   { name: 'ConJur', rss: 'https://www.conjur.com.br/feed/' },
   { name: 'JOTA', rss: 'https://www.jota.info/feed' },
+  { name: 'Agência Senado', rss: 'https://www12.senado.leg.br/noticias/feed' },
+  { name: 'Agência Câmara', rss: 'https://www.camara.leg.br/noticias/rss/rss-noticias' },
+  { name: 'Portal MAPA', rss: 'https://www.gov.br/agricultura/pt-br/RSS' },
   // Migalhas RSS discontinued (404 since ~Apr 2026). Replaced by ConJur /feed/.
 ]
 

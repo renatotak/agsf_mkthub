@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Lang, t } from "@/lib/i18n";
 import {
   Search, Leaf, FlaskConical, Map as MapIcon, Loader2, AlertCircle,
@@ -81,14 +81,22 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
   const [oracleSearched, setOracleSearched] = useState(false);
   const [expandedMolecule, setExpandedMolecule] = useState<string | null>(null);
 
-  const handleOracleSearch = async () => {
+  // Auto-load soja on first Oracle render
+  useEffect(() => {
+    if (activeTab === "oracle" && !oracleSearched) {
+      handleOracleSearch();
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleOracleSearch = async (pestOverride?: string) => {
     if (!oracleCulture) return;
     setOracleLoading(true);
     setOracleError(null);
     setExpandedMolecule(null);
+    const pest = pestOverride !== undefined ? pestOverride : oraclePest;
     try {
       const params = new URLSearchParams({ culture: oracleCulture, limit: "30" });
-      if (oraclePest.trim()) params.set("pest", oraclePest.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+      if (pest.trim()) params.set("pest", pest.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"));
       const res = await fetch(`/api/inputs/oracle?${params.toString()}`);
       const json = await res.json();
       if (json.success) {
@@ -105,6 +113,18 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
       setOracleSearched(true);
     }
   };
+
+  // Top manufacturers by product count from Oracle results
+  const topManufacturers = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const mol of oracleMolecules) {
+      for (const brand of mol.brands) {
+        const mfr = brand.manufacturer_display;
+        if (mfr) map.set(mfr, (map.get(mfr) || 0) + 1);
+      }
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [oracleMolecules]);
 
   const handleGlossarySearch = async () => {
     if (!glossaryQuery || glossaryQuery.length < 2) return;
@@ -368,7 +388,7 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
               </div>
               <div className="md:col-span-3">
                 <button
-                  onClick={handleOracleSearch}
+                  onClick={() => handleOracleSearch()}
                   disabled={oracleLoading}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-md text-[13px] font-bold hover:bg-brand-dark transition-colors disabled:opacity-50"
                 >
@@ -381,6 +401,42 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
               <Info size={10} className="mt-0.5 flex-shrink-0" />
               {tr.inputs.oracleHint}
             </p>
+
+            {/* Quick pest picks */}
+            {(() => {
+              const pestMap: Record<string, { slug: string; label_pt: string; label_en: string }[]> = {
+                soja: [
+                  { slug: "ferrugem-asiatica", label_pt: "Ferrugem Asiática", label_en: "Asian Rust" },
+                  { slug: "lagarta-da-soja", label_pt: "Lagarta da Soja", label_en: "Soybean Caterpillar" },
+                  { slug: "percevejo", label_pt: "Percevejo", label_en: "Stink Bug" },
+                  { slug: "nematoides", label_pt: "Nematoides", label_en: "Nematodes" },
+                  { slug: "mosca-branca", label_pt: "Mosca-branca", label_en: "Whitefly" },
+                ],
+                milho: [
+                  { slug: "lagarta-do-cartucho", label_pt: "Lagarta do Cartucho", label_en: "Fall Armyworm" },
+                  { slug: "cigarrinha", label_pt: "Cigarrinha", label_en: "Leafhopper" },
+                  { slug: "percevejo", label_pt: "Percevejo", label_en: "Stink Bug" },
+                ],
+              };
+              const pests = pestMap[oracleCulture];
+              if (!pests) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mr-1">
+                    {lang === "pt" ? "Pragas comuns:" : "Common pests:"}
+                  </span>
+                  {pests.map((p) => (
+                    <button
+                      key={p.slug}
+                      onClick={() => { setOraclePest(p.slug); handleOracleSearch(p.slug); }}
+                      className="px-2 py-0.5 text-[10px] font-semibold rounded-full border border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-brand-primary/10 hover:border-brand-primary/30 hover:text-brand-primary transition-colors"
+                    >
+                      {lang === "pt" ? p.label_pt : p.label_en}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Oracle results */}
@@ -464,7 +520,12 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
                             </span>
                           </div>
                           <div className="flex items-center gap-3 text-[11px] text-neutral-500">
-                            <span><strong className="text-neutral-700">{m.holder_count}</strong> {tr.inputs.oracleHolders}</span>
+                            <span>
+                              <strong className="text-neutral-700">{m.holder_count}</strong> {tr.inputs.oracleHolders}
+                              <span className="text-[9px] text-neutral-400 ml-1">
+                                {lang === "pt" ? "(mais fabricantes = mais concorrência = menor preço)" : "(more manufacturers = more competition = lower price)"}
+                              </span>
+                            </span>
                             <span><strong className="text-neutral-700">{m.brands.length}</strong> {tr.inputs.oracleBrands}</span>
                           </div>
                         </div>
@@ -512,6 +573,25 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
                   );
                 })}
               </div>
+
+              {/* Top Manufacturers summary */}
+              {topManufacturers.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-[12px] font-bold text-neutral-500 uppercase tracking-wider mb-2">
+                    {lang === "pt" ? "Top Fabricantes" : "Top Manufacturers"}
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {topManufacturers.map(([name, count]) => (
+                      <div key={name} className="bg-white border border-neutral-200 rounded-lg p-3 flex items-center justify-between gap-2">
+                        <span className="text-[12px] font-medium text-neutral-800 truncate">{name}</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary whitespace-nowrap">
+                          {count} {count === 1 ? (lang === "pt" ? "produto" : "product") : (lang === "pt" ? "produtos" : "products")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

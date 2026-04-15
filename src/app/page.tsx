@@ -91,7 +91,7 @@ export default function Home() {
             </button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <OracleChat lang={lang} />
+            <OracleChat lang={lang} module={activeModule} />
           </div>
         </div>
       )}
