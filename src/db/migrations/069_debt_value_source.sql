@@ -24,7 +24,8 @@ COMMENT ON COLUMN recuperacao_judicial.debt_value_source IS
 UPDATE recuperacao_judicial
 SET debt_value_source = CASE
   WHEN source_name ILIKE '%conjur%' OR source_name ILIKE '%migalhas%' THEN 'legal_rss'
-  WHEN source_name ILIKE '%ddg%' OR source_name ILIKE '%duckduck%' OR source_name ILIKE '%web scan%' THEN 'ddg_scrape'
+  WHEN source_name LIKE 'Web:%' THEN 'ddg_scrape'
+  WHEN source_name = 'Receita Federal (CNPJ)' THEN 'manual'
   ELSE NULL
 END
 WHERE debt_value_source IS NULL AND debt_value IS NOT NULL;
