@@ -99,6 +99,12 @@ const PROBES: JobProbe[] = [
     importFn: () => import('@/jobs/sync-mdic-comexstat').then(m => ({ default: m.runSyncMdicComexstat })) },
   { job: 'sync-source-registry-healthcheck', strategy: 'weekly_only', weekdays: [0],
     importFn: () => import('@/jobs/sync-source-registry-healthcheck').then(m => ({ default: m.runSyncSourceRegistryHealthcheck })) },
+  { job: 'sync-mfrural-fertilizers', strategy: 'weekly_only', weekdays: [0],
+    importFn: () => import('@/jobs/sync-mfrural-fertilizers').then(m => ({ default: m.runSyncMfruralFertilizers })) },
+  { job: 'sync-usda-agtransport',   strategy: 'weekly_only', weekdays: [0],
+    importFn: () => import('@/jobs/sync-usda-agtransport').then(m => ({ default: m.runSyncUsdaAgtransport })) },
+  { job: 'sync-events-agrural',     strategy: 'weekly_only', weekdays: [0],
+    importFn: () => import('@/jobs/sync-events-agrural').then(m => ({ default: m.runSyncEventsAgrural })) },
 ]
 
 // ─── Probe functions ────────────────────────────────────────────────────────
