@@ -5,7 +5,7 @@ import { Lang, t } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import {
   TrendingUp, TrendingDown, RefreshCw, Loader2, Zap,
-  ExternalLink, MapPin, Globe, Truck, Layers, BarChart3, Sprout,
+  ExternalLink, MapPin, Globe, Truck, Layers, BarChart3, Sprout, FlaskConical,
 } from "lucide-react";
 import { CommodityMap } from "@/components/CommodityMap";
 import { NACotacoesWidget } from "@/components/NACotacoesWidget";
@@ -192,7 +192,7 @@ function useLiveCultureSummaries() {
 export function MarketPulse({ lang }: { lang: Lang }) {
   const tr = t(lang);
   const [indicators, setIndicators] = useState<MarketIndicator[]>([]);
-  const [activeAnalysis, setActiveAnalysis] = useState<"culture" | "region" | "macro">("culture");
+  const [activeAnalysis, setActiveAnalysis] = useState<"culture" | "region" | "macro" | "insumos">("culture");
   const [activeCulture, setActiveCulture] = useState<string>("soja");
   const [activeRegion, setActiveRegion] = useState<string>("MT");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -256,6 +256,15 @@ export function MarketPulse({ lang }: { lang: Lang }) {
           <BarChart3 size={15} />
           {lang === "pt" ? "Contexto Macro" : "Macro Context"}
         </button>
+        <button
+          onClick={() => setActiveAnalysis("insumos")}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-[13px] font-semibold transition-all ${
+            activeAnalysis === "insumos" ? "bg-brand-primary text-white shadow-sm" : "text-neutral-600 hover:bg-neutral-100"
+          }`}
+        >
+          <FlaskConical size={15} />
+          {lang === "pt" ? "Preços de Insumos" : "Input Prices"}
+        </button>
       </div>
 
       {/* Active analysis content */}
@@ -272,6 +281,8 @@ export function MarketPulse({ lang }: { lang: Lang }) {
           onRegionChange={setActiveRegion}
           lang={lang}
         />
+      ) : activeAnalysis === "insumos" ? (
+        <InsumoAnalysis lang={lang} />
       ) : (
         <MacroAnalysis
           activeCulture={activeCulture}
@@ -1309,6 +1320,123 @@ interface WbPriceRow {
   period: string;
   value: number;
   unit: string;
+}
+
+// ─── Phase 29: Ag Input Prices (Fertilizers) ─────────────────────────────────
+
+const FERTILIZER_META = [
+  { slug: "dap",               label: "DAP",                   en: "DAP (Diammonium Phosphate)", color: "#1565C0" },
+  { slug: "tsp",               label: "TSP",                   en: "TSP (Triple Superphosphate)", color: "#0D47A1" },
+  { slug: "ureia",             label: "Ureia",                 en: "Urea",                        color: "#2E7D32" },
+  { slug: "cloreto_potassio",  label: "Cloreto de Potássio",   en: "Potassium Chloride (KCl)",    color: "#E65100" },
+  { slug: "fosfato_rocha",     label: "Fosfato de Rocha",      en: "Phosphate Rock",              color: "#6A1B9A" },
+];
+
+function InsumoAnalysis({ lang }: { lang: Lang }) {
+  const [data, setData] = useState<Record<string, { period: string; value: number }[]>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    supabase
+      .from("macro_statistics")
+      .select("commodity, period, value")
+      .eq("source_id", "worldbank_pinksheet")
+      .eq("category", "fertilizer_price")
+      .order("reference_date", { ascending: true })
+      .then(({ data: rows }) => {
+        const grouped: Record<string, { period: string; value: number }[]> = {};
+        for (const r of rows || []) {
+          if (!grouped[r.commodity]) grouped[r.commodity] = [];
+          grouped[r.commodity].push({ period: r.period, value: r.value });
+        }
+        setData(grouped);
+        setLoading(false);
+      });
+  }, []);
+
+  const hasData = Object.keys(data).length > 0;
+
+  return (
+    <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <FlaskConical size={16} className="text-brand-primary" />
+        <h3 className="text-[15px] font-bold text-neutral-900">
+          {lang === "pt" ? "Preços Internacionais de Fertilizantes" : "International Fertilizer Prices"}
+        </h3>
+        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-auto">
+          {lang === "pt" ? "Fonte: World Bank Pink Sheet" : "Source: World Bank Pink Sheet"}
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12 text-neutral-400">
+          <Loader2 size={18} className="animate-spin" />
+        </div>
+      ) : !hasData ? (
+        <div className="py-8 text-center">
+          <p className="text-[13px] text-neutral-500 mb-2">
+            {lang === "pt"
+              ? "Dados de fertilizantes ainda não foram sincronizados."
+              : "Fertilizer data has not been synced yet."}
+          </p>
+          <p className="text-[11px] text-neutral-400">
+            {lang === "pt"
+              ? "Execute: npm run cron sync-worldbank-prices"
+              : "Run: npm run cron sync-worldbank-prices"}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {FERTILIZER_META.map((fert) => {
+            const series = data[fert.slug];
+            if (!series || series.length === 0) return null;
+            const latest = series[series.length - 1];
+            const prev = series.length > 1 ? series[series.length - 2] : null;
+            const change = prev ? ((latest.value - prev.value) / prev.value) * 100 : null;
+
+            return (
+              <div key={fert.slug} className="rounded-lg border border-neutral-200 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-[13px] font-bold text-neutral-900">{lang === "pt" ? fert.label : fert.en}</p>
+                    <p className="text-[10px] text-neutral-400">USD/mt — {latest.period}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[16px] font-bold text-neutral-900">${latest.value.toLocaleString()}</p>
+                    {change != null && (
+                      <p className={`text-[11px] font-bold ${change >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        {change >= 0 ? "+" : ""}{change.toFixed(1)}% {lang === "pt" ? "vs ano ant." : "vs prior year"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="h-[100px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={series.slice(-10)}>
+                      <defs>
+                        <linearGradient id={`grad-${fert.slug}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={fert.color} stopOpacity={0.3} />
+                          <stop offset="100%" stopColor={fert.color} stopOpacity={0.05} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="period" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                      <YAxis hide domain={["auto", "auto"]} />
+                      <Tooltip
+                        formatter={(v: any) => [`$${Number(v).toLocaleString()}`, lang === "pt" ? "Preço" : "Price"]}
+                        contentStyle={{ fontSize: 11, borderRadius: 6 }}
+                      />
+                      <Area type="monotone" dataKey="value" stroke={fert.color} fill={`url(#grad-${fert.slug})`} strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MacroAnalysis({

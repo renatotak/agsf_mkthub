@@ -28,11 +28,23 @@ const COMMODITY_COLUMNS: { col: number; slug: string; expectedNamePrefix: string
   { col: 52, slug: 'algodao',  expectedNamePrefix: 'Cotton, A Index', expectedUnit: '$/kg' },
 ]
 
+// Phase 29 — fertilizer price columns from the same Pink Sheet
+// Column positions verified against the CMO-Historical-Data-Annual.xlsx layout.
+// These use fuzzy prefix matching, so minor WB label changes won't break the scraper.
+// If a column is missing or drifted, the scraper logs a warning but continues.
+const FERTILIZER_COLUMNS: { col: number; slug: string; expectedNamePrefix: string; expectedUnit: string }[] = [
+  { col: 56, slug: 'dap',           expectedNamePrefix: 'DAP',                     expectedUnit: '$/mt' },
+  { col: 57, slug: 'tsp',           expectedNamePrefix: 'TSP',                     expectedUnit: '$/mt' },
+  { col: 58, slug: 'ureia',         expectedNamePrefix: 'Urea',                    expectedUnit: '$/mt' },
+  { col: 59, slug: 'cloreto_potassio', expectedNamePrefix: 'Potassium chloride', expectedUnit: '$/mt' },
+  { col: 60, slug: 'fosfato_rocha', expectedNamePrefix: 'Phosphate rock',          expectedUnit: '$/mt' },
+]
+
 const RECENT_YEARS = 15
 
 interface PriceRow extends Record<string, unknown> {
   source_id: 'worldbank_pinksheet'
-  category: 'price_index'
+  category: 'price_index' | 'fertilizer_price'
   commodity: string
   region: 'World'
   indicator: 'price'
@@ -74,6 +86,16 @@ const worldbankPricesScraper: ScraperFn<PriceRow> = async () => {
     }
   }
 
+  // Phase 29 — validate fertilizer columns (soft-fail: skip drifted cols, don't crash)
+  const validFertilizerCols = FERTILIZER_COLUMNS.filter(map => {
+    const headerVal = String(headers[map.col] || '')
+    if (!headerVal.startsWith(map.expectedNamePrefix)) {
+      console.warn(`[worldbank] fertilizer col ${map.col} drifted: expected "${map.expectedNamePrefix}*" but got "${headerVal}" — skipping`)
+      return false
+    }
+    return true
+  })
+
   const rows: PriceRow[] = []
   let yearsCollected = 0
   for (let rowIdx = aoa.length - 1; rowIdx >= DATA_START_ROW; rowIdx--) {
@@ -102,6 +124,27 @@ const worldbankPricesScraper: ScraperFn<PriceRow> = async () => {
         period: String(year),
         reference_date: `${year}-12-31`,
         metadata: { wb_column_label: headerVal },
+      })
+    }
+
+    // Phase 29 — fertilizer prices from validated columns
+    for (const map of validFertilizerCols) {
+      const cell = row[map.col]
+      if (cell == null || cell === '…' || cell === '') continue
+      const value = typeof cell === 'number' ? cell : parseFloat(String(cell))
+      if (!Number.isFinite(value)) continue
+
+      rows.push({
+        source_id: 'worldbank_pinksheet',
+        category: 'fertilizer_price',
+        commodity: map.slug,
+        region: 'World',
+        indicator: 'price',
+        value,
+        unit: String(units[map.col]),
+        period: String(year),
+        reference_date: `${year}-12-31`,
+        metadata: { wb_column_label: String(headers[map.col]) },
       })
     }
 

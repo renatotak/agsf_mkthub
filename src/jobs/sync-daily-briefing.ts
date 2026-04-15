@@ -30,6 +30,7 @@ interface BriefingData {
   newRegulations: { title: string; body: string; impact: string; areas: string[] }[]
   newRJ: { company: string; cnpj: string }[]
   upcomingEvents: { name: string; date: string; location: string }[]
+  entityMentions: { name: string; contexts: string[] }[]
   sourceHealth: { total: number; healthy: number; error: number }
 }
 
@@ -115,6 +116,13 @@ async function gatherData(supabase: SupabaseClient): Promise<BriefingData> {
     .order("start_date")
     .limit(5)
 
+  // Entity mentions — companies mentioned in last 24h news/regs/rj
+  const { data: mentions } = await supabase
+    .from("entity_mentions")
+    .select("entity_uid, source_table, mention_type, legal_entities(display_name, tax_id)")
+    .gte("created_at", yesterday)
+    .limit(30)
+
   // Source health
   const { data: sources } = await supabase
     .from("data_sources")
@@ -124,6 +132,16 @@ async function gatherData(supabase: SupabaseClient): Promise<BriefingData> {
   const total = sources?.length || 0
   const healthy = sources?.filter((s: any) => s.url_status === "active").length || 0
   const error = sources?.filter((s: any) => s.url_status === "error").length || 0
+
+  // Dedupe entity mentions by name
+  const entitySet = new Map<string, { name: string; contexts: string[] }>()
+  for (const m of mentions || []) {
+    const ent = (m as any).legal_entities
+    if (!ent?.display_name) continue
+    const key = ent.display_name
+    if (!entitySet.has(key)) entitySet.set(key, { name: key, contexts: [] })
+    entitySet.get(key)!.contexts.push(`${m.source_table}:${m.mention_type}`)
+  }
 
   return {
     topNews: (news || []).map((n: any) => ({
@@ -151,6 +169,7 @@ async function gatherData(supabase: SupabaseClient): Promise<BriefingData> {
       date: e.start_date?.slice(0, 10) || "",
       location: e.location || "",
     })),
+    entityMentions: [...entitySet.values()],
     sourceHealth: { total, healthy, error },
   }
 }
@@ -167,7 +186,14 @@ Output a JSON object with exactly this structure:
   "key_takeaways": ["3-5 bullet points of the most important things the CEO needs to know today"]
 }
 
-Focus on what changed, what requires attention, and strategic implications. If there are no significant changes in a category, say so briefly rather than padding.`
+PRIORITY LENS — rank and emphasize information in this order:
+1. **Recuperações Judiciais** — new filings, debt amounts, affected companies in agribusiness. These are urgent risk signals.
+2. **Commodity prices & anomalies** — soy, corn, coffee, cotton, wheat, cattle. Highlight any price ruptures (>2σ moves). Explain the driver if the headline suggests one.
+3. **Ag input retailers & industries** — any news mentioning companies that AgriSafe monitors (retailers, distributors, cooperatives, input manufacturers). Cross-reference entity mentions.
+4. **Regulatory changes** — new norms that affect rural credit (CPR, CRA, FIAGRO), ag inputs registration, or agribusiness operations.
+5. **Events & other** — only if they are strategic (e.g., major trade fairs, policy announcements).
+
+If entity mentions data is provided, name the specific companies affected. Focus on what changed, what requires attention, and strategic implications. Do not pad sections with no significant changes.`
 
     const context = JSON.stringify({
       date: new Date().toISOString().slice(0, 10),
@@ -178,6 +204,7 @@ Focus on what changed, what requires attention, and strategic implications. If t
       new_regulations: data.newRegulations.map(r => `[${r.body}/${r.impact}] ${r.title}`),
       new_rj_filings: data.newRJ.map(r => r.company),
       upcoming_events: data.upcomingEvents.map(e => `${e.name} (${e.date}, ${e.location})`),
+      entities_mentioned_today: data.entityMentions.map(e => `${e.name} (${[...new Set(e.contexts)].join(", ")})`),
       source_health: data.sourceHealth,
     })
 

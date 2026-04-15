@@ -90,7 +90,7 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
   // Live KPI state
   const [kpis, setKpis] = useState({
     newsCount: 0, eventsCount: 0, rjCount: 0, retailersCount: 0,
-    sourcesHealthy: 0, sourcesTotal: 0, topMover: null as { name: string; change: number } | null,
+    sourcesHealthy: 0, sourcesTotal: 0, sourcesErrored: 0, topMover: null as { name: string; change: number } | null,
     scrapersBroken: 0, scrapersDegraded: 0,
   });
 
@@ -116,15 +116,19 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
     supabase.from("retailers").select("*", { count: "exact", head: true })
       .then(({ count }) => setKpis(prev => ({ ...prev, retailersCount: count || 0 })));
 
-    // Source health from sync_logs
-    supabase.from("sync_logs").select("source, status").order("started_at", { ascending: false }).limit(50)
+    // Source health: total from data_sources, healthy from recent sync_logs
+    supabase.from("data_sources").select("*", { count: "exact", head: true }).eq("active", true)
+      .then(({ count }) => {
+        if (count != null) setKpis(prev => ({ ...prev, sourcesTotal: count }));
+      });
+    supabase.from("sync_logs").select("source, status").order("started_at", { ascending: false }).limit(100)
       .then(({ data }) => {
         if (data) {
           const latest = new Map<string, string>();
           for (const log of data) { if (!latest.has(log.source)) latest.set(log.source, log.status); }
-          const total = latest.size;
-          const healthy = [...latest.values()].filter(s => s === "success").length;
-          setKpis(prev => ({ ...prev, sourcesHealthy: healthy, sourcesTotal: total }));
+          const healthy = [...latest.values()].filter(s => s === "success" || s === "partial").length;
+          const errored = latest.size - healthy;
+          setKpis(prev => ({ ...prev, sourcesHealthy: healthy, sourcesErrored: errored }));
         }
       });
 
@@ -241,13 +245,17 @@ function DashboardOverview({ lang, setActiveModule }: { lang: Lang; setActiveMod
             )}
           </p>
           <p className="text-[20px] font-bold text-white leading-tight mt-0.5">
-            {kpis.sourcesHealthy}/{kpis.sourcesTotal}
+            {kpis.sourcesTotal}
           </p>
           <p className="text-[10px] text-neutral-300">
             {kpis.scrapersBroken > 0
               ? lang === "pt"
                 ? `${kpis.scrapersBroken} scraper(s) quebrado(s)`
                 : `${kpis.scrapersBroken} scraper(s) broken`
+              : kpis.sourcesErrored > 0
+              ? lang === "pt"
+                ? `${kpis.sourcesErrored} com erro recente`
+                : `${kpis.sourcesErrored} recent errors`
               : kpis.scrapersDegraded > 0
               ? lang === "pt"
                 ? `${kpis.scrapersDegraded} degradado(s)`
