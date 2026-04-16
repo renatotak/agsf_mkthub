@@ -30,8 +30,9 @@ import {
   Loader2, Factory, Search, Filter, X, Recycle, Building2,
   ChevronDown, ChevronUp,
   LayoutList, Map as MapIcon, Briefcase, Globe, Sparkles, MapPin,
-  ExternalLink, Lock, CheckCircle2, XCircle,
+  ExternalLink, Lock, CheckCircle2, XCircle, Download,
 } from "lucide-react";
+import { downloadCsv, type CsvColumn } from "@/lib/csv-export";
 import { IndustryProfile } from "@/components/IndustryProfile";
 import { EntityMapShell, EntityMapMarker, EntityMapLayer } from "@/components/EntityMapShell";
 import { EntityCrmPanel } from "@/components/EntityCrmPanel";
@@ -366,16 +367,48 @@ export function IndustriesDirectory({ lang }: { lang: Lang }) {
         )}
       </div>
 
-      {/* ── Result count ── */}
-      <p className="text-[11px] text-neutral-500 mb-3">
-        {filtered.length === industries.length
-          ? lang === "pt"
-            ? `${filtered.length} indústrias`
-            : `${filtered.length} industries`
-          : lang === "pt"
-            ? `${filtered.length} de ${industries.length}`
-            : `${filtered.length} of ${industries.length}`}
-      </p>
+      {/* ── Result count + CSV export ── */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] text-neutral-500">
+          {filtered.length === industries.length
+            ? lang === "pt"
+              ? `${filtered.length} indústrias`
+              : `${filtered.length} industries`
+            : lang === "pt"
+              ? `${filtered.length} de ${industries.length}`
+              : `${filtered.length} of ${industries.length}`}
+        </p>
+        {filtered.length > 0 && (
+          <button
+            onClick={() => {
+              const columns: CsvColumn<Industry>[] = [
+                { key: "name", header: lang === "pt" ? "Nome" : "Name" },
+                { key: "name_display", header: lang === "pt" ? "Nome Exibição" : "Display Name" },
+                { key: "kind", header: lang === "pt" ? "Tipo" : "Kind" },
+                { key: "cnpj", header: "CNPJ" },
+                { key: "segment", header: "Segmento", format: (r) => r.segment?.join("; ") || "" },
+                { key: "cnae", header: "CNAE" },
+                { key: "cnae_descricao", header: "CNAE Descrição" },
+                { key: "porte", header: "Porte" },
+                { key: "natureza_juridica", header: "Natureza Jurídica" },
+                { key: "capital_social", header: "Capital Social" },
+                { key: "headquarters_country", header: "País" },
+                { key: "inpev", header: "inpEV", format: (r) => r.inpev ? "Sim" : "Não" },
+                { key: "cnpj_filiais", header: "Filiais" },
+                { key: "product_count", header: "Produtos" },
+                { key: "retailer_count", header: "Revendas" },
+              ];
+              const ts = new Date().toISOString().slice(0, 10);
+              downloadCsv(`industrias-${ts}`, filtered, columns);
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+            title={lang === "pt" ? "Exportar CSV" : "Export CSV"}
+          >
+            <Download size={12} />
+            CSV
+          </button>
+        )}
+      </div>
 
       {/* ── Body: list or map ── */}
       {loading ? (

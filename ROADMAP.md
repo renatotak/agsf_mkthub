@@ -107,7 +107,7 @@ Each phase lists concrete tracks. Phases marked **[parallel]** are safe to dispa
 - App Campo push notifications (FCM/APNs) + Resend outreach worker + template editor + unsubscribe page.
 - Sentry · WCAG 2.1 · dark mode · PDF export · institutional PDF briefing.
 - ~~Ctrl+K command palette~~ ✓ 2026-04-16 — keyboard-driven navigation across all 16 modules.
-- ~~CSV export~~ ✓ 2026-04-16 — reusable `src/lib/csv-export.ts` helper, wired to Financial Institutions directory (exports filtered results).
+- ~~CSV export~~ ✓ 2026-04-16 — reusable `src/lib/csv-export.ts` helper, wired to Financial Institutions + Indústrias directories (exports filtered results with 12-15 columns each).
 
 ---
 
