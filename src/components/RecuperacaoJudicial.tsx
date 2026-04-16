@@ -7,7 +7,7 @@ import {
   Scale, ExternalLink, RefreshCw, Loader2, Search,
   ChevronLeft, ChevronRight, AlertTriangle, Building2, MapPin,
   BarChart3, ChevronDown, ChevronUp, DollarSign, Globe, Zap,
-  Plus, X, Sparkles,
+  Plus, X, Sparkles, Newspaper, Calendar,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -498,32 +498,7 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
 
                   {/* Expanded detail section */}
                   {isExpanded && (
-                    <div className="mt-2 mb-3 p-3 rounded-md bg-neutral-50 border border-neutral-100 grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
-                      {item.entity_cnpj && (
-                        <div><span className="font-bold text-neutral-500">CNPJ:</span> <span className="font-mono text-neutral-700">{item.entity_cnpj}</span></div>
-                      )}
-                      {item.court && (
-                        <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Vara:" : "Court:"}</span> <span className="text-neutral-700">{item.court}</span></div>
-                      )}
-                      {item.case_number && (
-                        <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Processo:" : "Case #:"}</span> <span className="font-mono text-neutral-700">{item.case_number}</span></div>
-                      )}
-                      {item.state && (
-                        <div><span className="font-bold text-neutral-500">UF:</span> <span className="text-neutral-700">{item.state}</span></div>
-                      )}
-                      <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Fonte:" : "Source:"}</span> <span className="text-neutral-700">{item.source_name || "—"}</span></div>
-                      <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Indexado em:" : "Indexed:"}</span> <span className="text-neutral-700">{new Date(item.created_at).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US")}</span></div>
-                      {(item as any).debt_value_source && DEBT_SOURCE_LABELS[(item as any).debt_value_source as DebtValueSource] && (
-                        <div>
-                          <span className="font-bold text-neutral-500">{lang === "pt" ? "Origem do valor:" : "Value source:"}</span>{" "}
-                          <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${DEBT_SOURCE_LABELS[(item as any).debt_value_source as DebtValueSource].color}`}>
-                            {lang === "pt"
-                              ? DEBT_SOURCE_LABELS[(item as any).debt_value_source as DebtValueSource].pt
-                              : DEBT_SOURCE_LABELS[(item as any).debt_value_source as DebtValueSource].en}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                    <RJDetailPanel item={item} lang={lang} />
                   )}
 
                   <div className="flex items-center justify-between gap-3">
@@ -599,6 +574,172 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
             fetchItems();
           }}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Phase 6e — RJ Detail Panel with linked news ─────────────────────────
+
+interface LinkedNews {
+  id: string;
+  title: string;
+  published_at: string | null;
+  source_url: string | null;
+  source_name: string | null;
+}
+
+function RJDetailPanel({ item, lang }: { item: RJType; lang: Lang }) {
+  const [linkedNews, setLinkedNews] = useState<LinkedNews[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsFetched, setNewsFetched] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchLinkedNews = async () => {
+      // Need entity_uid to query entity_mentions
+      const entityUid = (item as any).entity_uid;
+      if (!entityUid) {
+        setNewsFetched(true);
+        return;
+      }
+
+      setNewsLoading(true);
+      try {
+        // Get news IDs linked to this entity via entity_mentions
+        const { data: mentions } = await supabase
+          .from("entity_mentions")
+          .select("source_id")
+          .eq("entity_uid", entityUid)
+          .eq("source_table", "agro_news")
+          .limit(20);
+
+        if (!cancelled && mentions && mentions.length > 0) {
+          const newsIds = mentions.map((m: any) => m.source_id);
+          const { data: newsData } = await supabase
+            .from("agro_news")
+            .select("id, title, published_at, source_url, source_name")
+            .in("id", newsIds)
+            .order("published_at", { ascending: false })
+            .limit(10);
+
+          if (!cancelled && newsData) {
+            setLinkedNews(newsData as LinkedNews[]);
+          }
+        }
+      } catch {
+        // fail silently
+      }
+      if (!cancelled) {
+        setNewsLoading(false);
+        setNewsFetched(true);
+      }
+    };
+
+    fetchLinkedNews();
+    return () => { cancelled = true; };
+  }, [item]);
+
+  return (
+    <div className="mt-2 mb-3 space-y-3">
+      {/* Case details grid */}
+      <div className="p-3 rounded-md bg-neutral-50 border border-neutral-100 grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
+        {item.entity_cnpj && (
+          <div><span className="font-bold text-neutral-500">CNPJ:</span> <span className="font-mono text-neutral-700">{item.entity_cnpj}</span></div>
+        )}
+        {item.court && (
+          <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Vara:" : "Court:"}</span> <span className="text-neutral-700">{item.court}</span></div>
+        )}
+        {item.case_number && (
+          <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Processo:" : "Case #:"}</span> <span className="font-mono text-neutral-700">{item.case_number}</span></div>
+        )}
+        {item.state && (
+          <div><span className="font-bold text-neutral-500">UF:</span> <span className="text-neutral-700">{item.state}</span></div>
+        )}
+        {item.filing_date && (
+          <div>
+            <span className="font-bold text-neutral-500">{lang === "pt" ? "Data do pedido:" : "Filing date:"}</span>{" "}
+            <span className="text-neutral-700">
+              {new Date(item.filing_date).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", { day: "numeric", month: "long", year: "numeric" })}
+            </span>
+          </div>
+        )}
+        {(item as any).debt_value != null && (
+          <div>
+            <span className="font-bold text-neutral-500">{lang === "pt" ? "Dívida:" : "Debt:"}</span>{" "}
+            <span className="font-bold text-error-dark">{formatCurrency((item as any).debt_value)}</span>
+          </div>
+        )}
+        <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Fonte:" : "Source:"}</span> <span className="text-neutral-700">{item.source_name || "—"}</span></div>
+        <div><span className="font-bold text-neutral-500">{lang === "pt" ? "Indexado em:" : "Indexed:"}</span> <span className="text-neutral-700">{new Date(item.created_at).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US")}</span></div>
+        {(item as any).debt_value_source && DEBT_SOURCE_LABELS[(item as any).debt_value_source as DebtValueSource] && (
+          <div>
+            <span className="font-bold text-neutral-500">{lang === "pt" ? "Origem do valor:" : "Value source:"}</span>{" "}
+            <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${DEBT_SOURCE_LABELS[(item as any).debt_value_source as DebtValueSource].color}`}>
+              {lang === "pt"
+                ? DEBT_SOURCE_LABELS[(item as any).debt_value_source as DebtValueSource].pt
+                : DEBT_SOURCE_LABELS[(item as any).debt_value_source as DebtValueSource].en}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Linked news section */}
+      {(newsLoading || (newsFetched && linkedNews.length > 0)) && (
+        <div className="p-3 rounded-md bg-blue-50/50 border border-blue-100">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Newspaper size={12} className="text-blue-600" />
+            <span className="text-[11px] font-bold text-blue-800">
+              {lang === "pt" ? "Notícias relacionadas" : "Related news"}
+            </span>
+            {linkedNews.length > 0 && (
+              <span className="text-[10px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full ml-1">
+                {linkedNews.length}
+              </span>
+            )}
+          </div>
+          {newsLoading ? (
+            <div className="flex items-center gap-2 py-2">
+              <Loader2 size={12} className="animate-spin text-blue-500" />
+              <span className="text-[11px] text-blue-600">{lang === "pt" ? "Carregando..." : "Loading..."}</span>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {linkedNews.map((news) => (
+                <div key={news.id} className="flex items-start gap-2 bg-white/70 rounded px-2.5 py-1.5 border border-blue-100/50">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-neutral-800 leading-snug truncate">
+                      {news.title || (lang === "pt" ? "Sem título" : "Untitled")}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {news.source_name && (
+                        <span className="text-[10px] text-neutral-500">{news.source_name}</span>
+                      )}
+                      {news.published_at && (
+                        <span className="text-[10px] text-neutral-400 flex items-center gap-0.5">
+                          <Calendar size={9} />
+                          {new Date(news.published_at).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
+                            day: "numeric", month: "short", year: "numeric",
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {news.source_url && (
+                    <a
+                      href={news.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 p-1 text-blue-500 hover:text-blue-700"
+                    >
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
