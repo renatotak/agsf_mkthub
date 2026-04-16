@@ -49,19 +49,44 @@ export async function POST(req: Request) {
       .map((it: any) => `[TIER ${it.tier}] ${it.title}: ${it.content || it.summary}`)
       .join('\n\n')
 
-    // 4. Generate answer using Gemini
-    const systemPrompt = `Você é o "AgriSafe Oracle", um assistente de inteligência de mercado sênior especializado no agronegócio brasileiro.
+    // 4. Fetch the Oracle settings (prompt & guardrails) from the database
+    const { data: lens } = await supabase
+        .from('analysis_lenses')
+        .select('*')
+        .eq('id', 'oracle_chat')
+        .maybeSingle()
+
+    // 5. App contextual injections (Events, etc)
+    let appRuntimeContext = ''
+    if (prompt.toLowerCase().includes('evento') || module === 'events') {
+      const { data: upcomingEvents } = await supabase
+        .from('events')
+        .select('name, date, location, description_pt, type')
+        .gte('date', new Date().toISOString().split('T')[0])
+        .order('date', { ascending: true })
+        .limit(10)
+      
+      if (upcomingEvents && upcomingEvents.length > 0) {
+        appRuntimeContext += `\n[CONTEXTO DA APP: PRÓXIMOS EVENTOS AGRO]\n` +
+          upcomingEvents.map((e: any) => `- ${e.name} em ${new Date(e.date).toLocaleDateString('pt-BR')} (${e.location || 'Local a definir'}): ${e.description_pt || e.type}`).join('\n')
+      }
+    }
+
+    const basePrompt = lens?.system_prompt || `Você é o "Assistente AIA", um assistente de inteligência de mercado sênior especializado no agronegócio brasileiro pela AgriSafe.
 Sua missão é fornecer respostas precisas, consultivas e baseadas em evidências usando o contexto fornecido.
 
 DIRETRIZES:
 - Se a informação estiver no contexto, use-a e cite a fonte (ex: "Segundo dados da CONAB...").
 - Se a informação NÃO estiver no contexto, use seu conhecimento geral mas sinalize claramente o que é análise externa.
 - Mantenha o tom profissional, formal e objetivo da AgriSafe.
-- Idioma da resposta: ${lang === 'pt' ? 'Português Brasileiro' : 'English'}.
-- Formate a resposta usando Markdown (bold, lists, etc).
+- Idioma da resposta: Português Brasileiro.
+- Formate a resposta usando Markdown (bold, lists, etc). Crie parágrafos concisos. Jamais retorne JSON.`
+
+    const systemPrompt = `${basePrompt}
 
 CONTEXTO DA BASE DE CONHECIMENTO:
 ${context || 'Nenhuma informação específica encontrada na base de conhecimento para esta consulta.'}
+${appRuntimeContext}
 
 HISTÓRICO DA CONVERSA:
 ${history.map((h: any) => `${h.role === 'user' ? 'Usuário' : 'Oráculo'}: ${h.content}`).join('\n')}
@@ -69,7 +94,7 @@ ${module ? `\nMÓDULO ATIVO: O usuário está no módulo "${module}". Priorize i
 ${entityContext?.entityName ? `\nENTIDADE EM FOCO: ${entityContext.entityName}${entityContext.cnpj ? ` (CNPJ: ${entityContext.cnpj})` : ''}. Quando possível, relacione a resposta a esta entidade.` : ""}
 `
 
-    const answer = await summarizeText(systemPrompt, prompt, 1500)
+    const answer = await summarizeText(systemPrompt, prompt, lens?.max_tokens || 1500, false)
 
     // Log the prompt for the weekly oracle-insights clustering job.
     // Non-blocking — if oracle_chat_logs doesn't exist yet, silently skip.

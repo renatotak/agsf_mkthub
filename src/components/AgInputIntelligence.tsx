@@ -6,7 +6,7 @@ import {
   Search, Leaf, FlaskConical, Map as MapIcon, Loader2, AlertCircle,
   ChevronLeft, ChevronRight, BookMarked, ExternalLink,
   Link, GitBranch, ChevronDown, ChevronUp, Info, Layers,
-  Sparkles, Zap, TrendingDown,
+  Sparkles, Zap, TrendingDown, Package, Factory, ArrowRight,
 } from "lucide-react";
 
 interface ProductRow {
@@ -19,7 +19,22 @@ interface ProductRow {
   holder: string;
 }
 
-type Tab = "oracle" | "chemicals" | "biologicals" | "soils" | "glossary";
+type Tab = "oracle" | "package" | "industry" | "chemicals" | "biologicals" | "soils" | "glossary";
+
+// Phase 5 — Canonical input types
+interface CanonicalInput {
+  id: number;
+  culture: string;
+  category: string;
+  product_name: string;
+  active_ingredient: string | null;
+  purpose: string | null;
+  industry_name: string | null;
+  rank: number | null;
+  market_share_pct: number | null;
+  cost_usd_ha: number | null;
+  source: string;
+}
 
 // Phase 20 — Oracle types
 interface OracleBrand {
@@ -80,6 +95,41 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
   const [oracleError, setOracleError] = useState<string | null>(null);
   const [oracleSearched, setOracleSearched] = useState(false);
   const [expandedMolecule, setExpandedMolecule] = useState<string | null>(null);
+  // Phase 5 — Canonical inputs state
+  const [canonicalByCategory, setCanonicalByCategory] = useState<Record<string, CanonicalInput[]>>({});
+  const [canonicalByIndustry, setCanonicalByIndustry] = useState<Record<string, CanonicalInput[]>>({});
+  const [canonicalLoading, setCanonicalLoading] = useState(false);
+  const [canonicalLoaded, setCanonicalLoaded] = useState(false);
+
+  const fetchCanonical = useCallback(async (culture: string) => {
+    setCanonicalLoading(true);
+    try {
+      const res = await fetch(`/api/inputs/canonical?culture=${culture}`);
+      const json = await res.json();
+      if (json.success) {
+        setCanonicalByCategory(json.by_category || {});
+        setCanonicalByIndustry(json.by_industry || {});
+      }
+    } catch { /* fail silently */ }
+    finally {
+      setCanonicalLoading(false);
+      setCanonicalLoaded(true);
+    }
+  }, []);
+
+  // Auto-load canonical data when switching to package/industry tab
+  useEffect(() => {
+    if ((activeTab === "package" || activeTab === "industry") && !canonicalLoaded) {
+      fetchCanonical(oracleCulture);
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-fetch canonical when culture changes (if already on those tabs)
+  useEffect(() => {
+    if (activeTab === "package" || activeTab === "industry") {
+      fetchCanonical(oracleCulture);
+    }
+  }, [oracleCulture]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-load soja on first Oracle render
   useEffect(() => {
@@ -297,7 +347,28 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
         >
           <Sparkles size={16} />
           {tr.inputs.oracleTab}
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-brand-primary/10 text-brand-primary">v0</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("package")}
+          className={`flex items-center gap-2 px-4 py-3 text-[14px] font-semibold border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "package"
+              ? "border-brand-primary text-brand-primary"
+              : "border-transparent text-neutral-500 hover:text-neutral-700"
+          }`}
+        >
+          <Package size={16} />
+          {tr.inputs.packageTab}
+        </button>
+        <button
+          onClick={() => setActiveTab("industry")}
+          className={`flex items-center gap-2 px-4 py-3 text-[14px] font-semibold border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "industry"
+              ? "border-brand-primary text-brand-primary"
+              : "border-transparent text-neutral-500 hover:text-neutral-700"
+          }`}
+        >
+          <Factory size={16} />
+          {tr.inputs.industryTab}
         </button>
         <button
           onClick={() => setActiveTab("chemicals")}
@@ -322,15 +393,13 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
           {tr.inputs.biologicals}
         </button>
         <button
-          onClick={() => setActiveTab("soils")}
-          className={`flex items-center gap-2 px-4 py-3 text-[14px] font-semibold border-b-2 transition-colors ${
-            activeTab === "soils"
-              ? "border-brand-primary text-brand-primary"
-              : "border-transparent text-neutral-500 hover:text-neutral-700"
-          }`}
+          disabled
+          title={lang === "pt" ? "API SmartSolos Embrapa indisponível" : "Embrapa SmartSolos API unavailable"}
+          className="flex items-center gap-2 px-4 py-3 text-[14px] font-semibold border-b-2 border-transparent text-neutral-300 cursor-not-allowed"
         >
           <MapIcon size={16} />
           {tr.inputs.soils}
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-400">offline</span>
         </button>
         <button
           onClick={() => setActiveTab("glossary")}
@@ -594,6 +663,166 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
               )}
             </>
           )}
+        </div>
+      ) : activeTab === "package" ? (
+        <div className="space-y-4">
+          {/* Culture selector (shared with Oracle) */}
+          <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Package size={16} className="text-brand-primary" />
+              <h3 className="text-[16px] font-bold text-neutral-900">{tr.inputs.packageTitle}</h3>
+            </div>
+            <p className="text-[12px] text-neutral-500 mb-4">{tr.inputs.packageSubtitle}</p>
+            <div className="flex items-center gap-3">
+              <select
+                value={oracleCulture}
+                onChange={(e) => setOracleCulture(e.target.value)}
+                className="px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary"
+              >
+                {ORACLE_CULTURES.map((c) => (
+                  <option key={c.slug} value={c.slug}>
+                    {lang === "pt" ? c.label_pt : c.label_en}
+                  </option>
+                ))}
+              </select>
+              {canonicalLoading && <Loader2 size={14} className="animate-spin text-neutral-400" />}
+            </div>
+          </div>
+
+          {/* Package by category */}
+          {canonicalLoaded && Object.keys(canonicalByCategory).length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-[13px] text-amber-800">
+              {tr.inputs.noCanonical}
+            </div>
+          )}
+
+          {Object.entries(canonicalByCategory).map(([cat, items]) => {
+            const catLabel = (tr.inputs.categoryLabels as Record<string, string>)[cat] || cat;
+            return (
+              <div key={cat} className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100 flex items-center justify-between">
+                  <h4 className="text-[13px] font-bold text-neutral-800">{catLabel}</h4>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">
+                    {items.length} {lang === "pt" ? "produtos" : "products"}
+                  </span>
+                </div>
+                <div className="divide-y divide-neutral-100">
+                  {items.map((item) => (
+                    <div key={item.id} className="px-4 py-3 flex items-center gap-4 hover:bg-neutral-50/50 transition-colors">
+                      <div className="w-6 text-center">
+                        {item.rank === 1 ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                            {tr.inputs.leader}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold text-neutral-400">#{item.rank}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-bold text-neutral-900">{item.product_name}</span>
+                          <span className="text-[10px] text-neutral-500">{item.industry_name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] text-neutral-500 mt-0.5">
+                          {item.active_ingredient && <span>{item.active_ingredient}</span>}
+                          {item.purpose && <span className="text-neutral-400">• {item.purpose}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {item.market_share_pct && (
+                          <div className="text-right">
+                            <p className="text-[9px] font-bold text-neutral-400 uppercase">{tr.inputs.marketShare}</p>
+                            <p className="text-[13px] font-bold text-brand-primary">{item.market_share_pct}%</p>
+                          </div>
+                        )}
+                        {item.cost_usd_ha && (
+                          <div className="text-right">
+                            <p className="text-[9px] font-bold text-neutral-400 uppercase">{tr.inputs.costPerHa}</p>
+                            <p className="text-[13px] font-bold text-neutral-700">US$ {item.cost_usd_ha}</p>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => {
+                            setActiveTab("oracle");
+                            setOraclePest("");
+                            handleOracleSearch("");
+                          }}
+                          className="p-1.5 rounded text-neutral-400 hover:text-brand-primary hover:bg-brand-primary/5 transition-colors"
+                          title={lang === "pt" ? "Ver alternativas no Oráculo" : "View alternatives in Oracle"}
+                        >
+                          <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : activeTab === "industry" ? (
+        <div className="space-y-4">
+          {/* Culture selector */}
+          <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Factory size={16} className="text-brand-primary" />
+              <h3 className="text-[16px] font-bold text-neutral-900">{tr.inputs.industryTitle}</h3>
+            </div>
+            <p className="text-[12px] text-neutral-500 mb-4">{tr.inputs.industrySubtitle}</p>
+            <div className="flex items-center gap-3">
+              <select
+                value={oracleCulture}
+                onChange={(e) => setOracleCulture(e.target.value)}
+                className="px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary"
+              >
+                {ORACLE_CULTURES.map((c) => (
+                  <option key={c.slug} value={c.slug}>
+                    {lang === "pt" ? c.label_pt : c.label_en}
+                  </option>
+                ))}
+              </select>
+              {canonicalLoading && <Loader2 size={14} className="animate-spin text-neutral-400" />}
+            </div>
+          </div>
+
+          {canonicalLoaded && Object.keys(canonicalByIndustry).length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-[13px] text-amber-800">
+              {tr.inputs.noCanonical}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {Object.entries(canonicalByIndustry)
+              .sort((a, b) => b[1].length - a[1].length)
+              .map(([name, items]) => (
+                <div key={name} className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100 flex items-center justify-between">
+                    <h4 className="text-[13px] font-bold text-neutral-800">{name}</h4>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-primary/10 text-brand-primary">
+                      {items.length} {items.length === 1 ? (lang === "pt" ? "produto" : "product") : (lang === "pt" ? "produtos" : "products")}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-neutral-100">
+                    {items.map((item) => {
+                      const catLabel = (tr.inputs.categoryLabels as Record<string, string>)[item.category] || item.category;
+                      return (
+                        <div key={item.id} className="px-4 py-2.5 flex items-center justify-between">
+                          <div className="min-w-0">
+                            <span className="text-[13px] font-medium text-neutral-900">{item.product_name}</span>
+                            <span className="text-[10px] text-neutral-400 ml-2">{catLabel}</span>
+                          </div>
+                          {item.rank === 1 && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
+                              {tr.inputs.leader}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+          </div>
         </div>
       ) : activeTab === "glossary" ? (
         <div className="space-y-4">

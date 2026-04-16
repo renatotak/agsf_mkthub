@@ -84,14 +84,8 @@ export default function Home() {
       {/* Phase 29 — Persistent Oracle Chat FAB */}
       {oracleOpen && (
         <div className="fixed bottom-20 right-4 md:right-8 z-50 w-[380px] max-h-[70vh] bg-white rounded-xl border border-neutral-200 shadow-2xl overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-neutral-900 text-white shrink-0">
-            <span className="text-[13px] font-bold">AgriSafe Oracle</span>
-            <button onClick={() => setOracleOpen(false)} className="text-neutral-400 hover:text-white">
-              <X size={14} />
-            </button>
-          </div>
           <div className="flex-1 overflow-hidden">
-            <OracleChat lang={lang} module={activeModule} />
+            <OracleChat lang={lang} module={activeModule} onClose={() => setOracleOpen(false)} />
           </div>
         </div>
       )}

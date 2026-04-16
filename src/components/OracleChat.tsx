@@ -31,10 +31,11 @@ export interface OracleEntityContext {
   module?: string;
 }
 
-export function OracleChat({ lang, module, entityContext }: {
+export function OracleChat({ lang, module, entityContext, onClose }: {
   lang: Lang;
   module?: string;
   entityContext?: OracleEntityContext;
+  onClose?: () => void;
 }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -106,7 +107,7 @@ export function OracleChat({ lang, module, entityContext }: {
             <Sparkles size={20} />
           </div>
           <div>
-            <h3 className="font-bold text-white leading-none">AgriSafe Oracle</h3>
+            <h3 className="font-bold text-white leading-none">Assistente AIA</h3>
             <p className="text-[11px] text-neutral-400 mt-1 uppercase tracking-widest font-semibold flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
               {lang === "pt" ? "IA de Inteligência de Mercado" : "Market Intel AI"}
@@ -114,11 +115,11 @@ export function OracleChat({ lang, module, entityContext }: {
           </div>
         </div>
         <button 
-          onClick={clearChat}
+          onClick={onClose}
           className="p-2 hover:bg-white/10 rounded-lg text-neutral-400 transition-colors"
-          title={lang === "pt" ? "Limpar conversa" : "Clear chat"}
+          title={lang === "pt" ? "Fechar conversa" : "Close chat"}
         >
-          <Trash2 size={18} />
+          <X size={18} />
         </button>
       </div>
 
@@ -230,7 +231,7 @@ export function OracleChat({ lang, module, entityContext }: {
                 <span className="w-1.5 h-1.5 bg-brand-primary/40 rounded-full animate-bounce [animation-delay:-0.15s]" />
                 <span className="w-1.5 h-1.5 bg-brand-primary/60 rounded-full animate-bounce" />
               </div>
-              <span className="text-[12px] font-medium text-neutral-400 uppercase tracking-wider">Consultando Cérebro AgriSafe...</span>
+              <span className="text-[12px] font-medium text-neutral-400 uppercase tracking-wider">Consultando nosso oráculo de dados...</span>
             </div>
           </div>
         )}
@@ -244,7 +245,7 @@ export function OracleChat({ lang, module, entityContext }: {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder={lang === "pt" ? "Pergunte ao Oráculo..." : "Ask the Oracle..."}
+            placeholder={lang === "pt" ? "Pergunte à Assistente AIA..." : "Ask the AIA Assistant..."}
             className="flex-1 bg-neutral-100 border-none rounded-xl px-4 py-3 text-[14px] focus:ring-2 focus:ring-brand-primary/20 pr-12 transition-all outline-none"
           />
           <button 
@@ -262,8 +263,8 @@ export function OracleChat({ lang, module, entityContext }: {
         <p className="text-[10px] text-center text-neutral-400 mt-3 flex items-center justify-center gap-1.5">
           <Bot size={12} />
           {lang === "pt" 
-            ? "O Oráculo pode estar sujeito a alucinações. Valide informações críticas." 
-            : "The Oracle may hallucinate. Always validate critical information."}
+            ? "A Assistente AIA pode estar sujeita a imprecisões. Valide informações críticas." 
+            : "The AIA Assistant may hallucinate. Always validate critical information."}
         </p>
       </div>
     </div>

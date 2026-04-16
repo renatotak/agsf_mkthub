@@ -207,77 +207,36 @@ export function RetailersDirectory({ lang }: { lang: Lang }) {
   const fetchRetailers = async () => {
     setLoading(true);
     // retailers.cnpj_raiz was dropped — resolve it via legal_entities.tax_id
-    // through the entity_uid FK embed.
+    // through the entity_uid FK embed. We now use the search_retailers RPC
+    // to perform fast trigram search in a single database hop.
+    // search_retailers RPC handles search, UF, grupo, classificacao server-side
     let query = supabase
-      .from("retailers")
-      .select("*, legal_entities(tax_id)", { count: "exact" })
+      .rpc(
+        "search_retailers",
+        {
+          search_term: search.trim() || null,
+          param_uf: ufFilter || null,
+          param_grupo: grupoFilter || null,
+          param_classificacao: classificacaoFilter || null,
+        },
+        { count: "exact" }
+      )
+      .select("*, legal_entities(tax_id)")
       .order(sortField, { ascending: sortDir === "asc", nullsFirst: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
-    if (search.trim()) {
-      const q = search.trim();
-      const digits = q.replace(/\D/g, "");
-      // If the query is mostly digits, resolve entity_uids by tax_id first
-      // so the retailer query can filter by .in("entity_uid", ...).
-      const orParts = [
-        `razao_social.ilike.%${q}%`,
-        `nome_fantasia.ilike.%${q}%`,
-        `entity_uid.ilike.%${q}%`,
-      ];
-      if (digits.length >= 4) {
-        const { data: byTax } = await supabase
-          .from("legal_entities")
-          .select("entity_uid")
-          .ilike("tax_id", `%${digits.slice(0, 8)}%`)
-          .limit(500);
-        const uids = (byTax || []).map((r: any) => r.entity_uid).filter(Boolean);
-        if (uids.length) {
-          query = query.or(`${orParts.join(",")},entity_uid.in.(${uids.join(",")})`);
-        } else {
-          query = query.or(orParts.join(","));
-        }
-      } else {
-        query = query.or(orParts.join(","));
-      }
-    }
-    if (grupoFilter) query = query.eq("grupo_acesso", grupoFilter);
-    if (classificacaoFilter) query = query.eq("classificacao", classificacaoFilter);
-
-    // UF filter requires joining with locations. retailer_locations keys
-    // on cnpj_raiz (no entity_uid column), so resolve UF → cnpj_raiz list
-    // → entity_uid list through legal_entities.tax_id.
-    if (ufFilter) {
-      const { data: ufLocations } = await supabase
-        .from("retailer_locations")
-        .select("cnpj_raiz")
-        .eq("uf", ufFilter)
-        .not("cnpj_raiz", "is", null);
-      const taxIds = [...new Set((ufLocations || []).map((r: any) => r.cnpj_raiz))].slice(0, 2000);
-      if (taxIds.length) {
-        const { data: ufEntities } = await supabase
-          .from("legal_entities")
-          .select("entity_uid")
-          .in("tax_id", taxIds);
-        const uids = [...new Set((ufEntities || []).map((e: any) => e.entity_uid))].filter(Boolean);
-        if (uids.length) query = query.in("entity_uid", uids.slice(0, 1000));
-      }
-    }
-
     // Phase 1d — curation chip filters: intersect active sets → .in("entity_uid", ...)
     if (curationLoaded && (filterCurated || filterClient || filterLead)) {
-      // Collect UIDs matching ALL active filters (intersection)
       const sets: Set<string>[] = [];
       if (filterCurated) sets.push(curatedUids);
       if (filterClient) sets.push(clientUids);
       if (filterLead) sets.push(leadUids);
-      // Union first set, then intersect with remaining
       let merged = new Set(sets[0]);
       for (let i = 1; i < sets.length; i++) {
         merged = new Set([...merged].filter(uid => sets[i].has(uid)));
       }
       const curationUids = [...merged].slice(0, 1000);
       if (curationUids.length === 0) {
-        // No matches — short-circuit
         setRetailers([]);
         setTotalCount(0);
         setLoading(false);

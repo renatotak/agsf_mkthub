@@ -117,7 +117,8 @@ export async function generateEmbeddingBatch(texts: string[]): Promise<number[][
 export async function summarizeText(
   systemPrompt: string,
   userPrompt: string,
-  maxTokens = 500
+  maxTokens = 500,
+  jsonMode = true
 ): Promise<string> {
   const ai = getClient()
   if (!ai) throw new Error('GEMINI_API_KEY not configured')
@@ -128,7 +129,7 @@ export async function summarizeText(
     config: {
       temperature: 0.3,
       maxOutputTokens: maxTokens,
-      responseMimeType: 'application/json',
+      ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
       systemInstruction: systemPrompt,
       thinkingConfig: { thinkingBudget: 0 },
     },

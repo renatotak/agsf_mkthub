@@ -1,6 +1,7 @@
 # CLAUDE.md — AgriSafe Market Hub
 
-> Agent context file. For humans, see README.md. For the full roadmap, see ROADMAP.md.
+> Universal agent context file (Claude Code · Cursor · Gemini CLI · Windsurf · GitHub Copilot · Antigravity).
+> For humans, see README.md. For the full roadmap, see ROADMAP.md.
 > For the latest user-defined task list, see `documentation/TODO_2026-04-06.md`.
 
 ## Project in One Line
@@ -370,6 +371,16 @@ Special characters in the DB password must be percent-encoded (`@`→`%40`, `!`�
 
 Primary `#5B7A2F` · Secondary `#7FA02B` · Warning `#E8722A`
 Page bg `#F7F4EF` · Text `#3D382F` · Font: Inter 300–800
+
+## Adding a Module (Checklist)
+
+- [ ] Identify which of the **5 entities** the module reads/writes
+- [ ] `src/data/{module}.ts` — interfaces + seed data
+- [ ] `src/components/{Module}.tsx` — import `Lang`, fetch Supabase, fall back to seed
+- [ ] `src/lib/i18n.ts` — add keys to both `pt` and `en`
+- [ ] `src/app/page.tsx` — add to `Module` type + sidebar + render
+- [ ] `src/db/migrations/` — new SQL file with RLS enabled, FK to anchor entity
+- [ ] Update this file's architecture table + `ROADMAP.md` if phase changes
 
 ## Deeper References
 

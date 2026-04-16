@@ -1,0 +1,41 @@
+culture,category,product_name,active_ingredient,purpose,industry_name,region,rank,market_share_pct,cost_usd_ha,source
+soja,fungicida_premium,Fox Xpro,trifloxistrobina + protioconazol,ferrugem asiática / mancha-alvo,Bayer,,1,,50.29,AMIS 19/20
+soja,fungicida_premium,Elatus WG,azoxistrobina + benzovindiflupir,ferrugem asiática / mancha-alvo,Syngenta,,2,,,AMIS 19/20
+soja,fungicida_premium,Orkestra SC,piraclostrobina + fluxapiroxade,ferrugem asiática / mancha-alvo,BASF,,3,,,AMIS 19/20
+soja,fungicida_premium,Aproach Prima,picoxistrobina + ciproconazol,ferrugem asiática / mancha-alvo,Corteva,,4,,,AMIS 19/20
+soja,fungicida_premium,Sphere Max,trifloxistrobina + ciproconazol,ferrugem asiática / mancha-alvo,Bayer,,5,,,AMIS 19/20
+soja,fungicida_premium,Cronnos,trifloxistrobina + protioconazol,ferrugem asiática / mancha-alvo,ADAMA,,6,,,AMIS 19/20
+soja,fungicida_multissitio,Unizeb Gold,mancozebe,manejo de resistência,UPL,,1,56,8.69,AMIS 19/20
+soja,fungicida_multissitio,Bravonil 720 SC,clorotalonil,manejo de resistência,Syngenta,,2,,,AMIS 19/20
+soja,fungicida_multissitio,Status,clorotalonil + carbendazim,manejo de resistência,BASF,,3,,9.18,AMIS 19/20
+soja,fungicida_multissitio,Triziman WG,mancozebe,manejo de resistência,UPL,,4,,,AMIS 19/20
+soja,fungicida_multissitio,Manfil 800 WP,mancozebe,manejo de resistência,Nufarm,,5,,,AMIS 19/20
+soja,inseticida_percevejo,Engeo Pleno,tiametoxam + lambda-cialotrina,percevejo,Syngenta,,1,,,AMIS 19/20
+soja,inseticida_percevejo,Perito 970 SG,acefato,percevejo,UPL,,2,33,,AMIS 19/20
+soja,inseticida_percevejo,Galil SC,bifentrina + imidacloprido,percevejo,ADAMA,,3,,,AMIS 19/20
+soja,inseticida_percevejo,Connect,imidacloprido + beta-ciflutrina,percevejo,Bayer,,4,,,AMIS 19/20
+soja,inseticida_percevejo,Orthene 750 BR,acefato,percevejo,UPL,,5,,,AMIS 19/20
+soja,inseticida_percevejo,Talisman 200CE,bifentrina,percevejo,FMC,,6,,,AMIS 19/20
+soja,inseticida_percevejo,Hero,bifentrina + zeta-cipermetrina,percevejo,FMC,,7,,,AMIS 19/20
+soja,inseticida_lagarta,Proclaim 50,benzoato de emamectina,lagarta-da-soja / falsa-medideira / helicoverpa,Syngenta,,1,,,AMIS 19/20
+soja,inseticida_lagarta,Exalt,espinetoram,lagarta-da-soja / falsa-medideira,Corteva,,2,,,AMIS 19/20
+soja,inseticida_lagarta,Pirate,clorfenapir,lagarta-da-soja / falsa-medideira,BASF,,3,,,AMIS 19/20
+soja,inseticida_lagarta,Avatar,indoxacarbe,lagarta-da-soja / helicoverpa,FMC,,4,,,AMIS 19/20
+soja,inseticida_lagarta,Premio,clorantraniliprole,lagarta-da-soja / falsa-medideira,FMC,,5,,,AMIS 19/20
+soja,inseticida_lagarta,Intrepid Edge,metoxifenozida + espinetoram,lagarta-da-soja / falsa-medideira,Corteva,,6,,,AMIS 19/20
+soja,herbicida_seletivo,Select 240 EC,cletodim,gramíneas,UPL,,1,16,8.88,AMIS 19/20
+soja,herbicida_seletivo,Poquer,cletodim,gramíneas,ADAMA,,2,,,AMIS 19/20
+soja,herbicida_seletivo,Cletodim N.,cletodim,gramíneas,Nortox,,3,,,AMIS 19/20
+soja,herbicida_seletivo,Verdict,haloxifope-P-metílico,gramíneas,Corteva,,4,,,AMIS 19/20
+soja,herbicida_seletivo,Dual Gold,s-metolacloro,gramíneas pré-emergência,Syngenta,,5,,,AMIS 19/20
+soja,herbicida_dessecacao,Roundup W.G.,glifosato,dessecação pré-plantio / OTT,Bayer,,1,47,15.22,AMIS 19/20
+soja,herbicida_dessecacao,Gramoxone,paraquate,dessecação pré-colheita,Syngenta,,2,,,AMIS 19/20
+soja,herbicida_dessecacao,Reglone,diquate,dessecação pré-colheita,Syngenta,,3,,,AMIS 19/20
+soja,herbicida_dessecacao,Heat,saflufenacil,dessecação pré-colheita,BASF,,4,,,AMIS 19/20
+soja,herbicida_dessecacao,Finale,glufosinato de amônio,dessecação pré-colheita,BASF,,5,,,AMIS 19/20
+soja,herbicida_dessecacao,Crucial,glifosato,dessecação,Nufarm,,6,,,AMIS 19/20
+soja,tsi,Standak Top,piraclostrobina + metil tiofanato + fipronil,pragas de solo / nematoides,BASF,,1,,17.23,AMIS 19/20
+soja,tsi,Dermacor BR,clorantraniliprole,pragas de solo,Corteva,,2,45,,AMIS 19/20
+soja,tsi,Fortenza Duo,ciantraniliprole + tiametoxam,pragas de solo,Syngenta,,3,,,AMIS 19/20
+soja,tsi,Cruiser 350 FS,tiametoxam,pragas de solo,Syngenta,,4,,,AMIS 19/20
+soja,tsi,Cropstar,imidacloprido + tiodicarbe,pragas de solo,Bayer,,5,,,AMIS 19/20

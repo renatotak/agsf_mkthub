@@ -139,6 +139,11 @@ export async function getSoilExpertProfiles(page = 1, query?: string): Promise<{
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
 
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`SmartSolos API error (${res.status}): ${body.slice(0, 200)}`);
+  }
+
   const total = parseInt(res.headers.get("X-Records-Count") || "0", 10);
   const pages = parseInt(res.headers.get("X-Pages") || "1", 10);
   const data = await res.json();
