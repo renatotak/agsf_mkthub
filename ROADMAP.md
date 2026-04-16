@@ -1,7 +1,7 @@
 # AgriSafe Market Hub — Roadmap
 
-> **Last updated:** 2026-04-16 (Phases 1–6 completed, security audit + RLS fix)
-> 4 verticals · 14 modules · 64 tables · 73 migrations · 30 cron jobs (smart orchestrator) · 9 MCP tools · 176 data sources
+> **Last updated:** 2026-04-16 (Phases 1–6 completed, Phase 5g mindmap shipped)
+> 4 verticals · 14 modules · 64 tables · 74 migrations · 30 cron jobs (smart orchestrator) · 9 MCP tools · 176 data sources
 > For phase history, see git log. For setup, see `.env.example`. For ops, see [`launchd/README.md`](launchd/README.md). For hard rules, see [`CLAUDE.md`](CLAUDE.md).
 
 ---
@@ -17,7 +17,7 @@
 | Marco Regulatório | 16 norms · CNAE classification · "X empresas afetadas" badge · summary section |
 | Recuperação Judicial | 131 cases · manual CNPJ add · cards styled collapsible (detail render pending) |
 | Pulso de Mercado | BCB SGS · NA prices · Yahoo futures · FAOSTAT · WB Pink Sheet · CONAB · USDA PSD · MDIC · Preços de Insumos tab (DAP/TSP/Urea/KCl/Phosphate Rock from WB) |
-| Inteligência de Insumos | Oracle UX + 800 AGROFIT products; tabs currently broken (Phase 5 fixes) |
+| Inteligência de Insumos | Oracle UX + 800 AGROFIT products · 40 canonical inputs (AMIS) · Pacote/Indústria/Mapa tabs · visual mindmap (SVG) |
 | Notícias Agro | 203 articles · 5 RSS feeds · Reading Room Chrome extension |
 | Eventos Agro | AgroAgenda + AgroAdvance unified · per-event AI enrichment |
 | Central de Conteúdo | Article pipeline + `published_article_links` · "Sugerir Artigos" button in UI |
@@ -37,7 +37,7 @@ Algorithms first, LLMs last. Vertex AI only (never Gemini free tier). Everything
 
 ---
 
-## 3. Roadmap — 6 phases
+## 3. Roadmap — 7 phases (6 done, 1 remaining)
 
 Each phase lists concrete tracks. Phases marked **[parallel]** are safe to dispatch to multiple agents concurrently; **[sequential]** phases have internal ordering.
 
@@ -70,17 +70,14 @@ Each phase lists concrete tracks. Phases marked **[parallel]** are safe to dispa
 - ~~**4c News → Directory enrichment**~~ — ✓ "Enriquecer Diretório" button per article card. New `/api/news/propose-enrichment` uses entity-matcher first, Vertex AI fallback. Confirmation modal with per-proposal accept/reject. Writes to `entity_mentions` + `entity_roles`.
 - ~~**4d Event URL paste + AI parse + location confirm**~~ — ✓ "Colar URL" field in EventFormModal. New `/api/events/parse-url` (Cheerio-first, 6 date regex patterns, BR location extraction, Vertex AI fallback). LocationConfirmModal shows Google Static Maps pin after save.
 
-### Phase 5 — Inteligência de Insumos rebuild  **[sequential, anchored on Ivan's PDF]**
+### Phase 5 — Inteligência de Insumos rebuild  **[DONE ✓ 2026-04-16]**
 
-Today's tabs don't render correctly and the UX doesn't match the buyer's journey. Rebuild around the canonical product list from [`local files/Industry products/management view ivan.pdf`](local%20files/Industry%20products/management%20view%20ivan.pdf).
-
-- **5a Extract canonical products from Ivan's PDF** → seed CSV with `culture, category, product_name, active_ingredient, purpose, industry_name` (e.g. CTVA = Corteva). Semi-automatic: `pdf-parse` extraction + human review.
-- **5b Data model** — new table `culture_canonical_inputs(culture, category, product_name, active_ingredient, purpose, industry_entity_uid, region, rank)` (mig 067). Links to `industries` + `industry_products`.
-- **5c Tab diagnosis + fix** — diagnose why AgInputIntelligence tabs aren't rendering (likely a failing upstream fetch). Restore baseline before layering new features.
-- **5d Greyed-out tab previews** — before a query runs, each tab shows a skeleton with the *expected* output shape and a tooltip "this query returns: ...", so users know what to expect.
-- **5e "Show alternatives" as primary action** — re-surface `v_oracle_brand_alternatives` as the default card action.
-- **5f Industry → products pivot** — pick an industry, see all commercial products grouped by culture × category. Powered by `industry_products` + the new canonical table.
-- **5g Mindmap view (polish)** — optional graph render over the canonical table (industry → product → molecule → purpose → culture). Gated behind 5a–5f.
+- ~~**5a Extract canonical products from Ivan's PDF**~~ — ✓ 40 products extracted from AMIS 19/20 soybean analysis into seed CSV (`src/data/culture-canonical-inputs.csv`). 7 categories: fungicida_premium, fungicida_multissitio, inseticida_percevejo, inseticida_lagarta, herbicida_seletivo, herbicida_dessecacao, tsi.
+- ~~**5b Data model**~~ — ✓ Migration 074 (`culture_canonical_inputs` table) + seed script with industry UID resolution.
+- ~~**5c Tab diagnosis + fix**~~ — ✓ Fixed broken Soils tab (SmartSolos API deprecated — disabled with offline badge). Added error handling to getSoilExpertProfiles.
+- ~~**5d/5e Pacote de Insumos + Show Alternatives**~~ — ✓ New "Pacote de Insumos" tab with category-grouped products and "Show Alternatives" → Oracle navigation.
+- ~~**5f Industry → products pivot**~~ — ✓ New "Indústria × Produtos" tab with 2-column manufacturer pivot.
+- ~~**5g Mindmap view**~~ — ✓ New "Mapa de Insumos" tab with hierarchical SVG graph (culture → category → product → industry/molecule). Hover highlighting, category color-coding, leader badges. Pure SVG, no extra dependencies.
 
 ### Phase 6 — Knowledge & content depth  **[DONE ✓ 2026-04-16]**
 
