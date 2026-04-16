@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { Lang, t } from "@/lib/i18n";
-import { MapPin, ExternalLink, CalendarDays, Loader2, RefreshCw, LayoutList, Calendar, Search, ArrowUpDown, Globe, Monitor, Sparkles, BookOpen, Database, Edit3, EyeOff } from "lucide-react";
+import { MapPin, ExternalLink, CalendarDays, Loader2, RefreshCw, LayoutList, Calendar, Search, ArrowUpDown, Globe, Monitor, Sparkles, BookOpen, Database, Edit3, EyeOff, Plus } from "lucide-react";
 import { EventFormModal, type EventEditRecord } from "@/components/EventFormModal";
 
 interface AgroEvent {
@@ -87,7 +87,25 @@ export function EventTracker({ lang }: { lang: Lang }) {
   const [enrichToast, setEnrichToast] = useState<string | null>(null);
   // Edit modal state
   const [editingEvent, setEditingEvent] = useState<EventEditRecord | null>(null);
+  const [isNewEvent, setIsNewEvent] = useState(false);
+  const openNewEvent = () => {
+    setIsNewEvent(true);
+    setEditingEvent({
+      id: "",
+      name: "",
+      date: "",
+      end_date: null,
+      location: null,
+      type: "other",
+      website: null,
+      description_pt: null,
+      source_name: null,
+      latitude: null,
+      longitude: null,
+    });
+  };
   const openEdit = (ev: AgroEvent) => {
+    setIsNewEvent(false);
     setEditingEvent({
       id: ev.id,
       name: ev.nome,
@@ -436,6 +454,11 @@ export function EventTracker({ lang }: { lang: Lang }) {
               </button>
             ))}
           </div>
+          <button onClick={openNewEvent}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-[12px] font-semibold hover:bg-amber-700 transition-colors">
+            <Plus size={14} />
+            {lang === "pt" ? "Adicionar Evento" : "Add Event"}
+          </button>
           <button onClick={fetchEvents} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary text-white rounded-lg text-[12px] font-semibold hover:bg-brand-dark transition-colors disabled:opacity-50">
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
@@ -634,8 +657,9 @@ export function EventTracker({ lang }: { lang: Lang }) {
         <EventFormModal
           lang={lang}
           event={editingEvent}
-          onClose={() => setEditingEvent(null)}
-          onSaved={() => { setEditingEvent(null); fetchEvents(); }}
+          onClose={() => { setEditingEvent(null); setIsNewEvent(false); }}
+          onSaved={() => { setEditingEvent(null); setIsNewEvent(false); fetchEvents(); }}
+          isNew={isNewEvent}
         />
       )}
     </div>
