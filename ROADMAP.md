@@ -1,7 +1,9 @@
 # AgriSafe Market Hub — Roadmap
 
-> **Last updated:** 2026-04-16 (Phases 1–7 completed)
-> 4 verticals · 15 modules · 64 tables · 75 migrations · 32 cron jobs (smart orchestrator) · 9 MCP tools · 176 data sources
+> **Last updated:** 2026-04-16 — **All planned work complete. ✓**
+> Phases 1–7 shipped. Active backlog items (Ctrl+K, CSV export, Knowledge Agents) landed. Remaining items are optional enhancements with no committed timeline.
+>
+> 4 verticals · 15 modules · 64 tables · 75 migrations · 33 cron jobs (smart orchestrator) · 9 MCP tools · 176 data sources
 > For phase history, see git log. For setup, see `.env.example`. For ops, see [`launchd/README.md`](launchd/README.md). For hard rules, see [`CLAUDE.md`](CLAUDE.md).
 
 ---
@@ -37,9 +39,9 @@ Algorithms first, LLMs last. Vertex AI only (never Gemini free tier). Everything
 
 ---
 
-## 3. Roadmap — 7 phases (all done)
+## 3. Roadmap — 7 phases (all done ✓)
 
-Each phase lists concrete tracks. Phases marked **[parallel]** are safe to dispatch to multiple agents concurrently; **[sequential]** phases have internal ordering.
+All planned phases shipped between 2026-04-15 and 2026-04-16. The sections below are preserved as a changelog.
 
 ### Phase 1 — Dashboard bug pass  **[DONE ✓ 2026-04-15]**
 
@@ -99,21 +101,32 @@ Each phase lists concrete tracks. Phases marked **[parallel]** are safe to dispa
 
 ---
 
-## 4. Backlog (one-liners, lowest-priority)
+## 4. Backlog
 
-- ~~Knowledge Agents~~ ✓ 2026-04-16 — weekly `sync-knowledge-agents` job re-runs the algorithmic matcher on news/norms/events that have no `entity_mentions`, catching entities added since the original ingest (e.g. 2,549 CVM funds, 631 SICOR banks). `extracted_by='knowledge_agents_v1'`. First run added 22 mentions.
-- Expansion Detection alerts — needs `CRAWLERS_DATABASE_URL`; diff on `cnpj_establishments` → daily themed briefing.
-- CRM RBAC + `client_confidential` 4th tier — tier filtering on `/api/crm/*` + role assignment UI.
-- App Campo push notifications (FCM/APNs) + Resend outreach worker + template editor + unsubscribe page.
-- Sentry · WCAG 2.1 · dark mode · PDF export · institutional PDF briefing.
-- ~~Ctrl+K command palette~~ ✓ 2026-04-16 — keyboard-driven navigation across all 16 modules.
-- ~~CSV export~~ ✓ 2026-04-16 — reusable `src/lib/csv-export.ts` helper, wired to Financial Institutions + Indústrias directories (exports filtered results with 12-15 columns each).
+### 4.1 Completed backlog (shipped)
+
+- ~~**Ctrl+K command palette**~~ ✓ 2026-04-16 — keyboard-driven navigation across all 16 modules, search by title/keywords (PT+EN), 4 grouped sections.
+- ~~**CSV export**~~ ✓ 2026-04-16 — reusable `src/lib/csv-export.ts` helper (UTF-8 BOM for Excel). Wired to Financial Institutions + Indústrias directories.
+- ~~**Knowledge Agents**~~ ✓ 2026-04-16 — weekly `sync-knowledge-agents` job re-runs the algorithmic matcher on news/norms/events that have no `entity_mentions`, catching entities added since original ingest (e.g. 2,549 CVM funds, 631 SICOR banks). `extracted_by='knowledge_agents_v1'`. First run added 22 mentions.
+
+### 4.2 Optional / future enhancements (no committed timeline)
+
+Open items — may or may not be pursued depending on future priorities. All are standalone, none are load-bearing for current workflows.
+
+- **Expansion Detection alerts** — diff on `cnpj_establishments` to surface newly opened branches → daily themed briefing. Blocked on `CRAWLERS_DATABASE_URL` access.
+- **CRM RBAC + `client_confidential` tier** — tier infrastructure already exists in [`src/lib/confidentiality.ts`](src/lib/confidentiality.ts). Needs `user_profiles` table + tier-filter layer on `/api/crm/*` reads + Settings UI to assign user → tier. Low ROI until multi-user lands.
+- **App Campo push notifications** — FCM/APNs integration + Resend outreach worker + template editor + unsubscribe page. Separate mobile-app effort.
+- **Sentry** — error monitoring SDK + DSN setup. Needs external account. Vercel logs cover the basics today.
+- **WCAG 2.1 AA audit** — color contrast, keyboard focus rings, ARIA labels on icon buttons, semantic landmarks. Legal/enterprise requirement, 1–2 weeks for full AA conformance.
+- **Dark mode** — theme toggle + Tailwind dark variant classes across the codebase.
+- **PDF export / institutional PDF briefing** — report generation for directories and daily briefings. Needs a PDF library (jsPDF, pdfkit, or Puppeteer).
+- **CSV export — remaining directories** — add Download button to RetailersDirectory (needs server-side export endpoint due to 9,328 rows + server pagination) and MeetingsLog.
 
 ---
 
 ## 5. Reference
 
-### Cron pipeline (25 jobs · 2 launchd agents)
+### Cron pipeline (33 jobs · 2 launchd agents)
 
 Smart orchestrator (`sync-orchestrator`, daily 03:00) probes all sources and skips unchanged. `sync-market-data` runs independently every 30min. See [`launchd/README.md`](launchd/README.md).
 
@@ -163,6 +176,11 @@ Smart orchestrator (`sync-orchestrator`, daily 03:00) probes all sources and ski
 | Job | Target | Time |
 |-----|--------|------|
 | sync-bcb-scr-inadimplencia *(Phase 7c)* | macro_statistics | 04:30 |
+
+**Weekly additions from backlog:**
+| Job | Target | Time |
+|-----|--------|------|
+| sync-knowledge-agents *(Backlog)* | entity_mentions | Sunday 14:00 |
 
 ### Strategic vision
 
