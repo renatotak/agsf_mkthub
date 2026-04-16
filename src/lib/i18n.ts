@@ -465,6 +465,9 @@ export const translations = {
       },
       noResults: "Nenhuma instituição encontrada.",
       seedDisclaimer: "Dados de exemplo — a tabela ainda não foi populada.",
+      sicorEligible: "Elegível SICOR",
+      activeOnly: "Ativos",
+      inadimplencia: "Inadimplência Rural",
     },
     map: {
       subsidiaryNew: "Filiais Novas",
@@ -1063,6 +1066,9 @@ export const translations = {
       },
       noResults: "No institutions found.",
       seedDisclaimer: "Sample data — the table has not been populated yet.",
+      sicorEligible: "SICOR Eligible",
+      activeOnly: "Active",
+      inadimplencia: "Rural Delinquency",
     },
     map: {
       subsidiaryNew: "New Branches",
