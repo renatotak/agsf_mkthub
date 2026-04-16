@@ -283,11 +283,11 @@ async function main() {
 
   await logActivity(supabase, {
     action: "upsert",
-    source: "script",
+    source: "seed-cogo-safra-projection",
     source_kind: "backfill",
     target_table: "macro_statistics",
-    record_count: upserted,
-    details: {
+    summary: `COGO 1ª Projeção Safra ${PERIOD}: ${upserted} rows upserted`,
+    metadata: {
       file: "1ª PROJEÇÃO SAFRA 2026-2027 BRASIL ABR26 - COGO INTELIGÊNCIA EM AGRONEGÓCIO.xlsx",
       period: PERIOD,
       reference_date: REFERENCE_DATE,
