@@ -310,6 +310,13 @@ export const translations = {
       conference: "Confer\u00eancia",
       webinar: "Webinar",
       fair: "Feira",
+      addEvent: "Adicionar Evento",
+      pasteUrl: "Colar URL do evento",
+      extract: "Extrair",
+      confirmLocation: "Confirmar Localiza\u00e7\u00e3o",
+      editCoordinates: "Editar coordenadas",
+      confirm: "Confirmar",
+      newEvent: "Novo Evento",
     },
     news: {
       // Phase 22 — News providers CRUD + Reading Room ingest
@@ -845,6 +852,13 @@ export const translations = {
       conference: "Conference",
       webinar: "Webinar",
       fair: "Fair",
+      addEvent: "Add Event",
+      pasteUrl: "Paste event URL",
+      extract: "Extract",
+      confirmLocation: "Confirm Location",
+      editCoordinates: "Edit coordinates",
+      confirm: "Confirm",
+      newEvent: "New Event",
     },
     news: {
       // Phase 22 — News providers CRUD + Reading Room ingest

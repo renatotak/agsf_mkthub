@@ -725,6 +725,15 @@ export function AgroNews({ lang }: { lang: Lang }) {
                         ))}
                       </div>
                     )}
+                    {/* Phase 4c — Enrich Directory button */}
+                    <button
+                      onClick={() => proposeEnrichment(item.id)}
+                      className="ml-auto flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-brand-primary hover:bg-brand-primary/10 rounded transition-colors"
+                      title={tr.enrichDirectory}
+                    >
+                      <Zap size={12} />
+                      {tr.enrichDirectory}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -957,6 +966,113 @@ export function AgroNews({ lang }: { lang: Lang }) {
               >
                 {tr.saveSource}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 4c — Enrichment Proposals Modal */}
+      {showEnrichModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-neutral-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200">
+              <div>
+                <h3 className="text-lg font-semibold text-neutral-800 flex items-center gap-2">
+                  <Zap size={18} className="text-brand-primary" />
+                  {tr.enrichModalTitle}
+                </h3>
+                <p className="text-xs text-neutral-500 mt-0.5">{tr.enrichModalSubtitle}</p>
+              </div>
+              <button
+                onClick={() => { setShowEnrichModal(false); setEnrichFeedback(null); }}
+                className="p-1.5 rounded hover:bg-neutral-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6">
+              {enrichLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 size={24} className="animate-spin text-brand-primary" />
+                  <span className="ml-3 text-sm text-neutral-500">{tr.enrichLoading}</span>
+                </div>
+              ) : enrichProposals.length === 0 ? (
+                <div className="text-center py-10">
+                  <ShieldCheck size={36} className="mx-auto text-neutral-300 mb-3" />
+                  <p className="text-sm text-neutral-500">{tr.enrichNoProposals}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {enrichProposals.map((p) => (
+                    <label
+                      key={p.entity_uid}
+                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        enrichSelected.has(p.entity_uid)
+                          ? "border-brand-primary/40 bg-brand-primary/5"
+                          : "border-neutral-200 hover:bg-neutral-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={enrichSelected.has(p.entity_uid)}
+                        onChange={() => toggleEnrichSelection(p.entity_uid)}
+                        className="mt-1 rounded border-neutral-300"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-neutral-800">{p.entity_name}</span>
+                          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                            p.source === "algorithmic"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-purple-100 text-purple-700"
+                          }`}>
+                            {p.source === "algorithmic" ? tr.enrichAlgorithmic : tr.enrichLlm}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded">
+                            {p.proposed_role}
+                          </span>
+                          <span className="text-[10px] text-neutral-400">
+                            {tr.enrichConfidence}: {Math.round(p.confidence * 100)}%
+                          </span>
+                        </div>
+                        <p className="text-xs text-neutral-500 italic line-clamp-2">{p.source_snippet}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {enrichFeedback && (
+                <div className={`mt-4 px-4 py-2.5 rounded-lg text-sm font-medium ${
+                  enrichFeedback.type === "success"
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : "bg-red-50 text-red-700 border border-red-200"
+                }`}>
+                  {enrichFeedback.type === "success" && <Check size={14} className="inline mr-1.5" />}
+                  {enrichFeedback.msg}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-200 bg-neutral-50">
+              <button
+                onClick={() => { setShowEnrichModal(false); setEnrichFeedback(null); }}
+                className="px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 rounded-lg"
+              >
+                {tr.enrichClose}
+              </button>
+              {enrichProposals.length > 0 && !enrichFeedback?.type?.startsWith("success") && (
+                <button
+                  onClick={acceptEnrichment}
+                  disabled={enrichSelected.size === 0 || enrichAccepting}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-brand-primary hover:bg-brand-primary-dark rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {enrichAccepting ? (
+                    <><Loader2 size={14} className="animate-spin" /> {tr.enrichAccepting}</>
+                  ) : (
+                    <><Check size={14} /> {tr.enrichAccept} ({enrichSelected.size})</>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
