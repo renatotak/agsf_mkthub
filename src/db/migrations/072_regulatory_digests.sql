@@ -18,14 +18,16 @@ CREATE TABLE IF NOT EXISTS regulatory_digests (
 -- RLS: public read, service_role write
 ALTER TABLE regulatory_digests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "public_read_regulatory_digests" ON regulatory_digests;
 CREATE POLICY "public_read_regulatory_digests"
   ON regulatory_digests FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "service_write_regulatory_digests" ON regulatory_digests;
 CREATE POLICY "service_write_regulatory_digests"
   ON regulatory_digests FOR ALL
-  USING ((current_setting('role') = 'service_role'))
-  WITH CHECK ((current_setting('role') = 'service_role'));
+  USING ((auth.role() = 'service_role'))
+  WITH CHECK ((auth.role() = 'service_role'));
 
 COMMENT ON TABLE regulatory_digests IS 'Weekly AI-generated bilingual summaries of regulatory changes (Phase 6d)';
 
