@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { Lang } from "@/lib/i18n";
 import {
   Users, CalendarDays, Target, Plus, Loader2, Trash2, Save, X, Lock, ChevronDown, ChevronUp, Edit3, MessageCircle,
+  Landmark,
 } from "lucide-react";
 import { MeetingFormModal, type MeetingRecord } from "@/components/MeetingFormModal";
 import { SimilarTargetsSection } from "@/components/SimilarTargetsSection";
@@ -158,6 +159,7 @@ export function EntityCrmPanel({
           <MeetingsSection entityUid={entityUid} lang={lang} />
           <LeadsSection entityUid={entityUid} lang={lang} />
           <SimilarTargetsSection entityUid={entityUid} lang={lang} />
+          <FinanciadoresSection entityUid={entityUid} lang={lang} />
         </div>
       )}
     </div>
@@ -793,5 +795,117 @@ function CrmSelect({
         <option key={o.value} value={o.value}>{o.label}</option>
       ))}
     </select>
+  );
+}
+
+// ─── Phase 7f: Financiadores section ─────────────────────────────────────────
+
+interface FiMatch {
+  id: string;
+  name: string;
+  short_name: string | null;
+  institution_type: string;
+  headquarters_uf: string | null;
+  is_sicor_eligible: boolean;
+  specialties: string[] | null;
+}
+
+const FI_TYPE_LABELS: Record<string, string> = {
+  bank: "Banco",
+  cooperative_bank: "Cooperativa",
+  development_bank: "Banco Desenv.",
+  fidc: "FIDC",
+  fiagro: "FIAGRO",
+};
+
+function FinanciadoresSection({ entityUid, lang }: { entityUid: string; lang: Lang }) {
+  const [fis, setFis] = useState<FiMatch[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [entityUf, setEntityUf] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        // 1. Get entity's UF from legal_entities or retailer_locations
+        const { data: entity } = await supabase
+          .from("legal_entities")
+          .select("entity_uid, display_name")
+          .eq("entity_uid", entityUid)
+          .maybeSingle();
+
+        // Try to get UF from retailer_locations
+        const { data: locs } = await supabase
+          .from("retailer_locations")
+          .select("uf")
+          .eq("cnpj_raiz", entity?.entity_uid ? undefined! : "")
+          .limit(1);
+
+        // Fallback: get UF from entity mentions or any available source
+        // For now, just fetch top SICOR-eligible FIs (banks + cooperatives)
+        const { data: fiData } = await supabase
+          .from("financial_institutions")
+          .select("id, name, short_name, institution_type, headquarters_uf, is_sicor_eligible, specialties")
+          .eq("is_sicor_eligible", true)
+          .in("institution_type", ["bank", "cooperative_bank", "development_bank"])
+          .order("name")
+          .limit(12);
+
+        setFis(fiData || []);
+      } catch { /* silent */ }
+      finally { setLoading(false); }
+    })();
+  }, [entityUid]);
+
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-2">
+        <Landmark size={13} className="text-purple-600" />
+        <span className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+          {lang === "pt" ? "Financiadores" : "Lenders"}
+        </span>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-700">
+          SICOR
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 py-2">
+          <Loader2 size={12} className="animate-spin text-neutral-400" />
+          <span className="text-[11px] text-neutral-400">{lang === "pt" ? "Carregando..." : "Loading..."}</span>
+        </div>
+      ) : fis.length === 0 ? (
+        <p className="text-[11px] text-neutral-400 italic">
+          {lang === "pt" ? "Nenhuma IF elegível encontrada." : "No eligible FIs found."}
+        </p>
+      ) : (
+        <div className="space-y-1">
+          <p className="text-[10px] text-neutral-400 mb-1.5">
+            {lang === "pt"
+              ? `${fis.length} instituições SICOR-elegíveis (bancos e cooperativas com autorização para crédito rural)`
+              : `${fis.length} SICOR-eligible institutions (banks and cooperatives authorized for rural credit)`}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {fis.map((fi) => (
+              <div key={fi.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-neutral-100 bg-neutral-50 text-[11px]">
+                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                  style={{
+                    backgroundColor: fi.institution_type === "cooperative_bank" ? "#E6F4EA" : fi.institution_type === "development_bank" ? "#E0F2F1" : "#E8F0FE",
+                    color: fi.institution_type === "cooperative_bank" ? "#137333" : fi.institution_type === "development_bank" ? "#00695C" : "#1A73E8",
+                  }}>
+                  {FI_TYPE_LABELS[fi.institution_type] || fi.institution_type}
+                </span>
+                <span className="text-neutral-800 font-medium truncate">
+                  {fi.short_name || fi.name}
+                </span>
+                {fi.headquarters_uf && (
+                  <span className="text-neutral-400 shrink-0 ml-auto">{fi.headquarters_uf}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

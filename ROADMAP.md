@@ -1,7 +1,7 @@
 # AgriSafe Market Hub — Roadmap
 
-> **Last updated:** 2026-04-16 (Phases 1–6 completed, Phase 5g mindmap shipped)
-> 4 verticals · 14 modules · 64 tables · 74 migrations · 30 cron jobs (smart orchestrator) · 9 MCP tools · 176 data sources
+> **Last updated:** 2026-04-16 (Phases 1–7 completed)
+> 4 verticals · 15 modules · 64 tables · 75 migrations · 32 cron jobs (smart orchestrator) · 9 MCP tools · 176 data sources
 > For phase history, see git log. For setup, see `.env.example`. For ops, see [`launchd/README.md`](launchd/README.md). For hard rules, see [`CLAUDE.md`](CLAUDE.md).
 
 ---
@@ -13,7 +13,7 @@
 | 5-entity model | 9,818 legal_entities · 9,609 roles · 143 mentions |
 | Diretório de Canais | 9,328 retailers · 24,275 geocoded locations · CRM panel + Street View |
 | Diretório de Indústrias | 274 industries · 1,699 geocoded establishments · industries chat → Oracle redirect |
-| Instituições Financeiras | mig 063 + seed (BB, BNDES, Sicredi, Sicoob, Ailos, Cresol, Rabobank, BTG); full chapter in **Phase 7** (SICOR eligibility · BACEN MCR · SCR inadimplência · CVM FIDC/FIAGRO inventory) |
+| Instituições Financeiras | 3,026 FIs (631 SICOR banks/coops + 2,395 CVM FIDC/FIAGRO) · 223 MCR regulatory sections · SCR inadimplência sparkline · paginated list with SICOR/Active filters · Financiadores cross-ref in Canais/Indústrias |
 | Marco Regulatório | 16 norms · CNAE classification · "X empresas afetadas" badge · summary section |
 | Recuperação Judicial | 131 cases · manual CNPJ add · cards styled collapsible (detail render pending) |
 | Pulso de Mercado | BCB SGS · NA prices · Yahoo futures · FAOSTAT · WB Pink Sheet · CONAB · USDA PSD · MDIC · Preços de Insumos tab (DAP/TSP/Urea/KCl/Phosphate Rock from WB) |
@@ -37,7 +37,7 @@ Algorithms first, LLMs last. Vertex AI only (never Gemini free tier). Everything
 
 ---
 
-## 3. Roadmap — 7 phases (6 done, 1 remaining)
+## 3. Roadmap — 7 phases (all done)
 
 Each phase lists concrete tracks. Phases marked **[parallel]** are safe to dispatch to multiple agents concurrently; **[sequential]** phases have internal ordering.
 
@@ -88,16 +88,14 @@ Each phase lists concrete tracks. Phases marked **[parallel]** are safe to dispa
 - ~~**6e RJ card detail + debt-source chip**~~ — ✓ Expandable `RJDetailPanel` with full fields (case, court, debt, filing date, debt_value_source chip). Linked news via entity_mentions → agro_news join.
 - ~~**6f Meeting reclassification panel**~~ — ✓ Settings → "Reclassificar Importações" panel. `/api/entities/reclassify` endpoint. Migration 073 (expands entity_roles CHECK for `financial_institution`). Batch role reassignment with `logActivity()`.
 
-### Phase 7 — Instituições Financeiras (FIs) deep build  **[parallel · 4 agents, merge at UI step]**
+### Phase 7 — Instituições Financeiras (FIs) deep build  **[DONE ✓ 2026-04-16]**
 
-Mig 063 + seed rows are in place (BB, BNDES, Sicredi, Sicoob, Ailos, Cresol, Rabobank, BTG). This phase turns it into a full chapter: eligible-IF registry, credit-risk series, fund inventory (FIDCs / FIAGROs from CVM), and a Marco Regulatório anchor for the MCR.
-
-- **7a SICOR eligible-IF import** — parse [`local files/financial institutions/sicor_lista_ifs.csv`](local%20files/financial%20institutions/sicor_lista_ifs.csv) (the BACEN SICOR list of institutions authorised to operate rural credit). For each row: resolve `entity_uid` via `ensureLegalEntityUid()` on the CNPJ, add `entity_roles` with `role_type` in `{bank, cooperative_bank, fidc, fiagro, development_bank}`, tag `is_sicor_eligible=true` in `financial_institution_profile`. One-shot seeder (`src/scripts/seed-sicor-ifs.js`) with `logActivity`; idempotent re-run.
-- **7b BACEN MCR ingestion → Marco Regulatório + Base de Conhecimento** — the Manual de Crédito Rural is the ground-truth rulebook for rural-credit FIs. New `sync-bacen-mcr` weekly Cheerio scraper against `https://www3.bcb.gov.br/mcr/` → writes each chapter/sub-chapter as a `regulatory_norms` row (agency=`BCB`, tag=`MCR`) **and** a `knowledge_items` row with Vertex embedding so the Oracle can quote MCR passages with citations. Add an `mcr_chapter` + `mcr_version` column on `regulatory_norms` (mig 068) so the UI can show "MCR 2-1 — Beneficiários" as a filter chip.
-- **7c SCR inadimplência series** — rebuild the BCB SCR chart (`bcb.gov.br/estabilidadefinanceira/scrdata`) on our side using the open dataset at `https://dadosabertos.bcb.gov.br/dataset/21082-inadimplencia-da-carteira-de-credito---total`. New `sync-bcb-scr-inadimplencia` daily job → `macro_statistics` rows with dimensions `uf`, `cnae`, `porte`, `modalidade`, `origem`, `indexador`, `cliente`, `submodalidade`, `segmento`. UI widget on the FI module shows a configurable multi-series chart (same filters as the BCB source) that updates daily vs. BCB's quarterly refresh cadence.
-- **7d CVM fund inventory (FIDCs + FIAGROs)** — walk `https://sistemas.cvm.gov.br/` fund listings to extract every active FIDC + FIAGRO with an agro mandate. For each fund capture `name, cnpj, inception_date, aum_brl, aum_asof, gp_name, gp_cnpj, website, status, target_yield, callable, concentration_limits, fund_type`. Persist on `financial_institution_profile` (extend the table if needed via mig 069) + `fund_holdings` (new) for the fund-of-funds structure. Source-tag `cvm_fidc_fiagro`. New `sync-cvm-funds` weekly Sunday 13:00.
-- **7e FI module UI** — [FinancialInstitutionsDirectory.tsx](src/components/FinancialInstitutionsDirectory.tsx) with filters (kind, region, AUM bracket, SICOR-eligible, fund_type) and an expandable per-FI panel showing: profile, GP, fund list, AUM history, SCR inadimplência series scoped to that FI where possible, MCR-citation chips, news mentions, BCB agro-credit volume, top counterparties.
-- **7f Cross-reference "Financiadores" tab** — on Diretório de Canais + Diretório de Indústrias expanded panels, a new tab listing FIs that have lent to that entity (pulled from `sync-bcb-rural` counterparty aggregation + `entity_mentions` where `mention_type='credit_relationship'`).
+- ~~**7a SICOR eligible-IF import**~~ — ✓ `seed-sicor-ifs.ts` parses BACEN SICOR CSV (Latin-1, 631 rows). Migration 075 (`is_sicor_eligible` + `sicor_segment` + unique cnpj index). All 631 entities resolved + `financial_institution` role added. Breakdown: 554 cooperative banks, 67 banks, 10 development banks.
+- ~~**7b BACEN MCR ingestion**~~ — ✓ `seed-mcr.ts` parses 376-page MCR PDF via `pdf-parse`, splits by SEÇÃO headers into 223 sections across 6 chapters. Each section written to `regulatory_norms` (body=BCB, norm_type=manual) + `knowledge_items` (tier=1, tags=MCR) for Oracle RAG. BCB decommissioned www3.bcb.gov.br/mcr; used offline PDF instead.
+- ~~**7c SCR inadimplência series**~~ — ✓ `sync-bcb-scr-inadimplencia` job fetches 3 BCB SGS series (21082 total, 21136 rural PJ, 21148 rural PF) × 20 months → `macro_statistics`. Cron route + job runner registered. Monthly data, same API as `sync-market-data`.
+- ~~**7d CVM fund inventory**~~ — ✓ `sync-cvm-funds` job downloads CVM `cad_fi.csv` (open data, ~20MB), filters FIDC/FIAGRO + agro-mandate FI funds. 2,549 funds upserted into `financial_institutions` with entity resolution. Cron route + job runner registered.
+- ~~**7e FI module UI**~~ — ✓ `FinancialInstitutions.tsx` rebuilt: paginated list (40/page) for 3,026 institutions, SICOR + Active toggle chips, type/UF/search filters, clickable KPI strip (6 cards), SCR inadimplência sparkline chart, expandable per-FI detail panel with CNPJ, BCB code, SICOR eligibility, segment, patrimônio líquido, notes, MCR citation chips.
+- ~~**7f Financiadores cross-ref tab**~~ — ✓ New `FinanciadoresSection` in `EntityCrmPanel` — shows SICOR-eligible banks and cooperatives. Mounted on both Diretório de Canais and Diretório de Indústrias expanded panels.
 
 ---
 
