@@ -282,7 +282,7 @@ async function main() {
   console.log(`[seed-cogo] upserted ${upserted} rows, ${errors} batch errors`);
 
   await logActivity(supabase, {
-    action: "seed_cogo_safra_projection",
+    action: "upsert",
     source: "script",
     source_kind: "backfill",
     target_table: "macro_statistics",
