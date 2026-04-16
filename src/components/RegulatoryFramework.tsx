@@ -9,7 +9,7 @@ import { MockBadge } from "@/components/ui/MockBadge";
 import {
   ExternalLink, AlertTriangle, Calendar, BookOpen,
   ChevronDown, ChevronUp, Search, Clock, BarChart3, Filter,
-  Upload, List, X, Loader2, Plus, Database, Globe, Building2, FileText,
+  Upload, List, X, Loader2, Plus, Database, Globe, Building2, FileText, RefreshCw,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -91,6 +91,11 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
   const [drilldownEntities, setDrilldownEntities] = useState<any[]>([]);
   const [drilldownLoading, setDrilldownLoading] = useState(false);
 
+  // Phase 6d — digest + refresh state
+  const [digest, setDigest] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+
   // Reload norms after a successful upload so the new row appears
   // immediately without a page refresh.
   const refreshNorms = async () => {
@@ -132,6 +137,46 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
       })
       .catch(() => {});
   }, []);
+
+  // Phase 6d — fetch latest digest
+  useEffect(() => {
+    supabase
+      .from("regulatory_digests")
+      .select("*")
+      .order("digest_date", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setDigest(data);
+      });
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setRefreshMsg(null);
+    try {
+      const res = await fetch("/api/regulatory/refresh", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setRefreshMsg(tr.regulatory.refreshSuccess);
+        refreshNorms();
+        // Re-fetch digest
+        const { data: d } = await supabase
+          .from("regulatory_digests")
+          .select("*")
+          .order("digest_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (d) setDigest(d);
+      } else {
+        setRefreshMsg(tr.regulatory.refreshError);
+      }
+    } catch {
+      setRefreshMsg(tr.regulatory.refreshError);
+    }
+    setRefreshing(false);
+    setTimeout(() => setRefreshMsg(null), 4000);
+  };
 
   const openDrilldown = async (normId: number) => {
     setDrilldownNormId(normId);
@@ -247,6 +292,17 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
             <Upload size={13} />
             {lang === "pt" ? "Inserir Norma" : "Add Norm"}
           </button>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] font-semibold border border-brand-primary bg-brand-primary text-white hover:bg-brand-dark disabled:opacity-50 transition-all"
+          >
+            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? tr.regulatory.refreshing : tr.regulatory.refreshNow}
+          </button>
+          {refreshMsg && (
+            <span className="text-[11px] font-medium text-brand-primary">{refreshMsg}</span>
+          )}
         </div>
       </div>
 
@@ -272,6 +328,55 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
           <p className="text-[24px] font-bold text-neutral-900 mt-1">{uniqueAreas}</p>
         </div>
       </div>
+
+      {/* Phase 6d — Regulatory Digest Panel */}
+      {digest && (
+        <div className="mb-6 bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[14px] font-bold text-neutral-900 flex items-center gap-2">
+              <BookOpen size={15} className="text-brand-primary" />
+              {tr.regulatory.digestTitle}
+            </h3>
+            <span className="text-[10px] text-neutral-400">
+              {tr.regulatory.digestPeriod}: {digest.period_start} → {digest.period_end}
+            </span>
+          </div>
+          <p className="text-[12px] text-neutral-500 mb-3 italic">{tr.regulatory.digestSubtitle}</p>
+          <div className="text-[12px] text-neutral-700 leading-relaxed whitespace-pre-line">
+            {lang === "pt" ? digest.digest_text_pt : digest.digest_text_en}
+          </div>
+          {digest.citations && digest.citations.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-neutral-100">
+              <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                {lang === "pt" ? "Citações" : "Citations"} ({digest.citations.length})
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {digest.citations.map((c: any, i: number) => (
+                  <span
+                    key={i}
+                    className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                      c.impact_level === "high"
+                        ? "bg-red-50 border-red-200 text-red-700"
+                        : c.impact_level === "medium"
+                        ? "bg-amber-50 border-amber-200 text-amber-700"
+                        : "bg-neutral-50 border-neutral-200 text-neutral-600"
+                    }`}
+                    title={c.title}
+                  >
+                    <span className="font-bold">{c.body}</span>
+                    {c.title.length > 40 ? c.title.slice(0, 40) + "..." : c.title}
+                    {c.source_url && (
+                      <a href={c.source_url} target="_blank" rel="noopener noreferrer" className="ml-0.5">
+                        <ExternalLink size={9} />
+                      </a>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Phase 29 — Regulatory Change Summary */}
       {norms.length > 0 && (
