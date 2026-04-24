@@ -429,6 +429,9 @@ export const translations = {
       addNewsSuccess: "Notícia adicionada com sucesso!",
       addNewsError: "Falha ao adicionar notícia",
       addNewsUrlRequired: "URL é obrigatória",
+      deleteNews: "Remover notícia",
+      deleteNewsConfirm: "Tem certeza que deseja remover esta notícia? Esta ação não pode ser desfeita.",
+      deleteNewsError: "Falha ao remover notícia",
       // Phase 4c — News → Directory enrichment
       enrichDirectory: "Enriquecer Diretório",
       enrichLoading: "Analisando...",
@@ -1030,6 +1033,9 @@ export const translations = {
       addNewsSuccess: "News added successfully!",
       addNewsError: "Failed to add news",
       addNewsUrlRequired: "URL is required",
+      deleteNews: "Delete news",
+      deleteNewsConfirm: "Are you sure you want to delete this article? This cannot be undone.",
+      deleteNewsError: "Failed to delete news",
       // Phase 4c — News → Directory enrichment
       enrichDirectory: "Enrich Directory",
       enrichLoading: "Analyzing...",

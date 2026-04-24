@@ -121,6 +121,15 @@ export async function POST(req: NextRequest) {
   const sourceName = (typeof body.source_name === "string" && body.source_name.trim())
     ? body.source_name.trim()
     : isManualUi ? "Manual" : "Reading Room";
+
+  // Connectivity probe short-circuit: the extension's "Save & Test Connection"
+  // button fires a real POST with source_name ending in "(config test)". The
+  // auth check above already verified the secret works, which is the only
+  // thing the probe needs to confirm — don't pollute agro_news with probe rows.
+  if (sourceName.endsWith("(config test)")) {
+    return NextResponse.json({ success: true, probe: true });
+  }
+
   const fetchedAt = (typeof body.fetched_at === "string" && body.fetched_at)
     ? body.fetched_at
     : new Date().toISOString();

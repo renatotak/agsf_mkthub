@@ -346,6 +346,19 @@ export function AgroNews({ lang }: { lang: Lang }) {
     await fetchSources();
   };
 
+  const deleteNewsItem = async (item: AgroNewsType) => {
+    if (!confirm(tr.deleteNewsConfirm)) return;
+    const res = await fetch(`/api/news?id=${encodeURIComponent(item.id)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`${tr.deleteNewsError}: ${err.error || res.statusText}`);
+      return;
+    }
+    setNews((prev) => prev.filter((n) => n.id !== item.id));
+    setAllNewsForCharts((prev) => prev.filter((n) => n.id !== item.id));
+    setTotalCount((c) => Math.max(0, c - 1));
+  };
+
   // Phase 4b — manual news submit
   const submitManualNews = async () => {
     if (!addNewsUrl.trim()) {
@@ -355,13 +368,9 @@ export function AgroNews({ lang }: { lang: Lang }) {
     setAddNewsSubmitting(true);
     setAddNewsFeedback(null);
     try {
-      const secret = process.env.NEXT_PUBLIC_READING_ROOM_SECRET || "";
-      const res = await fetch("/api/reading-room/ingest", {
+      const res = await fetch("/api/news/manual-add", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-reading-room-secret": secret,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: addNewsUrl.trim(),
           title: addNewsTitle.trim() || undefined,
@@ -733,6 +742,14 @@ export function AgroNews({ lang }: { lang: Lang }) {
                     >
                       <Zap size={12} />
                       {tr.enrichDirectory}
+                    </button>
+                    <button
+                      onClick={() => deleteNewsItem(item)}
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title={tr.deleteNews}
+                      aria-label={tr.deleteNews}
+                    >
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
