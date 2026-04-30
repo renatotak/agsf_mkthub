@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Lang, t } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import {
   Scale, ExternalLink, RefreshCw, Loader2, Search,
   ChevronLeft, ChevronRight, AlertTriangle, Building2, MapPin,
   BarChart3, ChevronDown, ChevronUp, DollarSign, Globe, Zap,
-  Plus, X, Sparkles, Newspaper, Calendar,
+  Plus, X, Sparkles, Newspaper, Calendar, CheckCircle2, XCircle,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -16,6 +16,8 @@ import {
 import { ENTITY_TYPES, RJ_STATUS, DEBT_SOURCE_LABELS, type RecuperacaoJudicial as RJType, type DebtValueSource } from "@/data/recuperacao";
 import { mockRecuperacaoJudicial } from "@/data/mock";
 import { MockBadge } from "@/components/ui/MockBadge";
+
+type MainTab = "rj" | "candidates";
 
 const PAGE_SIZE = 15;
 
@@ -68,6 +70,26 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
 
   // Phase 24C — Manual add modal
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addModalDefaultCnpj, setAddModalDefaultCnpj] = useState<string | undefined>(undefined);
+
+  // Phase 29 — Top-level tab
+  const [activeTab, setActiveTab] = useState<MainTab>("rj");
+  const [candidatePendingCount, setCandidatePendingCount] = useState<number | null>(null);
+
+  // Fetch pending count for the badge
+  const fetchCandidateCount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/rj-candidates?status=pending&limit=1");
+      if (res.ok) {
+        const json = await res.json();
+        setCandidatePendingCount(json.count ?? null);
+      }
+    } catch {
+      // fail silently
+    }
+  }, []);
+
+  useEffect(() => { fetchCandidateCount(); }, [fetchCandidateCount]);
 
   // Fetch all items for stats (lightweight)
   useEffect(() => {
@@ -192,6 +214,45 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
 
   return (
     <div>
+      {/* Top-level tab bar */}
+      <div className="flex gap-1 mb-6 bg-neutral-200/50 rounded-md p-0.5 w-fit">
+        <button
+          onClick={() => setActiveTab("rj")}
+          className={`px-4 py-2 rounded text-[13px] font-medium transition-colors whitespace-nowrap ${
+            activeTab === "rj" ? "bg-white text-neutral-900 shadow-xs" : "text-neutral-600 hover:text-neutral-800"
+          }`}
+        >
+          {tr.recuperacao.tabRJ}
+        </button>
+        <button
+          onClick={() => setActiveTab("candidates")}
+          className={`px-4 py-2 rounded text-[13px] font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === "candidates" ? "bg-white text-neutral-900 shadow-xs" : "text-neutral-600 hover:text-neutral-800"
+          }`}
+        >
+          {tr.recuperacao.tabCandidatos}
+          {candidatePendingCount != null && candidatePendingCount > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#E8722A] text-white text-[10px] font-bold leading-none">
+              {candidatePendingCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Candidates tab */}
+      {activeTab === "candidates" && (
+        <CandidatesTab
+          lang={lang}
+          onPromote={(cnpj) => {
+            setAddModalDefaultCnpj(cnpj);
+            setShowAddModal(true);
+          }}
+          onCountChange={setCandidatePendingCount}
+        />
+      )}
+
+      {/* RJ tab content */}
+      {activeTab === "rj" && (<>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
@@ -203,7 +264,7 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => { setAddModalDefaultCnpj(undefined); setShowAddModal(true); }}
             className="flex items-center gap-2 px-4 py-2 bg-brand-surface text-brand-primary border border-brand-primary/30 rounded-md hover:bg-brand-primary/10 text-[13px] font-semibold transition-colors"
           >
             <Plus size={14} />
@@ -563,17 +624,239 @@ export function RecuperacaoJudicial({ lang }: { lang: Lang }) {
         </div>
       )}
 
-      {/* Phase 24C — Add by CNPJ modal */}
+      </>)}
+
+      {/* Phase 24C — Add by CNPJ modal (rendered outside tab panels so it works from both tabs) */}
       {showAddModal && (
         <AddRJModal
           lang={lang}
-          onClose={() => setShowAddModal(false)}
+          defaultCnpj={addModalDefaultCnpj}
+          onClose={() => { setShowAddModal(false); setAddModalDefaultCnpj(undefined); }}
           onSaved={() => {
             setShowAddModal(false);
+            setAddModalDefaultCnpj(undefined);
             fetchAll();
             fetchItems();
           }}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Phase 29 — Candidates review panel ───────────────────────────────────
+
+interface RJCandidate {
+  id: string;
+  entity_uid: string;
+  news_snippet: string;
+  news_published_at: string | null;
+  keyword_match: "rj_filing" | "rj_mention" | "rj_approved" | "falencia" | "dip_financing";
+  status: "pending" | "accepted" | "rejected";
+  detected_at: string;
+  entity: { display_name: string | null; tax_id: string; tax_id_type: string };
+  news: { title: string | null; source_url: string | null; source_name: string | null };
+}
+
+const KEYWORD_BADGE: Record<RJCandidate["keyword_match"], { label_pt: string; label_en: string; cls: string }> = {
+  rj_filing:     { label_pt: "Petição RJ",    label_en: "RJ Filing",     cls: "bg-yellow-100 text-yellow-800 border border-yellow-200" },
+  rj_mention:    { label_pt: "Menção RJ",     label_en: "RJ Mention",    cls: "bg-neutral-100 text-neutral-700 border border-neutral-200" },
+  rj_approved:   { label_pt: "RJ Aprovada",   label_en: "RJ Approved",   cls: "bg-red-100 text-red-700 border border-red-200" },
+  falencia:      { label_pt: "Falência",       label_en: "Bankruptcy",    cls: "bg-red-100 text-red-700 border border-red-200" },
+  dip_financing: { label_pt: "DIP Financing", label_en: "DIP Financing", cls: "bg-orange-100 text-orange-700 border border-orange-200" },
+};
+
+function formatRelative(dateStr: string, lang: Lang): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return lang === "pt" ? "hoje" : "today";
+  if (diffDays === 1) return lang === "pt" ? "ontem" : "yesterday";
+  if (diffDays < 7) return lang === "pt" ? `há ${diffDays} dias` : `${diffDays} days ago`;
+  if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return lang === "pt" ? `há ${weeks} sem.` : `${weeks}w ago`;
+  }
+  const months = Math.floor(diffDays / 30);
+  return lang === "pt" ? `há ${months} mês` : `${months}mo ago`;
+}
+
+function CandidatesTab({
+  lang,
+  onPromote,
+  onCountChange,
+}: {
+  lang: Lang;
+  onPromote: (cnpj: string) => void;
+  onCountChange: (count: number) => void;
+}) {
+  const tr = t(lang);
+  const [candidates, setCandidates] = useState<RJCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actioning, setActioning] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/rj-candidates?status=pending&limit=50");
+      if (res.ok) {
+        const json = await res.json();
+        setCandidates(json.candidates ?? []);
+        onCountChange(json.count ?? 0);
+      }
+    } catch {
+      // fail silently — show empty state
+    }
+    setLoading(false);
+  }, [onCountChange]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleAction = async (candidate: RJCandidate, status: "accepted" | "rejected") => {
+    setActioning((prev) => new Set(prev).add(candidate.id));
+    try {
+      const res = await fetch("/api/rj-candidates", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: candidate.id, status }),
+      });
+      if (!res.ok) throw new Error("API error");
+      // Optimistically remove from list
+      setCandidates((prev) => prev.filter((c) => c.id !== candidate.id));
+      onCountChange(Math.max(0, candidates.length - 1));
+      if (status === "rejected") {
+        showToast(lang === "pt" ? "Candidato rejeitado." : "Candidate rejected.");
+      } else {
+        // Promote: open modal pre-filled with CNPJ
+        showToast(lang === "pt" ? "Candidato aceito. Abrindo formulário..." : "Candidate accepted. Opening form...");
+        onPromote(candidate.entity.tax_id);
+      }
+    } catch {
+      showToast(lang === "pt" ? "Erro ao processar. Tente novamente." : "Error processing. Please try again.");
+    } finally {
+      setActioning((prev) => { const next = new Set(prev); next.delete(candidate.id); return next; });
+    }
+  };
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h2 className="text-[20px] font-bold text-neutral-900">{tr.recuperacao.candidatosTitle}</h2>
+        <p className="text-[12px] text-neutral-500 mt-0.5">{tr.recuperacao.candidatosSubtitle}</p>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="mb-4 flex items-center gap-2 bg-brand-surface/30 border border-brand-light rounded-lg px-4 py-2.5">
+          <CheckCircle2 size={14} className="text-brand-primary shrink-0" />
+          <p className="text-[12px] text-neutral-700">{toast}</p>
+          <button onClick={() => setToast(null)} className="ml-auto text-neutral-400 hover:text-neutral-600 text-[11px]">&times;</button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-6 h-6 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : candidates.length === 0 ? (
+        <div className="text-center py-16">
+          <Scale size={40} className="mx-auto text-neutral-300 mb-3" />
+          <p className="text-[14px] font-medium text-neutral-500">{tr.recuperacao.candidatosEmpty}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {candidates.map((candidate) => {
+            const badge = KEYWORD_BADGE[candidate.keyword_match] ?? KEYWORD_BADGE.rj_mention;
+            const isActioning = actioning.has(candidate.id);
+            const companyName = candidate.entity.display_name || candidate.entity.tax_id;
+            const snippet = candidate.news_snippet?.length > 200
+              ? candidate.news_snippet.slice(0, 200) + "…"
+              : candidate.news_snippet;
+
+            return (
+              <div
+                key={candidate.id}
+                className="bg-white rounded-lg border border-neutral-100 shadow-sm overflow-hidden"
+              >
+                <div className="p-5">
+                  {/* Company + badges row */}
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-neutral-900 text-[14px] leading-snug mr-1">
+                      {companyName}
+                    </h3>
+                    <span className="font-mono text-[11px] text-neutral-500">{candidate.entity.tax_id}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`}>
+                      {lang === "pt" ? badge.label_pt : badge.label_en}
+                    </span>
+                  </div>
+
+                  {/* Snippet */}
+                  {snippet && (
+                    <p className="text-[12px] text-neutral-600 leading-relaxed mb-3 italic">
+                      &ldquo;{snippet}&rdquo;
+                    </p>
+                  )}
+
+                  {/* News metadata */}
+                  {(candidate.news.title || candidate.news.source_name) && (
+                    <div className="flex items-center gap-2 mb-3 text-[11px] text-neutral-500">
+                      <Newspaper size={11} className="text-neutral-400 shrink-0" />
+                      {candidate.news.source_url ? (
+                        <a
+                          href={candidate.news.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-brand-primary hover:text-brand-dark font-medium flex items-center gap-1 truncate"
+                        >
+                          {candidate.news.title || candidate.news.source_name}
+                          <ExternalLink size={10} className="shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="truncate">{candidate.news.title || candidate.news.source_name}</span>
+                      )}
+                      {candidate.news.source_name && candidate.news.title && (
+                        <span className="shrink-0 text-neutral-400">— {candidate.news.source_name}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Footer: detected_at + actions */}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+                      <Calendar size={11} />
+                      {tr.recuperacao.candidatosDetectedAt}: {formatRelative(candidate.detected_at, lang)}
+                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        disabled={isActioning}
+                        onClick={() => handleAction(candidate, "rejected")}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold border border-neutral-200 text-neutral-600 bg-white hover:bg-neutral-50 disabled:opacity-40 transition-colors"
+                      >
+                        {isActioning ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                        {tr.recuperacao.candidatosRejeitar}
+                      </button>
+                      <button
+                        disabled={isActioning}
+                        onClick={() => handleAction(candidate, "accepted")}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-bold bg-[#5B7A2F] text-white hover:bg-[#4a6426] disabled:opacity-40 transition-colors"
+                      >
+                        {isActioning ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                        {tr.recuperacao.candidatosPromover}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -749,14 +1032,16 @@ function RJDetailPanel({ item, lang }: { item: RJType; lang: Lang }) {
 
 function AddRJModal({
   lang,
+  defaultCnpj,
   onClose,
   onSaved,
 }: {
   lang: Lang;
+  defaultCnpj?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [cnpj, setCnpj] = useState("");
+  const [cnpj, setCnpj] = useState(defaultCnpj ?? "");
   const [entityName, setEntityName] = useState("");
   const [state, setState] = useState("");
   const [entityType, setEntityType] = useState("outros");
