@@ -23,7 +23,7 @@ import { Lang } from "@/lib/i18n";
 import {
   Calendar, Search, Loader2, Filter, X, Edit3, Trash2, ChevronLeft, ChevronRight,
   Users, Target, AlertTriangle, Lock, Globe, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown,
-  Copy, ExternalLink, Check, ChevronDown, ChevronUp, Building2, Plus,
+  Copy, ExternalLink, Check, ChevronDown, ChevronUp, Building2, Plus, Link2,
 } from "lucide-react";
 import { MeetingFormModal, type MeetingRecord } from "@/components/MeetingFormModal";
 import { formatCnpj, buildMatrizCnpj, cnpjPublicUrl } from "@/lib/cnpj";
@@ -43,6 +43,7 @@ interface Meeting {
   outcome: string;
   source: string;
   confidentiality: string;
+  entity_match_confidence: string | null;
   competitor_tech: string[];
   service_interest: string[];
   financial_info: string | null;
@@ -64,6 +65,7 @@ interface EntityCard {
   outcome_counts: Record<string, number>;
   confidentiality_counts: Record<string, number>;
   onenote_count: number;
+  needs_review_count: number;
   key_person_count: number;
   lead_stage: string | null;
   lead_service_interest: string | null;
@@ -139,6 +141,10 @@ export function MeetingsLog({ lang }: { lang: Lang }) {
   const [expandedUid, setExpandedUid] = useState<string | null>(null);
   const [modal, setModal] = useState<{ mode: "create" | "edit"; entityUid: string; entityName: string | null; entityTaxId: string | null; meeting: Meeting | null } | null>(null);
 
+  // Rematch state
+  const [rematchLoading, setRematchLoading] = useState(false);
+  const [rematchToast, setRematchToast] = useState<string | null>(null);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -195,6 +201,37 @@ export function MeetingsLog({ lang }: { lang: Lang }) {
     fetchData();
   };
 
+  const handleRematch = async () => {
+    setRematchLoading(true);
+    setRematchToast(null);
+    try {
+      const res = await fetch("/api/crm/meetings/rematch", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setRematchToast(lang === "pt" ? "Falha ao corrigir vínculos" : "Failed to fix entity links");
+      } else {
+        const matched: number = data.matched ?? 0;
+        const review: number = data.reviewNeeded ?? 0;
+        const noMatch: number = data.noMatch ?? 0;
+        if (matched === 0 && review === 0 && noMatch === 0) {
+          setRematchToast(lang === "pt" ? "Nenhuma reunião para corrigir" : "No meetings to fix");
+        } else {
+          const parts: string[] = [];
+          if (matched > 0) parts.push(lang === "pt" ? `${matched} corrigidos` : `${matched} fixed`);
+          if (review > 0) parts.push(lang === "pt" ? `${review} para revisar` : `${review} to review`);
+          if (noMatch > 0) parts.push(lang === "pt" ? `${noMatch} sem match` : `${noMatch} no match`);
+          setRematchToast(parts.join(", "));
+        }
+        fetchData();
+      }
+    } catch {
+      setRematchToast(lang === "pt" ? "Falha ao corrigir vínculos" : "Failed to fix entity links");
+    } finally {
+      setRematchLoading(false);
+      setTimeout(() => setRematchToast(null), 5000);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(totalEntities / PAGE_SIZE));
   const activeFilterCount = [q, from, to, type, outcome, mood, tech, service, confidentiality].filter(Boolean).length;
 
@@ -212,7 +249,20 @@ export function MeetingsLog({ lang }: { lang: Lang }) {
               : `${totalEntities.toLocaleString("en-US")} companies · ${totalMeetings.toLocaleString("en-US")} meetings · AgriSafe CRM`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleRematch}
+            disabled={rematchLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-60"
+            title={lang === "pt" ? "Re-executar vinculação de entidades para reuniões OneNote" : "Re-run entity matching for OneNote meetings"}
+          >
+            {rematchLoading
+              ? <Loader2 size={13} className="animate-spin" />
+              : <Link2 size={13} />}
+            {rematchLoading
+              ? (lang === "pt" ? "Corrigindo..." : "Fixing...")
+              : (lang === "pt" ? "Corrigir Vínculos" : "Fix Entity Links")}
+          </button>
           <button
             onClick={fetchData}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium text-neutral-700 bg-white border border-neutral-200 rounded-lg hover:border-neutral-400"
@@ -238,6 +288,14 @@ export function MeetingsLog({ lang }: { lang: Lang }) {
           </button>
         </div>
       </div>
+
+      {/* Rematch toast */}
+      {rematchToast && (
+        <div className="mb-3 px-3 py-2 text-[12px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+          <Link2 size={13} className="shrink-0" />
+          {rematchToast}
+        </div>
+      )}
 
       {/* Confidentiality legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-500 mb-3 px-1">
@@ -559,6 +617,18 @@ function EntityRecord({
                 </span>
               </>
             )}
+            {(entity.needs_review_count ?? 0) > 0 && (
+              <>
+                <span>•</span>
+                <span
+                  className="inline-flex items-center gap-0.5 text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-300 px-1.5 py-0.5 rounded uppercase"
+                  title={lang === "pt" ? "Vínculo de entidade pendente de revisão" : "Entity link needs review"}
+                >
+                  <AlertTriangle size={9} />
+                  {lang === "pt" ? `${entity.needs_review_count} revisar` : `${entity.needs_review_count} review`}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Visibility split */}
@@ -671,6 +741,24 @@ function MeetingRow({
           {meeting.source === "onenote_import" && (
             <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded uppercase">
               OneNote
+            </span>
+          )}
+          {meeting.entity_match_confidence === "needs_review" && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-300 px-1.5 py-0.5 rounded uppercase"
+              title={lang === "pt" ? "Vínculo de entidade ambíguo — revisar" : "Ambiguous entity link — review needed"}
+            >
+              <AlertTriangle size={9} />
+              {lang === "pt" ? "Revisar vínculo" : "Review link"}
+            </span>
+          )}
+          {meeting.entity_match_confidence === "no_match" && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[9px] font-bold text-red-700 bg-red-50 border border-red-300 px-1.5 py-0.5 rounded uppercase"
+              title={lang === "pt" ? "Nenhuma entidade encontrada para este vínculo" : "No entity candidate found for this link"}
+            >
+              <AlertTriangle size={9} />
+              {lang === "pt" ? "Sem vínculo" : "No link"}
             </span>
           )}
         </div>

@@ -43,6 +43,7 @@ interface Meeting {
   outcome: string;
   source: string;
   confidentiality: string;
+  entity_match_confidence: string | null;
   competitor_tech: string[];
   service_interest: string[];
   financial_info: string | null;
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
   let query = supabaseAdmin
     .from("v_meetings_enriched")
     .select(
-      "id, entity_uid, entity_name, entity_tax_id, entity_roles, meeting_date, meeting_type, attendees, agenda, summary, next_steps, outcome, source, external_id, confidentiality, competitor_tech, service_interest, financial_info, mood, plans, created_at",
+      "id, entity_uid, entity_name, entity_tax_id, entity_roles, meeting_date, meeting_type, attendees, agenda, summary, next_steps, outcome, source, external_id, confidentiality, entity_match_confidence, competitor_tech, service_interest, financial_info, mood, plans, created_at",
     )
     .order("meeting_date", { ascending: false })
     .limit(5000);
@@ -116,6 +117,7 @@ export async function GET(req: NextRequest) {
     outcome_counts: Record<string, number>;
     confidentiality_counts: Record<string, number>;
     onenote_count: number;
+    needs_review_count: number;
   };
 
   const buckets = new Map<string, EntityBucket>();
@@ -136,6 +138,7 @@ export async function GET(req: NextRequest) {
         outcome_counts: {},
         confidentiality_counts: {},
         onenote_count: 0,
+        needs_review_count: 0,
       };
       buckets.set(m.entity_uid, b);
     }
@@ -148,6 +151,7 @@ export async function GET(req: NextRequest) {
     b.outcome_counts[m.outcome] = (b.outcome_counts[m.outcome] || 0) + 1;
     b.confidentiality_counts[m.confidentiality] = (b.confidentiality_counts[m.confidentiality] || 0) + 1;
     if (m.source === "onenote_import") b.onenote_count++;
+    if (m.entity_match_confidence === "needs_review" || m.entity_match_confidence === "no_match") b.needs_review_count++;
   }
 
   // ─── 3. Attach lead + key-person stats ────────────────────
@@ -178,6 +182,7 @@ export async function GET(req: NextRequest) {
       outcome_counts: b.outcome_counts,
       confidentiality_counts: b.confidentiality_counts,
       onenote_count: b.onenote_count,
+      needs_review_count: b.needs_review_count,
       key_person_count: prof.key_person_count || 0,
       lead_stage: prof.lead_stage || null,
       lead_service_interest: prof.lead_service_interest || null,
