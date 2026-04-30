@@ -7,6 +7,11 @@ import { mockRegulatoryNorms } from "@/data/mock";
 import { Badge } from "@/components/ui/Badge";
 import { MockBadge } from "@/components/ui/MockBadge";
 import {
+  NORM_TYPE_REGISTRY,
+  NORM_TYPE_DISPLAY_ORDER,
+  normTypeMeta,
+} from "@/data/regulatory-doc-types";
+import {
   ExternalLink, AlertTriangle, Calendar, BookOpen,
   ChevronDown, ChevronUp, Search, Clock, BarChart3,
   Upload, List, X, Loader2, Plus, Database, Globe, Building2, FileText, RefreshCw,
@@ -63,6 +68,22 @@ const AREA_LABELS: Record<string, { pt: string; en: string; color: string }> = {
   geral: { pt: "Geral", en: "General", color: "#616161" },
 };
 
+// ─── Doc-type badge (Phase 30) ───
+
+function DocTypeBadge({ normType, lang }: { normType: string | null | undefined; lang: Lang }) {
+  const meta = normTypeMeta(normType);
+  const Icon = meta.Icon;
+  return (
+    <span
+      title={lang === "pt" ? meta.descPt : meta.descEn}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${meta.badgeClass}`}
+    >
+      <Icon size={10} />
+      {lang === "pt" ? meta.pt : meta.en}
+    </span>
+  );
+}
+
 // ─── Component ───
 
 export function RegulatoryFramework({ lang }: { lang: Lang }) {
@@ -74,8 +95,17 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
   // Filters
   const [search, setSearch] = useState("");
   const [bodyFilter, setBodyFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set());
   const [impactFilter, setImpactFilter] = useState("");
+
+  const toggleTypeFilter = (key: string) => {
+    setTypeFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   // UI state
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -196,7 +226,7 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
     const q = search.toLowerCase();
     return norms.filter((n) => {
       if (bodyFilter && n.body !== bodyFilter) return false;
-      if (typeFilter && n.norm_type !== typeFilter) return false;
+      if (typeFilters.size > 0 && !typeFilters.has(n.norm_type)) return false;
       if (impactFilter && n.impact_level !== impactFilter) return false;
       if (q) {
         const haystack = `${n.title} ${n.summary || ""} ${n.body} ${n.norm_number || ""} ${(n.affected_areas || []).join(" ")}`.toLowerCase();
@@ -204,7 +234,28 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
       }
       return true;
     });
-  }, [norms, bodyFilter, typeFilter, impactFilter, search]);
+  }, [norms, bodyFilter, typeFilters, impactFilter, search]);
+
+  // Phase 30 — type counts for chip row (used to drive both display order and superscript)
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const n of norms) {
+      if (!n.norm_type) continue;
+      counts[n.norm_type] = (counts[n.norm_type] || 0) + 1;
+    }
+    return counts;
+  }, [norms]);
+
+  // Phase 30 — types actually present in the data, ordered by registry display order,
+  // with unknown types appended in count-desc order.
+  const visibleTypes = useMemo(() => {
+    const present = new Set(Object.keys(typeCounts));
+    const ordered = NORM_TYPE_DISPLAY_ORDER.filter((k) => present.has(k));
+    const unknown = Object.keys(typeCounts)
+      .filter((k) => !NORM_TYPE_REGISTRY[k])
+      .sort((a, b) => (typeCounts[b] || 0) - (typeCounts[a] || 0));
+    return [...ordered, ...unknown];
+  }, [typeCounts]);
 
   const highImpact = useMemo(() => norms.filter((n) => n.impact_level === "high"), [norms]);
 
@@ -429,7 +480,10 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${BODY_STYLES[norm.body]?.color || "bg-neutral-600 text-white"}`}>{norm.body}</span>
-                    <span className="text-[11px] text-neutral-500">{NORM_TYPE_LABELS[norm.norm_type]?.[lang === "pt" ? "pt" : "en"] || norm.norm_type} {norm.norm_number}</span>
+                    <DocTypeBadge normType={norm.norm_type} lang={lang} />
+                    {norm.norm_number && (
+                      <span className="text-[11px] text-neutral-500 font-medium">{norm.norm_number}</span>
+                    )}
                   </div>
                   <p className="text-[13px] font-semibold text-error-dark">{norm.title}</p>
                   {norm.effective_at && (
@@ -551,7 +605,7 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
       </div>
 
       {/* Search + Filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-3">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input
@@ -562,13 +616,6 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
             className="w-full pl-9 pr-3 py-2 rounded-md text-[12px] font-medium bg-white border border-neutral-300 text-neutral-700 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary"
           />
         </div>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-3 py-2 rounded-md text-[12px] font-medium bg-white border border-neutral-300 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary">
-          <option value="">{tr.regulatory.allTypes}</option>
-          {Object.entries(NORM_TYPE_LABELS).map(([key, val]) => (
-            <option key={key} value={key}>{lang === "pt" ? val.pt : val.en}</option>
-          ))}
-        </select>
         <select value={impactFilter} onChange={(e) => setImpactFilter(e.target.value)}
           className="px-3 py-2 rounded-md text-[12px] font-medium bg-white border border-neutral-300 text-neutral-700 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary">
           <option value="">{tr.regulatory.allImpacts}</option>
@@ -583,10 +630,59 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
         )}
       </div>
 
+      {/* Phase 30 — Doc-type filter chip row */}
+      {visibleTypes.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-[0.05em]">
+              {tr.regulatory.filterByType}
+            </span>
+            {typeFilters.size > 0 && (
+              <button
+                onClick={() => setTypeFilters(new Set())}
+                className="text-[10px] font-semibold text-brand-primary hover:text-brand-dark inline-flex items-center gap-1"
+              >
+                <X size={10} />
+                {tr.regulatory.clearTypeFilters}
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {visibleTypes.map((typeKey) => {
+              const meta = normTypeMeta(typeKey);
+              const active = typeFilters.has(typeKey);
+              const count = typeCounts[typeKey] || 0;
+              const Icon = meta.Icon;
+              return (
+                <button
+                  key={typeKey}
+                  type="button"
+                  onClick={() => toggleTypeFilter(typeKey)}
+                  title={lang === "pt" ? meta.descPt : meta.descEn}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                    active ? meta.chipActiveClass : meta.chipIdleClass
+                  }`}
+                >
+                  <Icon size={12} />
+                  <span>{lang === "pt" ? meta.pt : meta.en}</span>
+                  <sup
+                    className={`text-[9px] font-bold leading-none ml-0.5 ${
+                      active ? "text-white/85" : "text-neutral-500"
+                    }`}
+                  >
+                    {count}
+                  </sup>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Results count */}
       <p className="text-[11px] text-neutral-400 mb-3">
         {filtered.length} {lang === "pt" ? "normas" : "norms"}
-        {(search || bodyFilter || typeFilter || impactFilter) && ` (${lang === "pt" ? "filtrado" : "filtered"})`}
+        {(search || bodyFilter || typeFilters.size > 0 || impactFilter) && ` (${lang === "pt" ? "filtrado" : "filtered"})`}
       </p>
 
       {/* Norms Feed */}
@@ -607,9 +703,10 @@ export function RegulatoryFramework({ lang }: { lang: Lang }) {
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${BODY_STYLES[norm.body]?.color || "bg-neutral-600 text-white"}`}>{norm.body}</span>
-                      <span className="text-[12px] text-neutral-500 font-medium">
-                        {NORM_TYPE_LABELS[norm.norm_type]?.[lang === "pt" ? "pt" : "en"] || norm.norm_type} {norm.norm_number}
-                      </span>
+                      <DocTypeBadge normType={norm.norm_type} lang={lang} />
+                      {norm.norm_number && (
+                        <span className="text-[12px] text-neutral-500 font-medium">{norm.norm_number}</span>
+                      )}
                       <Badge variant={impactInfo.variant}>{lang === "pt" ? impactInfo.pt : impactInfo.en}</Badge>
                     </div>
                     <time className="text-[11px] text-neutral-400 whitespace-nowrap">

@@ -256,6 +256,9 @@ export const translations = {
       refreshing: "Atualizando...",
       refreshSuccess: "Atualiza\u00e7\u00e3o conclu\u00edda",
       refreshError: "Erro ao atualizar",
+      filterByType: "Filtrar por tipo",
+      clearTypeFilters: "Limpar filtros de tipo",
+      docTypeColumnHeader: "Tipo de documento",
     },
     recuperacao: {
       title: "Recupera\u00e7\u00e3o Judicial",
@@ -896,6 +899,9 @@ export const translations = {
       refreshing: "Refreshing...",
       refreshSuccess: "Refresh complete",
       refreshError: "Refresh failed",
+      filterByType: "Filter by type",
+      clearTypeFilters: "Clear type filters",
+      docTypeColumnHeader: "Document type",
     },
     recuperacao: {
       title: "Judicial Recovery",
