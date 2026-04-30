@@ -139,13 +139,15 @@ export const mockCompetitors = [
     id: "traive",
     name: "Traive",
     vertical: "Credit",
-    website: "traive.com",
-    description_pt: "IA para an\u00e1lise de risco e estrutura\u00e7\u00e3o de cr\u00e9dito. Pioneira em 'digital twins' de especialistas de cr\u00e9dito.",
-    description_en: "AI for risk analysis and credit structuring. Pioneer in 'digital twins' of credit specialists.",
-    scores: { depth: 2, precision: 4, pulse: 2, regulatory: 1, ux: 2, credit: 4 },
+    segment: "agri-fintech",
+    website: "traive.com.br",
+    description_pt: "Agri-fintech que transforma dados agr\u00edcolas em an\u00e1lises de cr\u00e9dito, conectando produtores rurais a capital e investidores a ativos de cr\u00e9dito agr\u00edcola. Plataformas: Traive Agro (comercializa\u00e7\u00e3o de cr\u00e9dito rural com scoring de risco por IA) e Traive Finance (qualifica\u00e7\u00e3o de ativos e diversifica\u00e7\u00e3o de investimentos agro). Mais de 160 mil produtores cadastrados; R$ 60 bilh\u00f5es em ativos de cr\u00e9dito agr\u00edcola na base; R$ 6 bilh\u00f5es em opera\u00e7\u00f5es de cr\u00e9dito estruturado recorrente.",
+    description_en: "Agri-fintech that transforms agricultural data into credit analyses, connecting rural producers with capital and investors with agricultural credit assets. Platforms: Traive Agro (agricultural credit commercialization with AI risk scoring) and Traive Finance (credit asset qualification and agro investment diversification). 160,000+ registered producers; R$60B+ in agricultural credit assets in client base; R$6B in structured recurring credit operations.",
+    scores: { depth: 3, precision: 4, pulse: 3, regulatory: 1, ux: 3, credit: 4 },
     competitor_signals: [
-      { id: "tr1", competitor_id: "traive", type: "product_launch", title_pt: "Expans\u00e3o da plataforma de r\u00e9plicas digitais para an\u00e1lise de risco", title_en: "Expansion of digital twin platform for risk analysis", date: "2026-02-10", source: "InfoMoney" },
-      { id: "tr2", competitor_id: "traive", type: "partnership", title_pt: "Parceria com Fiagros para cust\u00f3dia digital de receb\u00edveis", title_en: "Partnership with Fiagros for digital receivable custody", date: "2025-11-15", source: "Exame" },
+      { id: "tr1", competitor_id: "traive", type: "product_launch", title_pt: "Traive Agro: plataforma de cr\u00e9dito rural com IA propriet\u00e1ria para scoring de risco agro", title_en: "Traive Agro: rural credit platform with proprietary AI for agro risk scoring", date: "2026-01-15", source: "traive.com.br" },
+      { id: "tr2", competitor_id: "traive", type: "news", title_pt: "160 mil produtores cadastrados e R$ 6 bilh\u00f5es em cr\u00e9dito estruturado \u2014 Traive consolida posi\u00e7\u00e3o em fintech agro", title_en: "160,000 registered producers and R$6B in structured credit \u2014 Traive consolidates position in agro fintech", date: "2026-04-01", source: "traive.com.br" },
+      { id: "tr3", competitor_id: "traive", type: "product_launch", title_pt: "Traive Finance: qualifica\u00e7\u00e3o de ativos de cr\u00e9dito rural para investidores institucionais", title_en: "Traive Finance: agricultural credit asset qualification for institutional investors", date: "2026-02-20", source: "traive.com.br" },
     ],
   },
   {
@@ -206,6 +208,22 @@ export const mockCompetitors = [
     description_en: "Agricultural monitoring and risk analysis for insurers.",
     scores: { depth: 2, precision: 3, pulse: 2, regulatory: 2, ux: 2, credit: 2 },
     competitor_signals: [],
+  },
+  // OagronomIA: adicionado via mock (Task B). Para adicionar via UI, use o bot\u00e3o
+  // "Adicionar Concorrente" em Intelig\u00eancia de Mercado \u2192 Radar Competitivo \u2014
+  // o modal faz POST para /api/competitors/crud e persiste na tabela competitors.
+  {
+    id: "oagronomia",
+    name: "OagronomIA",
+    vertical: "Agtech / AI",
+    segment: "agri-ai",
+    website: "oagronomia.com.br",
+    description_pt: "Plataforma focada na interse\u00e7\u00e3o do agroneg\u00f3cio com intelig\u00eancia artificial \u2014 'O Agro no Mundo da IA'. Conte\u00fado e ferramentas de IA aplicadas ao agro.",
+    description_en: "Platform at the intersection of agribusiness and artificial intelligence \u2014 'Agriculture in the World of AI'. AI content and tools applied to agro.",
+    scores: { depth: 1, precision: 2, pulse: 2, regulatory: 1, ux: 2, credit: 1 },
+    competitor_signals: [
+      { id: "oa1", competitor_id: "oagronomia", type: "news", title_pt: "Lan\u00e7amento de plataforma de IA para o agroneg\u00f3cio brasileiro", title_en: "AI platform launch for Brazilian agribusiness", date: "2026-04-01", source: "oagronomia.com.br" },
+    ],
   },
 ];
 
