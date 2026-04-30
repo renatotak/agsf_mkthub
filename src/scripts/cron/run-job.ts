@@ -64,6 +64,8 @@ import { runSyncCvmFunds } from '@/jobs/sync-cvm-funds'
 import { runSyncKnowledgeAgents } from '@/jobs/sync-knowledge-agents'
 import { runSyncOecd } from '@/jobs/sync-oecd'
 import { runSyncRjCandidates } from '@/jobs/sync-rj-candidates'
+import { runSyncAdaparParana } from '@/jobs/sync-adapar-parana'
+import { runSyncLlmNewsScout } from '@/jobs/sync-llm-news-scout'
 
 import type { JobResult } from '@/jobs/types'
 
@@ -106,6 +108,8 @@ const JOB_REGISTRY: Record<string, JobFn> = {
   'sync-knowledge-agents':      runSyncKnowledgeAgents,
   'sync-oecd':                  runSyncOecd,
   'sync-rj-candidates':         runSyncRjCandidates,
+  'sync-adapar-parana':         runSyncAdaparParana,
+  'sync-llm-news-scout':        runSyncLlmNewsScout,
 }
 
 async function main() {

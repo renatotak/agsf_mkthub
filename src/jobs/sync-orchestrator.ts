@@ -113,6 +113,10 @@ const PROBES: JobProbe[] = [
     importFn: () => import('@/jobs/sync-regulatory-digest').then(m => ({ default: m.runSyncRegulatoryDigest })) },
   { job: 'sync-rj-candidates',      strategy: 'weekly_only', weekdays: [0],
     importFn: () => import('@/jobs/sync-rj-candidates').then(m => ({ default: m.runSyncRjCandidates })) },
+  { job: 'sync-adapar-parana',      strategy: 'weekly_only', weekdays: [0],
+    importFn: () => import('@/jobs/sync-adapar-parana').then(m => ({ default: m.runSyncAdaparParana })) },
+  { job: 'sync-llm-news-scout',     strategy: 'weekly_only', weekdays: [0],
+    importFn: () => import('@/jobs/sync-llm-news-scout').then(m => ({ default: m.runSyncLlmNewsScout })) },
 ]
 
 // ─── Probe functions ────────────────────────────────────────────────────────
