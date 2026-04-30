@@ -111,6 +111,8 @@ const PROBES: JobProbe[] = [
     importFn: () => import('@/jobs/sync-oracle-insights').then(m => ({ default: m.runSyncOracleInsights })) },
   { job: 'sync-regulatory-digest',  strategy: 'weekly_only', weekdays: [0],
     importFn: () => import('@/jobs/sync-regulatory-digest').then(m => ({ default: m.runSyncRegulatoryDigest })) },
+  { job: 'sync-rj-candidates',      strategy: 'weekly_only', weekdays: [0],
+    importFn: () => import('@/jobs/sync-rj-candidates').then(m => ({ default: m.runSyncRjCandidates })) },
 ]
 
 // ─── Probe functions ────────────────────────────────────────────────────────

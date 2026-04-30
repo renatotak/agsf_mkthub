@@ -3586,5 +3586,25 @@
     "last_checked_at": null,
     "last_known_update": null,
     "used_in_app": true
+  },
+  {
+    "id": "src-news-rj-cross-ref",
+    "name": "RJ Candidates — Cross-ref Notícias × Receita Federal",
+    "source_org": "AgriSafe Internal",
+    "category": "diretorio",
+    "data_type": "Postgres derived",
+    "description": "Descoberta de empresas potencialmente em recuperação judicial via cruzamento de regex em agro_news com entity_mentions. Substitui a abordagem abandonada de CSV da Serasa (não existe CSV da Serasa com empresas em RJ). Algoritmo-first, sem LLM.",
+    "frequency": "semanal",
+    "url": "/api/rj-candidates",
+    "url_secondary": null,
+    "server": "Supabase",
+    "automated": true,
+    "notes": "Cron sync-rj-candidates (Domingo via orchestrator). Janela: últimos 90 dias de agro_news. Migration 077. Phase 29.",
+    "origin_file": "phase29-rj-candidates",
+    "url_status": "unchecked",
+    "http_status": null,
+    "last_checked_at": null,
+    "last_known_update": null,
+    "used_in_app": true
   }
 ]
