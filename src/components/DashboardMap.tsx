@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, Component } from "rea
 import { APIProvider, Map as GMap, AdvancedMarker, InfoWindow, useMap } from "@vis.gl/react-google-maps";
 import {
   Calendar, Eye, EyeOff, ExternalLink,
-  CloudRain, Thermometer, MapPin, Search, X, RefreshCw,
+  CloudRain, CloudSun, Thermometer, Droplets, MapPin, Search, X, RefreshCw,
   Newspaper, Gavel, AlertCircle, Home, Maximize,
   Building2, Megaphone,
 } from "lucide-react";
@@ -120,7 +120,7 @@ type MapMarker = {
 
 const LAYER_META: Record<MarkerType, { label: string; labelEn: string; color: string }> = {
   event:          { label: "Eventos",          labelEn: "Events",            color: "#5B7A2F" },
-  weather:        { label: "Clima / Alertas",  labelEn: "Weather / Alerts",  color: "#1565C0" },
+  weather:        { label: "Clima",            labelEn: "Weather",           color: "#0891B2" },
   news:           { label: "Notícias",         labelEn: "News",              color: "#E8722A" },
   rj:             { label: "Recup. Judicial",  labelEn: "Distress",          color: "#C62828" },
   subsidiary_new: { label: "Filiais Novas",    labelEn: "New Branches",      color: "#7B1FA2" },
@@ -216,30 +216,57 @@ export function DashboardMap({ lang }: { lang: Lang }) {
       setAllEvents(markers);
     }).catch(() => {});
 
-    // Weather — show all stations as alerts (precip > 0mm or notable temp)
-    fetch("/api/agroapi/clima").then(r => r.json()).then(json => {
-      if (!json.success || !json.data) return;
+    // Weather — curated 25 agro-hub cities, Embrapa ClimAPI (NCEP GFS).
+    // Uses /api/map/markers/weather (1h ISR) with the canonical marker shape:
+    // { type: 'weather', lat, lng, city, uf, temp_c, precip_mm_24h, humidity, last_update }.
+    fetch("/api/map/markers/weather").then(r => r.json()).then(json => {
+      if (!json.success || !Array.isArray(json.data)) return;
       const markers: MapMarker[] = [];
       for (const w of json.data) {
-        if (w.tempMax === null && w.precip === null) continue; // skip empty data
-        const precipLabel = w.precip !== null ? `${w.precip} mm` : "";
-        const tempLabel = w.tempMax !== null && w.tempMin !== null ? `${w.tempMin}°–${w.tempMax}°C` : "";
+        // Skip cities for which the upstream returned no values at all.
+        if (w.temp_c === null && w.precip_mm_24h === null && w.humidity === null) continue;
+        const tempLabel = w.temp_c !== null ? `${w.temp_c}°C` : "";
+        const precipLabel = w.precip_mm_24h !== null ? `${w.precip_mm_24h} mm` : "";
+        const humLabel = w.humidity !== null ? `${w.humidity}%` : "";
         markers.push({
-          id: `wx-${w.id}`,
+          id: w.id,
           type: "weather",
           lat: w.lat,
           lng: w.lng,
-          title: `${w.name}, ${w.state}`,
+          title: `${w.city}, ${w.uf}`,
           subtitle: [tempLabel, precipLabel].filter(Boolean).join(" | "),
-          uf: w.state || "",
+          uf: w.uf || "",
+          date: w.last_update,
           extra: (
-            <div className="mt-1 flex items-center gap-3 text-[11px]">
-              {w.tempMax !== null && (
-                <span className="flex items-center gap-0.5 text-orange-600"><Thermometer size={11} /> {w.tempMin}°–{w.tempMax}°C</span>
+            <div className="mt-1 space-y-1">
+              <div className="flex items-center gap-3 text-[11px]">
+                {w.temp_c !== null && (
+                  <span className="flex items-center gap-0.5 text-orange-600">
+                    <Thermometer size={11} /> {lang === "pt" ? "Temperatura" : "Temperature"}: {w.temp_c}°C
+                    {w.temp_min_c !== null && w.temp_max_c !== null ? ` (${w.temp_min_c}°–${w.temp_max_c}°)` : ""}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-[11px]">
+                {w.precip_mm_24h !== null && (
+                  <span className="flex items-center gap-0.5 text-blue-600">
+                    <CloudRain size={11} /> {lang === "pt" ? "Precipitação 24h" : "Precip 24h"}: {w.precip_mm_24h} mm
+                  </span>
+                )}
+                {w.humidity !== null && (
+                  <span className="flex items-center gap-0.5 text-cyan-700">
+                    <Droplets size={11} /> {humLabel}
+                  </span>
+                )}
+              </div>
+              {w.last_update && (
+                <p className="text-[10px] text-neutral-400">
+                  {lang === "pt" ? "Última atualização" : "Last update"}: {new Date(w.last_update).toLocaleString(lang === "pt" ? "pt-BR" : "en-US")}
+                </p>
               )}
-              {w.precip !== null && w.precip > 0 && (
-                <span className="flex items-center gap-0.5 text-blue-600"><CloudRain size={11} /> {w.precip} mm</span>
-              )}
+              <p className="text-[9px] text-neutral-400 italic">
+                {lang === "pt" ? "Fonte" : "Source"}: Embrapa ClimAPI
+              </p>
             </div>
           ),
         });
@@ -688,7 +715,7 @@ export function DashboardMap({ lang }: { lang: Lang }) {
                   <div className="w-7 h-7 rounded-full flex items-center justify-center text-white border-2 border-white shadow-md cursor-pointer transition-transform hover:scale-125"
                     style={{ backgroundColor: LAYER_META[m.type]?.color || "#5B7A2F" }}>
                     {m.type === "event" && <Calendar size={13} />}
-                    {m.type === "weather" && <CloudRain size={13} />}
+                    {m.type === "weather" && <CloudSun size={13} />}
                     {m.type === "news" && <Newspaper size={13} />}
                     {m.type === "rj" && <Gavel size={13} />}
                     {m.type === "subsidiary_new" && <Building2 size={13} />}
