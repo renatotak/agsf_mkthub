@@ -6,7 +6,7 @@ import {
   Search, Leaf, FlaskConical, Map as MapIcon, Loader2, AlertCircle,
   ChevronLeft, ChevronRight, BookMarked, ExternalLink,
   Link, GitBranch, ChevronDown, ChevronUp, Info, Layers,
-  Sparkles, Zap, TrendingDown, Package, Factory, ArrowRight, Network,
+  Sparkles, Zap, TrendingDown, Package, Factory, ArrowRight, Network, Atom,
 } from "lucide-react";
 
 interface ProductRow {
@@ -19,7 +19,15 @@ interface ProductRow {
   holder: string;
 }
 
-type Tab = "oracle" | "package" | "industry" | "mindmap" | "chemicals" | "biologicals" | "soils" | "glossary";
+type Tab = "oracle" | "package" | "industry" | "mindmap" | "tech_products" | "formulated_products" | "biologicals" | "soils" | "glossary";
+
+// Phase 30 — Tech Product types (active ingredients / molecules)
+interface TechMolecule {
+  ingredient: string;
+  product_types: string[];
+  formulated_count: number;
+  products: Array<{ product_name: string; product_type: string; titular_registro: string | null }>;
+}
 
 // Phase 5 — Canonical input types
 interface CanonicalInput {
@@ -301,6 +309,12 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
   const [oracleError, setOracleError] = useState<string | null>(null);
   const [oracleSearched, setOracleSearched] = useState(false);
   const [expandedMolecule, setExpandedMolecule] = useState<string | null>(null);
+  // Phase 30 — Tech Products state
+  const [techSearchTerm, setTechSearchTerm] = useState("");
+  const [techMolecules, setTechMolecules] = useState<TechMolecule[]>([]);
+  const [techLoading, setTechLoading] = useState(false);
+  const [techLoaded, setTechLoaded] = useState(false);
+  const [expandedMoleculeRow, setExpandedMoleculeRow] = useState<string | null>(null);
   // Phase 5 — Canonical inputs state
   const [canonicalByCategory, setCanonicalByCategory] = useState<Record<string, CanonicalInput[]>>({});
   const [canonicalByIndustry, setCanonicalByIndustry] = useState<Record<string, CanonicalInput[]>>({});
@@ -323,10 +337,60 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
     }
   }, []);
 
+  // Phase 30 — fetch active ingredients grouped from agrofit endpoint
+  const fetchTechProducts = useCallback(async (query: string) => {
+    setTechLoading(true);
+    try {
+      const q = query.trim() || "soja";
+      const res = await fetch(`/api/agroapi/agrofit?q=${encodeURIComponent(q)}&page=1`);
+      const json = await res.json();
+      const rows: Array<Record<string, unknown>> = json.data || [];
+      // Group by active ingredient — algorithm only, no LLM
+      const map = new Map<string, TechMolecule>();
+      for (const row of rows) {
+        const join = (v: unknown) => Array.isArray(v) ? v.join(", ") : String(v || "");
+        const rawIngredients = join(row.ingrediente_ativo);
+        const productType = join(row.classe_categoria_agronomica).toLowerCase();
+        const productName = join(row.marca_comercial);
+        const titular = (row.titular_registro as string | null) || null;
+        if (!rawIngredients) continue;
+        // Split compound ingredients (e.g. "Azoxistrobina + Benzovindiflupir")
+        const ingredients = rawIngredients.split(/[+;,]/).map((s: string) => s.trim()).filter(Boolean);
+        for (const ing of ingredients) {
+          const key = ing.toLowerCase();
+          if (!map.has(key)) {
+            map.set(key, { ingredient: ing, product_types: [], formulated_count: 0, products: [] });
+          }
+          const mol = map.get(key)!;
+          mol.formulated_count += 1;
+          if (productType && !mol.product_types.includes(productType)) {
+            mol.product_types.push(productType);
+          }
+          if (productName) {
+            mol.products.push({ product_name: productName, product_type: productType, titular_registro: titular });
+          }
+        }
+      }
+      const sorted = [...map.values()].sort((a, b) => b.formulated_count - a.formulated_count);
+      setTechMolecules(sorted);
+    } catch { /* fail silently */ }
+    finally {
+      setTechLoading(false);
+      setTechLoaded(true);
+    }
+  }, []);
+
   // Auto-load canonical data when switching to package/industry/mindmap tab
   useEffect(() => {
     if ((activeTab === "package" || activeTab === "industry" || activeTab === "mindmap") && !canonicalLoaded) {
       fetchCanonical(oracleCulture);
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-load tech products when switching to tech_products tab
+  useEffect(() => {
+    if (activeTab === "tech_products" && !techLoaded) {
+      fetchTechProducts("soja");
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -422,7 +486,7 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
   };
 
   const doSearch = useCallback(async (q: string, tab: Tab, pg: number) => {
-    if (!q.trim() || tab === "soils" || tab === "glossary") return;
+    if (!q.trim() || tab === "soils" || tab === "glossary" || tab === "tech_products") return;
     setLoading(true);
     setError("");
 
@@ -492,7 +556,7 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
 
   // Re-search on tab change if we have a query
   useEffect(() => {
-    if (activeTab === "glossary") return;
+    if (activeTab === "glossary" || activeTab === "tech_products") return;
     if (searchTerm.trim()) {
       setPage(1);
       if (activeTab === "soils") {
@@ -588,15 +652,26 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
           {tr.inputs.mindmapTab}
         </button>
         <button
-          onClick={() => setActiveTab("chemicals")}
+          onClick={() => setActiveTab("tech_products")}
           className={`flex items-center gap-2 px-4 py-3 text-[14px] font-semibold border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "chemicals"
+            activeTab === "tech_products"
+              ? "border-brand-primary text-brand-primary"
+              : "border-transparent text-neutral-500 hover:text-neutral-700"
+          }`}
+        >
+          <Atom size={16} />
+          {tr.inputs.techProducts}
+        </button>
+        <button
+          onClick={() => setActiveTab("formulated_products")}
+          className={`flex items-center gap-2 px-4 py-3 text-[14px] font-semibold border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "formulated_products"
               ? "border-brand-primary text-brand-primary"
               : "border-transparent text-neutral-500 hover:text-neutral-700"
           }`}
         >
           <FlaskConical size={16} />
-          {tr.inputs.activeIngredients}
+          {tr.inputs.formulatedProducts}
         </button>
         <button
           onClick={() => setActiveTab("biologicals")}
@@ -1079,6 +1154,143 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
             />
           ) : null}
         </div>
+      ) : activeTab === "tech_products" ? (
+        <div className="space-y-4">
+          {/* Tech Products header */}
+          <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Atom size={16} className="text-brand-primary" />
+              <h3 className="text-[16px] font-bold text-neutral-900">{tr.inputs.techProductsTitle}</h3>
+            </div>
+            <p className="text-[12px] text-neutral-500 mb-4">{tr.inputs.techProductsSubtitle}</p>
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="text"
+                  value={techSearchTerm}
+                  onChange={(e) => setTechSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setTechLoaded(false);
+                      fetchTechProducts(techSearchTerm || "soja");
+                    }
+                  }}
+                  placeholder={lang === "pt" ? "Buscar por mol\u00e9cula ou tipo..." : "Search by molecule or type..."}
+                  className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary"
+                />
+              </div>
+              <button
+                onClick={() => { setTechLoaded(false); fetchTechProducts(techSearchTerm || "soja"); }}
+                disabled={techLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-md text-[13px] font-bold hover:bg-brand-dark transition-colors disabled:opacity-50"
+              >
+                {techLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                {lang === "pt" ? "Buscar" : "Search"}
+              </button>
+            </div>
+          </div>
+
+          {techLoading && (
+            <div className="flex items-center justify-center py-12 gap-2 text-neutral-400">
+              <Loader2 size={20} className="animate-spin" />
+              <span className="text-[13px]">{lang === "pt" ? "Carregando mol\u00e9culas..." : "Loading molecules..."}</span>
+            </div>
+          )}
+
+          {!techLoading && techLoaded && techMolecules.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-[13px] text-amber-800">
+              {lang === "pt"
+                ? "Nenhuma mol\u00e9cula encontrada. Execute /api/cron/sync-agrofit-bulk para popular a base."
+                : "No molecules found. Run /api/cron/sync-agrofit-bulk to populate the index."}
+            </div>
+          )}
+
+          {!techLoading && techMolecules.length > 0 && (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                  {techMolecules.length} {lang === "pt" ? "mol\u00e9culas" : "molecules"}
+                </p>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-neutral-100 text-neutral-500 font-medium">AGROFIT / MAPA</span>
+              </div>
+              <div className="space-y-2">
+                {techMolecules
+                  .filter((mol) =>
+                    !techSearchTerm.trim() ||
+                    mol.ingredient.toLowerCase().includes(techSearchTerm.toLowerCase()) ||
+                    mol.product_types.some((pt) => pt.includes(techSearchTerm.toLowerCase()))
+                  )
+                  .map((mol) => {
+                    const isExpanded = expandedMoleculeRow === mol.ingredient;
+                    return (
+                      <div key={mol.ingredient} className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => setExpandedMoleculeRow(isExpanded ? null : mol.ingredient)}
+                          className="w-full px-4 py-3 flex items-center gap-4 hover:bg-neutral-50/50 transition-colors text-left"
+                        >
+                          <Atom size={14} className="text-brand-primary shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center flex-wrap gap-2">
+                              <span className="text-[13px] font-bold text-neutral-900">{mol.ingredient}</span>
+                              {mol.product_types.map((pt) => (
+                                <span key={pt} className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                  pt.includes("herbicida") ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                  pt.includes("fungicida") ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                  pt.includes("inseticida") ? "bg-purple-50 text-purple-700 border-purple-200" :
+                                  pt.includes("biol") ? "bg-green-50 text-green-700 border-green-200" :
+                                  "bg-neutral-100 text-neutral-600 border-neutral-200"
+                                }`}>
+                                  {pt}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-[11px] text-neutral-400 mt-0.5">
+                              {mol.formulated_count} {lang === "pt" ? "produto(s) formulado(s)" : "formulated product(s)"}
+                            </p>
+                          </div>
+                          {isExpanded
+                            ? <ChevronUp size={14} className="text-neutral-400 shrink-0" />
+                            : <ChevronDown size={14} className="text-neutral-400 shrink-0" />}
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-neutral-100 bg-neutral-50/30">
+                            <table className="w-full text-[12px]">
+                              <thead className="text-[9px] uppercase font-bold text-neutral-500">
+                                <tr>
+                                  <th className="text-left px-4 py-2">{lang === "pt" ? "Produto Formulado" : "Formulated Product"}</th>
+                                  <th className="text-left px-4 py-2">{lang === "pt" ? "Tipo" : "Type"}</th>
+                                  <th className="text-left px-4 py-2">{lang === "pt" ? "Titular" : "Holder"}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {mol.products.map((p, idx) => (
+                                  <tr key={idx} className="border-t border-neutral-100 hover:bg-white/50">
+                                    <td className="px-4 py-2 font-medium text-neutral-900">{p.product_name}</td>
+                                    <td className="px-4 py-2">
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                        p.product_type.includes("herbicida") ? "bg-amber-100 text-amber-800" :
+                                        p.product_type.includes("fungicida") ? "bg-blue-100 text-blue-800" :
+                                        p.product_type.includes("inseticida") ? "bg-purple-100 text-purple-800" :
+                                        "bg-neutral-100 text-neutral-700"
+                                      }`}>
+                                        {p.product_type || "\u2014"}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-neutral-500">{p.titular_registro || "\u2014"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+        </div>
       ) : activeTab === "glossary" ? (
         <div className="space-y-4">
           {/* Glossary Search */}
@@ -1317,7 +1529,7 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
           <div className="p-12 text-center text-neutral-400">
             <Search size={40} className="mx-auto mb-4 opacity-20" />
             <p className="text-[14px] font-medium text-neutral-600 mb-1">
-              {activeTab === "chemicals"
+              {activeTab === "formulated_products"
                 ? (lang === "pt" ? "Consultar Defensivos Registrados (MAPA)" : "Search Registered Pesticides (MAPA)")
                 : activeTab === "biologicals"
                 ? (lang === "pt" ? "Consultar Bioinsumos Registrados (MAPA)" : "Search Registered Biological Inputs (MAPA)")
@@ -1386,7 +1598,7 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
                 {pages > 1 && <span className="text-neutral-400"> &middot; {lang === "pt" ? "pág" : "p."} {page}/{pages}</span>}
               </p>
               <span className="text-[10px] px-2 py-0.5 rounded bg-neutral-100 text-neutral-500 font-medium">
-                {activeTab === "chemicals" ? "AGROFIT / MAPA" : "Bioinsumos / MAPA"}
+                {activeTab === "formulated_products" ? "AGROFIT / MAPA" : "Bioinsumos / MAPA"}
               </span>
             </div>
 
