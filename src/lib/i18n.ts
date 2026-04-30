@@ -476,6 +476,16 @@ export const translations = {
       subsidiaryNew: "Filiais Novas",
       newsAttached: "Entidade + Not\u00edcia",
       viewEntity: "Ver entidade",
+      layer: {
+        weather: "Clima",
+      },
+      weather: {
+        tempLabel: "Temperatura",
+        precipLabel: "Precipita\u00e7\u00e3o 24h",
+        humidityLabel: "Umidade",
+        lastUpdate: "\u00daltima atualiza\u00e7\u00e3o",
+        source: "Fonte: Embrapa ClimAPI",
+      },
     },
     nav: {
       dashboard: "Painel",
@@ -1080,6 +1090,16 @@ export const translations = {
       subsidiaryNew: "New Branches",
       newsAttached: "Entity News",
       viewEntity: "View entity",
+      layer: {
+        weather: "Weather",
+      },
+      weather: {
+        tempLabel: "Temperature",
+        precipLabel: "Precip 24h",
+        humidityLabel: "Humidity",
+        lastUpdate: "Last update",
+        source: "Source: Embrapa ClimAPI",
+      },
     },
     nav: {
       dashboard: "Dashboard",
