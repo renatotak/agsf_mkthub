@@ -61,6 +61,7 @@ export function ExecutiveBriefingWidget({ lang }: { lang: Lang }) {
 
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   // Persona tab state
@@ -77,6 +78,19 @@ export function ExecutiveBriefingWidget({ lang }: { lang: Lang }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetch("/api/executive-briefing/refresh", { method: "POST" });
+      const r = await fetch("/api/executive-briefing");
+      const json = await r.json();
+      if (json.briefing) setBriefing(json.briefing);
+      // Clear persona cache so tabs regenerate with fresh base data
+      setPersonaCache({});
+    } catch {}
+    finally { setRefreshing(false); }
   };
 
   useEffect(fetchBriefing, []);
@@ -167,11 +181,12 @@ export function ExecutiveBriefingWidget({ lang }: { lang: Lang }) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchBriefing}
-            className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title={lang === "pt" ? "Atualizar" : "Refresh"}
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
           </button>
           <button
             onClick={() => setExpanded(!expanded)}
