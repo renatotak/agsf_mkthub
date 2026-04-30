@@ -10,9 +10,9 @@
     },
     {
       "name": "sync-orchestrator",
-      "description": "Smart orchestrator — probes all 25 sources, only runs jobs with new data",
+      "description": "Smart orchestrator — probes all 26 sources, only runs jobs with new data",
       "schedule": { "calendar": { "Hour": 3, "Minute": 0 } },
-      "comment": "Daily 03:00 local — probes first, skips unchanged sources. Weekly jobs only fire on Sunday."
+      "comment": "Daily 03:00 local — probes first, skips unchanged sources. Weekly jobs (incl. sync-oecd, Phase 29) only fire on Sunday."
     }
   ]
 }
