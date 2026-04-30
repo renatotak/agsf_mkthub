@@ -32,10 +32,26 @@ async function getSummaryModel(): Promise<string> {
 let _client: GoogleGenAI | null = null
 
 /**
- * Find a GCP service account key file in the project root.
- * Matches pattern: agrisafe-*.json
+ * Find GCP service account credentials.
+ *
+ * Priority order:
+ *   1. GOOGLE_APPLICATION_CREDENTIALS_JSON env var — entire SA JSON as a string.
+ *      Set this in Vercel / CI where the key file cannot be deployed.
+ *   2. agrisafe-*.json file in project root — used on local dev / Mac mini.
  */
 function findSaKeyFile(): { credentials: any; project: string } | null {
+  // 1. Env var (Vercel / CI)
+  const jsonEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+  if (jsonEnv) {
+    try {
+      const creds = JSON.parse(jsonEnv)
+      if (creds.type === 'service_account' && creds.project_id) {
+        return { credentials: creds, project: creds.project_id }
+      }
+    } catch { /* malformed JSON in env var */ }
+  }
+
+  // 2. Key file on disk (local dev / Mac mini)
   try {
     const root = resolve(process.cwd())
     const files = readdirSync(root).filter(f => f.startsWith('agrisafe-') && f.endsWith('.json'))
@@ -52,14 +68,15 @@ function findSaKeyFile(): { credentials: any; project: string } | null {
 /**
  * Initialize the Gemini client.
  *
- * Two modes (Vertex AI tried first):
- *   1. **Vertex AI** — auto-detected from agrisafe-*.json SA key file in project root
- *   2. **Gemini API** — fallback via GEMINI_API_KEY env var
+ * Three modes (Vertex AI tried first):
+ *   1. **Vertex AI via env var** — GOOGLE_APPLICATION_CREDENTIALS_JSON (Vercel / CI)
+ *   2. **Vertex AI via key file** — agrisafe-*.json in project root (local / Mac mini)
+ *   3. **Gemini API** — fallback via GEMINI_API_KEY env var
  */
 function getClient(): GoogleGenAI | null {
   if (_client) return _client
 
-  // Try Vertex AI via SA key file
+  // Try Vertex AI (env var first, then key file)
   const sa = findSaKeyFile()
   if (sa) {
     _client = new GoogleGenAI({
