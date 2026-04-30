@@ -9,6 +9,7 @@ import {
   Shield, Building2, TrendingDown, BookOpen, Filter, Download,
 } from "lucide-react";
 import { downloadCsv, type CsvColumn } from "@/lib/csv-export";
+import { FIDelinquencyTab } from "@/components/FIDelinquencyTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -205,6 +206,9 @@ export function FinancialInstitutions({ lang }: { lang: Lang }) {
   const tr = t(lang);
   const fi = (tr as any).financialInstitutions || {} as Record<string, any>;
 
+  type FiTab = "directory" | "delinquency";
+  const [tab, setTab] = useState<FiTab>("directory");
+
   const [institutions, setInstitutions] = useState<FinancialInstitution[]>([]);
   const [loading, setLoading] = useState(true);
   const [scrData, setScrData] = useState<ScrDataPoint[]>([]);
@@ -324,6 +328,28 @@ export function FinancialInstitutions({ lang }: { lang: Lang }) {
           SICOR + CVM
         </span>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-neutral-200/50 rounded-md p-0.5 w-fit">
+        {([
+          { id: "directory" as const,   label: fi.tabDirectory   || (lang === "pt" ? "Diretório"     : "Directory") },
+          { id: "delinquency" as const, label: fi.tabDelinquency || (lang === "pt" ? "Inadimplência" : "Delinquency") },
+        ]).map((tb) => (
+          <button
+            key={tb.id}
+            onClick={() => setTab(tb.id)}
+            className={`px-4 py-1.5 rounded text-[13px] font-medium transition-colors whitespace-nowrap ${
+              tab === tb.id ? "bg-white text-neutral-900 shadow-xs" : "text-neutral-600 hover:text-neutral-800"
+            }`}
+          >
+            {tb.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "delinquency" && <FIDelinquencyTab lang={lang} />}
+
+      {tab === "directory" && (<>
 
       {/* KPI Strip */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
@@ -576,6 +602,8 @@ export function FinancialInstitutions({ lang }: { lang: Lang }) {
           </button>
         </div>
       )}
+
+      </>)}
     </div>
   );
 }
