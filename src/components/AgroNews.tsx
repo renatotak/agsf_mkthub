@@ -94,6 +94,28 @@ export function AgroNews({ lang }: { lang: Lang }) {
   const [addNewsSubmitting, setAddNewsSubmitting] = useState(false);
   const [addNewsFeedback, setAddNewsFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
+  // ─── Bug-fix 2026-04-30 — "Atualizar" button feedback state ─
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshFeedback, setRefreshFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshFeedback(null);
+    try {
+      const res = await fetch("/api/news-na/refresh", { method: "POST" });
+      if (!res.ok) throw new Error("refresh failed");
+      setRefreshFeedback({ type: "success", msg: tr.refreshed });
+      setPage(0);
+      await fetchNews();
+    } catch {
+      setRefreshFeedback({ type: "error", msg: tr.refreshError });
+    } finally {
+      setRefreshing(false);
+      setTimeout(() => setRefreshFeedback(null), 3500);
+    }
+  };
+
   // ─── Phase 4c — News → Directory enrichment ────────────────
   interface EnrichmentProposal {
     entity_uid: string;
@@ -440,14 +462,27 @@ export function AgroNews({ lang }: { lang: Lang }) {
             {tr.addNews}
           </button>
           <button
-            onClick={() => { setPage(0); fetchNews(); }}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-dark font-medium text-sm transition-colors shadow-sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-dark font-medium text-sm transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            title={tr.refresh}
           >
-            <RefreshCw size={16} />
-            {tr.refresh}
+            {refreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            {refreshing ? tr.refreshing : tr.refresh}
           </button>
         </div>
       </div>
+      {refreshFeedback && (
+        <div
+          className={`mb-4 px-4 py-2.5 rounded-lg text-sm font-medium border ${
+            refreshFeedback.type === "success"
+              ? "bg-green-50 text-green-700 border-green-200"
+              : "bg-red-50 text-red-700 border-red-200"
+          }`}
+        >
+          {refreshFeedback.msg}
+        </div>
+      )}
 
       {/* Sources Panel (Phase 22 — CRUD) */}
       {showSourcesPanel && (
