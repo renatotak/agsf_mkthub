@@ -4,12 +4,17 @@
  * Fetches rural credit delinquency rates from BCB SGS API (same API
  * used by sync-market-data) and writes to macro_statistics.
  *
- * Series:
- *   21082  — Total credit inadimplência (benchmark)
+ * Series (5 total — 3 rural + 2 system-wide benchmarks):
+ *   21082  — Total credit inadimplência (system-wide benchmark)
+ *   21084  — PF total inadimplência (consumer + housing + rural PF benchmark)
+ *   21085  — PJ total inadimplência (corporate + rural PJ benchmark)
  *   21136  — Rural credit PJ (legal entities)
  *   21148  — Rural credit PF (individuals)
  *
  * Data: monthly since 2011-03, unit = % of portfolio 90+ days overdue.
+ *
+ * NOTE: We pull `ultimos/60` (5 years) so the UI period selector (12/24/36/all)
+ * has enough history for the long view. BCB SGS allows >20 in /ultimos.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -24,6 +29,8 @@ const SCR_SERIES: {
   label: string;
 }[] = [
   { code: 21082, indicator: "inadimplencia_total", commodity: "credit_total", label: "Inadimplência total" },
+  { code: 21084, indicator: "inadimplencia_pf_total", commodity: "credit_pf_total", label: "Inadimplência PF total" },
+  { code: 21085, indicator: "inadimplencia_pj_total", commodity: "credit_pj_total", label: "Inadimplência PJ total" },
   { code: 21136, indicator: "inadimplencia_rural_pj", commodity: "rural_credit", label: "Inadimplência rural PJ" },
   { code: 21148, indicator: "inadimplencia_rural_pf", commodity: "rural_credit", label: "Inadimplência rural PF" },
 ];
@@ -50,7 +57,7 @@ export async function runSyncBcbScrInadimplencia(supabase: SupabaseClient): Prom
   try {
     for (const series of SCR_SERIES) {
       try {
-        const data = await fetchSGS(series.code, 20);
+        const data = await fetchSGS(series.code, 60);
         fetched += data.length;
 
         const rows = data
@@ -103,7 +110,7 @@ export async function runSyncBcbScrInadimplencia(supabase: SupabaseClient): Prom
       source: "sync-bcb-scr-inadimplencia",
       source_kind: "cron",
       target_table: "macro_statistics",
-      summary: `SCR inadimplência: ${updated} rows (${SCR_SERIES.length} series × 20mo)`,
+      summary: `SCR inadimplência: ${updated} rows (${SCR_SERIES.length} series × 60mo)`,
       metadata: { fetched, updated, errors },
     }).catch(() => {});
 
