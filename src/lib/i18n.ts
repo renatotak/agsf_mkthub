@@ -527,6 +527,15 @@ export const translations = {
         source: "Fonte: Embrapa ClimAPI",
       },
     },
+    personaBriefing: {
+      general: "Geral",
+      ceo: "CEO",
+      comercial: "Comercial",
+      credito: "Cr\u00e9dito",
+      marketing: "Marketing",
+      generating: "Gerando an\u00e1lise personalizada...",
+      noData: "Nenhum briefing dispon\u00edvel para esta data.",
+    },
     nav: {
       dashboard: "Painel",
       settings: "Configura\u00e7\u00f5es",
@@ -1189,6 +1198,15 @@ export const translations = {
         lastUpdate: "Last update",
         source: "Source: Embrapa ClimAPI",
       },
+    },
+    personaBriefing: {
+      general: "General",
+      ceo: "CEO",
+      comercial: "Commercial",
+      credito: "Credit",
+      marketing: "Marketing",
+      generating: "Generating personalised analysis...",
+      noData: "No briefing available for this date.",
     },
     nav: {
       dashboard: "Dashboard",
