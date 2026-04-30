@@ -450,6 +450,18 @@ export const translations = {
       enrichSuccess: "Diretório enriquecido com sucesso",
       enrichError: "Falha ao enriquecer",
       enrichClose: "Fechar",
+      // Bug-fix 2026-04-30 — feedback states for the "Atualizar" button
+      refreshing: "Atualizando...",
+      refreshed: "Notícias atualizadas",
+      refreshError: "Falha ao atualizar",
+    },
+    notifications: {
+      title: "Notificações",
+      subtitle: "Atividade recente do sistema",
+      empty: "Nenhuma atividade recente",
+      loading: "Carregando...",
+      loadError: "Falha ao carregar atividades",
+      viewAll: "Ver todas no Registro de Atividade",
     },
     financialInstitutions: {
       title: "Instituições Financeiras",
@@ -1054,6 +1066,18 @@ export const translations = {
       enrichSuccess: "Directory enriched successfully",
       enrichError: "Enrichment failed",
       enrichClose: "Close",
+      // Bug-fix 2026-04-30 — feedback states for the "Refresh" button
+      refreshing: "Refreshing...",
+      refreshed: "News refreshed",
+      refreshError: "Refresh failed",
+    },
+    notifications: {
+      title: "Notifications",
+      subtitle: "Recent system activity",
+      empty: "No recent activity",
+      loading: "Loading...",
+      loadError: "Failed to load activity",
+      viewAll: "View all in Activity Log",
     },
     financialInstitutions: {
       title: "Financial Institutions",
