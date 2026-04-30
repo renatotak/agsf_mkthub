@@ -97,6 +97,8 @@ const PROBES: JobProbe[] = [
     importFn: () => import('@/jobs/sync-usda-psd').then(m => ({ default: m.runSyncUsdaPsd })) },
   { job: 'sync-mdic-comexstat',     strategy: 'weekly_only', weekdays: [0],
     importFn: () => import('@/jobs/sync-mdic-comexstat').then(m => ({ default: m.runSyncMdicComexstat })) },
+  { job: 'sync-oecd',               strategy: 'weekly_only', weekdays: [0],
+    importFn: () => import('@/jobs/sync-oecd').then(m => ({ default: m.runSyncOecd })) },
   { job: 'sync-source-registry-healthcheck', strategy: 'weekly_only', weekdays: [0],
     importFn: () => import('@/jobs/sync-source-registry-healthcheck').then(m => ({ default: m.runSyncSourceRegistryHealthcheck })) },
   { job: 'sync-mfrural-fertilizers', strategy: 'weekly_only', weekdays: [0],

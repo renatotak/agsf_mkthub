@@ -62,6 +62,7 @@ import { runSyncRegulatoryDigest } from '@/jobs/sync-regulatory-digest'
 import { runSyncBcbScrInadimplencia } from '@/jobs/sync-bcb-scr-inadimplencia'
 import { runSyncCvmFunds } from '@/jobs/sync-cvm-funds'
 import { runSyncKnowledgeAgents } from '@/jobs/sync-knowledge-agents'
+import { runSyncOecd } from '@/jobs/sync-oecd'
 
 import type { JobResult } from '@/jobs/types'
 
@@ -102,6 +103,7 @@ const JOB_REGISTRY: Record<string, JobFn> = {
   'sync-bcb-scr-inadimplencia': runSyncBcbScrInadimplencia,
   'sync-cvm-funds':             runSyncCvmFunds,
   'sync-knowledge-agents':      runSyncKnowledgeAgents,
+  'sync-oecd':                  runSyncOecd,
 }
 
 async function main() {

@@ -3566,5 +3566,25 @@
     "last_checked_at": null,
     "last_known_update": null,
     "used_in_app": true
+  },
+  {
+    "id": "src-oecd-agr-outlook",
+    "name": "OECD-FAO Agricultural Outlook (SDMX)",
+    "source_org": "OECD",
+    "category": "agropecuaria",
+    "data_type": "REST/SDMX-CSV",
+    "description": "Projeções de 10 anos (produção, consumo, exportações, importações) para commodities principais (trigo, milho, soja, arroz, açúcar, algodão, oleaginosas, grãos forrageiros) por país. Endpoint SDMX público (DSD_AGR@DF_OUTLOOK_2023_2032).",
+    "frequency": "anual",
+    "url": "https://sdmx.oecd.org/public/rest/data/OECD.TAD.ATM,DSD_AGR@DF_OUTLOOK_2023_2032/?format=csvfile",
+    "url_secondary": "https://www.oecd-ilibrary.org/agriculture-and-food/oecd-fao-agricultural-outlook_19991142",
+    "server": "OECD SDMX",
+    "automated": true,
+    "notes": "Cron sync-oecd (Domingo via orchestrator) → macro_statistics. Codes em src/lib/macro/oecd-outlook-codes.ts. Janela: 3 anos históricos + 5 anos de projeção. Phase 29.",
+    "origin_file": "phase29-oecd",
+    "url_status": "unchecked",
+    "http_status": null,
+    "last_checked_at": null,
+    "last_known_update": null,
+    "used_in_app": true
   }
 ]
