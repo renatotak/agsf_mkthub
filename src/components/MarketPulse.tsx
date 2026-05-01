@@ -25,6 +25,7 @@ interface MarketIndicator {
   value: string;
   trend: "up" | "down" | "stable";
   source: string;
+  last_update?: string | null;
 }
 
 interface RegionalPrice {
@@ -93,6 +94,23 @@ const SOURCE_COLORS: Record<string, string> = {
 
 function formatPrice(n: number, lang: Lang): string {
   return n.toLocaleString(lang === "pt" ? "pt-BR" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Format a date string (ISO, date-only, or DD/MM/YYYY) as a compact locale date.
+ * Returns a fallback string when the input is empty/null.
+ */
+function formatDateLabel(raw: string | null | undefined, lang: Lang, fallback: string): string {
+  if (!raw) return fallback;
+  // NA closing dates come in as DD/MM/YYYY — convert to ISO before parsing
+  const normalised = /^\d{2}\/\d{2}\/\d{4}$/.test(raw)
+    ? raw.split("/").reverse().join("-")
+    : raw;
+  const d = new Date(normalised);
+  if (isNaN(d.getTime())) return fallback;
+  return lang === "pt"
+    ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatRelativeTime(iso: string, lang: Lang): string {
@@ -201,9 +219,10 @@ export function MarketPulse({ lang }: { lang: Lang }) {
   const { summaries, loading: summariesLoading } = useLiveCultureSummaries();
 
   // Macro indicators from Supabase (USD/BRL, Selic, etc.)
+  // Explicitly select columns to ensure last_update is included
   useEffect(() => {
-    supabase.from("market_indicators").select("*").order("id").then(({ data }) => {
-      setIndicators(data || []);
+    supabase.from("market_indicators").select("id, name_pt, name_en, value, trend, source, last_update").order("id").then(({ data }) => {
+      setIndicators((data || []) as MarketIndicator[]);
     });
   }, [refreshKey]);
 
@@ -373,6 +392,18 @@ function MarketHighlights({
                 </div>
               ))}
             </div>
+            {indicators.length > 0 && (() => {
+              const latestIndicatorDate = indicators
+                .map(i => i.last_update)
+                .filter(Boolean)
+                .sort()
+                .at(-1);
+              return latestIndicatorDate ? (
+                <p className="text-[9px] text-neutral-500 mt-1.5">
+                  {lang === "pt" ? "Atualizado em" : "Updated"}: {formatDateLabel(latestIndicatorDate, lang, "—")}
+                </p>
+              ) : null;
+            })()}
             {ruptures > 0 && (
               <div className="mt-2 pt-2 border-t border-neutral-700/50 space-y-1">
                 <div className="flex items-center gap-1">
@@ -499,7 +530,7 @@ function CultureAnalysis({
         <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: culture.color }} />
                 <h3 className="text-[16px] font-bold text-neutral-900">
                   {lang === "pt" ? culture.label : culture.en}
@@ -508,6 +539,11 @@ function CultureAnalysis({
                 <span className="text-[10px] text-neutral-500">
                   {lang === "pt" ? "Média de" : "Average of"} {summary.count} {lang === "pt" ? "praças BR" : "BR locations"}
                 </span>
+                {summary.closingDate && (
+                  <span className="text-[10px] text-neutral-400">
+                    · {lang === "pt" ? "Atualizado em" : "Updated"}: {summary.closingDate}
+                  </span>
+                )}
               </div>
               <div className="flex items-baseline gap-2 flex-wrap">
                 <span className="text-[36px] font-bold text-neutral-900 tracking-tight font-mono">
@@ -782,7 +818,16 @@ function IntlFuturesChart({ slug, lang }: { slug: string; lang: Lang }) {
 
       {/* Footer */}
       <div className="px-4 py-2 border-t border-neutral-100 bg-neutral-50 flex items-center justify-between text-[10px] text-neutral-500">
-        <span>{data.exchange} · {data.symbol} · {data.unitFull}</span>
+        <span>
+          {data.exchange} · {data.symbol} · {data.unitFull}
+          {data.regularMarketTime ? (
+            <span className="ml-2 text-neutral-400">
+              · {lang === "pt" ? "cotação" : "quote"}: {new Date(data.regularMarketTime * 1000).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", { day: "2-digit", month: "2-digit", year: "numeric" })} ({lang === "pt" ? "atraso 15min" : "15min delay"})
+            </span>
+          ) : (
+            <span className="ml-2 text-neutral-400">· {lang === "pt" ? "atraso 15min" : "15min delay"}</span>
+          )}
+        </span>
         <a
           href={data.tradingViewLink}
           target="_blank"
@@ -941,10 +986,12 @@ function RegionAnalysis({
   const region = REGIONS.find((r) => r.uf === activeRegion)!;
   const [data, setData] = useState<RegionCommodityData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [closingDate, setClosingDate] = useState<string>("");
 
   useEffect(() => {
     setLoading(true);
     setData([]);
+    setClosingDate("");
 
     Promise.all(
       CULTURES.map(async (c) => {
@@ -952,6 +999,7 @@ function RegionAnalysis({
           const res = await fetch(`/api/prices-na/regional?commodity=${c.slug}`);
           const json = await res.json();
           if (!json.success || !json.data) return null;
+          if (json.closing_date) setClosingDate(json.closing_date);
           const inUf = (json.data as RegionalPrice[]).filter(
             (p) => p.uf === activeRegion && p.price !== null
           );
@@ -1044,6 +1092,11 @@ function RegionAnalysis({
             <p className="text-[12px] text-neutral-500">
               {lang === "pt" ? "Culturas dominantes" : "Dominant crops"}: <span className="font-semibold text-neutral-700">{region.bias}</span>
             </p>
+            {!loading && (
+              <p className="text-[10px] text-neutral-400 mt-1">
+                {lang === "pt" ? "Atualizado em" : "Updated"}: {closingDate || (lang === "pt" ? "sem dados" : "no data")}
+              </p>
+            )}
           </div>
           <div className="text-right">
             <p className="text-[10px] font-semibold text-neutral-400 uppercase">{lang === "pt" ? "Culturas com cotação" : "Quoted crops"}</p>
@@ -1335,22 +1388,28 @@ const FERTILIZER_META = [
 function InsumoAnalysis({ lang }: { lang: Lang }) {
   const [data, setData] = useState<Record<string, { period: string; value: number }[]>>({});
   const [loading, setLoading] = useState(true);
+  const [latestReferenceDate, setLatestReferenceDate] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     supabase
       .from("macro_statistics")
-      .select("commodity, period, value")
+      .select("commodity, period, value, reference_date")
       .eq("source_id", "worldbank_pinksheet")
       .eq("category", "fertilizer_price")
       .order("reference_date", { ascending: true })
       .then(({ data: rows }) => {
         const grouped: Record<string, { period: string; value: number }[]> = {};
+        let maxRefDate: string | null = null;
         for (const r of rows || []) {
           if (!grouped[r.commodity]) grouped[r.commodity] = [];
           grouped[r.commodity].push({ period: r.period, value: r.value });
+          if (r.reference_date && (!maxRefDate || r.reference_date > maxRefDate)) {
+            maxRefDate = r.reference_date;
+          }
         }
         setData(grouped);
+        setLatestReferenceDate(maxRefDate);
         setLoading(false);
       });
   }, []);
@@ -1359,14 +1418,21 @@ function InsumoAnalysis({ lang }: { lang: Lang }) {
 
   return (
     <div className="bg-white rounded-lg border border-neutral-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <FlaskConical size={16} className="text-brand-primary" />
         <h3 className="text-[15px] font-bold text-neutral-900">
           {lang === "pt" ? "Preços Internacionais de Fertilizantes" : "International Fertilizer Prices"}
         </h3>
-        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-auto">
-          {lang === "pt" ? "Fonte: World Bank Pink Sheet" : "Source: World Bank Pink Sheet"}
-        </span>
+        <div className="ml-auto flex items-center gap-3">
+          {!loading && (
+            <span className="text-[10px] text-neutral-400">
+              {lang === "pt" ? "Atualizado em" : "Updated"}: {formatDateLabel(latestReferenceDate, lang, lang === "pt" ? "sem dados" : "no data")}
+            </span>
+          )}
+          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+            {lang === "pt" ? "Fonte: World Bank Pink Sheet" : "Source: World Bank Pink Sheet"}
+          </span>
+        </div>
       </div>
 
       {loading ? (
@@ -1583,6 +1649,9 @@ function MacroAnalysis({
               )}
             </h3>
             <p className="text-[12px] text-neutral-500">{tr.marketPulse.macroSubtitle}</p>
+            <p className="text-[10px] text-neutral-400 mt-0.5">
+              {tr.marketPulse.lastUpdated}: {formatDateLabel(lastSuccessAt, lang, tr.marketPulse.noDataTimestamp)}
+            </p>
           </div>
           <div className="flex items-center gap-3">
              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-neutral-400">
@@ -1672,7 +1741,7 @@ function MacroAnalysis({
               {/* Phase 24E — World Bank Pink Sheet annual price history */}
               {wbPrices.length > 0 && (
                 <div>
-                  <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                  <h4 className="text-[13px] font-bold text-neutral-800 mb-4 uppercase tracking-wider flex items-center gap-2 flex-wrap">
                     <Globe size={14} className="text-purple-600" />
                     {lang === "pt" ? "Preço Anual Mundial" : "Annual World Price"} ({wbUnit})
                     <span className="ml-1 text-[9px] font-normal text-neutral-400 normal-case">
@@ -1682,6 +1751,11 @@ function MacroAnalysis({
                       <span className="w-1 h-1 rounded-full bg-purple-500" />
                       LIVE
                     </span>
+                    {wbPrices.length > 0 && (
+                      <span className="text-[9px] font-normal text-neutral-400 normal-case ml-auto">
+                        {lang === "pt" ? "Atualizado em" : "Updated"}: {wbPrices[wbPrices.length - 1].period}
+                      </span>
+                    )}
                   </h4>
                   <div className="h-[200px]">
                     <ResponsiveContainer width="100%" height="100%">
