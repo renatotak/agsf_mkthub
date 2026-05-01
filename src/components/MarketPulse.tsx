@@ -1287,7 +1287,39 @@ const TONNES_TO_MMT = 1 / 1_000_000;
 function toMmt(value: number, unit: string): number {
   if (unit === "tonnes") return value * TONNES_TO_MMT;
   if (unit === "kg") return value / 1_000_000_000; // kg → MMT
+  if (unit === "thousand_tonnes") return value / 1000; // mil t → MMT
   return value;
+}
+
+/**
+ * Phase 28 — Pivot COGO projection rows into Brazilian per-period projection points.
+ * Only uses source_id=cogo, region=Brazil. Returns area / production / yield per period.
+ * Backs the "Estimativa Longo Prazo" sidebar panel (was previously mocked).
+ */
+interface CogoProjectionPoint {
+  period: string;
+  br_prod_mmt?: number;       // production in MMT
+  br_area_mha?: number;       // area in million hectares
+  br_yield_kg_per_ha?: number;
+}
+
+function pivotCogoProjections(rows: MacroStatRow[]): CogoProjectionPoint[] {
+  const byPeriod = new Map<string, CogoProjectionPoint>();
+  for (const r of rows) {
+    if (r.source_id !== "cogo" || r.region !== "Brazil") continue;
+    if (typeof r.value !== "number") continue;
+    if (!byPeriod.has(r.period)) byPeriod.set(r.period, { period: r.period });
+    const p = byPeriod.get(r.period)!;
+    if (r.indicator === "production") {
+      p.br_prod_mmt = round(toMmt(r.value, r.unit));
+    } else if (r.indicator === "area_planted") {
+      // Cogo writes in thousand_hectares — convert to million ha
+      p.br_area_mha = round(r.unit === "thousand_hectares" ? r.value / 1000 : r.value);
+    } else if (r.indicator === "yield") {
+      p.br_yield_kg_per_ha = Math.round(r.value);
+    }
+  }
+  return Array.from(byPeriod.values()).sort((a, b) => a.period.localeCompare(b.period));
 }
 
 /**
@@ -1579,6 +1611,8 @@ function MacroAnalysis({
   const conabData = useMemo(() => pivotConabRows(liveRows), [liveRows]);
   const usdaCountry = useMemo(() => pivotUsdaCountries(liveRows), [liveRows]);
   const mdicData = useMemo(() => pivotMdicExports(liveRows), [liveRows]);
+  // Phase 28 — Cogo projections feed the "Estimativa Longo Prazo" sidebar panel
+  const cogoProjections = useMemo(() => pivotCogoProjections(liveRows), [liveRows]);
 
   // We have usable live data when at least one period carries production for both Brazil and World.
   const hasLiveData = liveChartData.some(p => p.br_prod !== undefined && p.world_prod !== undefined);
@@ -1957,28 +1991,60 @@ function MacroAnalysis({
                     </div>
                   </div>
                 </div>
-                <button className="w-full mt-4 py-2 border border-brand-primary text-brand-primary text-[11px] font-bold rounded-md hover:bg-brand-primary/5 transition-colors">
+                <a
+                  href="https://www.oecd-ilibrary.org/agriculture-and-food/oecd-fao-agricultural-outlook_19991142"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full mt-4 py-2 border border-brand-primary text-brand-primary text-[11px] font-bold rounded-md hover:bg-brand-primary/5 transition-colors text-center"
+                >
                   {lang === 'pt' ? 'Ver Relatório Completo OECD' : 'View Full OECD Report'}
-                </button>
+                </a>
               </div>
 
               <div className="bg-neutral-900 rounded-lg p-4 text-white">
-                <h5 className="text-[10px] font-bold text-neutral-400 uppercase mb-3">{tr.marketPulse.projections}</h5>
+                <h5 className="text-[10px] font-bold text-neutral-400 uppercase mb-3 flex items-center justify-between">
+                  <span>{tr.marketPulse.projections}</span>
+                  {cogoProjections.length > 0 && (
+                    <span className="text-[8px] font-normal text-emerald-400 normal-case">
+                      {lang === 'pt' ? 'COGO Inteligência' : 'COGO Intelligence'}
+                    </span>
+                  )}
+                </h5>
                 <div className="space-y-3">
-                  {chartData.slice(-2).map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between border-b border-neutral-800 pb-2 last:border-0 last:pb-0">
-                      <div>
-                        <p className="text-[11px] font-bold text-neutral-300">{item.period}</p>
-                        <p className="text-[9px] text-neutral-500">{lang === 'pt' ? 'Estimativa Longo Prazo' : 'Long-term Estimate'}</p>
+                  {cogoProjections.length > 0 ? (
+                    cogoProjections.slice(-2).map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between border-b border-neutral-800 pb-2 last:border-0 last:pb-0">
+                        <div>
+                          <p className="text-[11px] font-bold text-neutral-300">{lang === 'pt' ? 'Safra ' : 'Crop '}{item.period}</p>
+                          <p className="text-[9px] text-neutral-500">
+                            {item.br_area_mha !== undefined ? `${item.br_area_mha} M ha` : '—'}
+                            {item.br_yield_kg_per_ha !== undefined ? ` · ${item.br_yield_kg_per_ha} kg/ha` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[13px] font-bold text-emerald-400">
+                            {item.br_prod_mmt !== undefined ? `${item.br_prod_mmt} MT` : "—"}
+                          </p>
+                          <p className="text-[9px] text-neutral-500">{lang === 'pt' ? 'Produção Brasil' : 'Brazil Production'}</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[13px] font-bold text-emerald-400">
-                          {item.br_prod !== undefined ? `${item.br_prod} MT` : "—"}
-                        </p>
-                        <p className="text-[9px] text-neutral-500">{lang === 'pt' ? 'Safra Brasil' : 'Brazil Crop'}</p>
+                    ))
+                  ) : (
+                    chartData.slice(-2).map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between border-b border-neutral-800 pb-2 last:border-0 last:pb-0">
+                        <div>
+                          <p className="text-[11px] font-bold text-neutral-300">{item.period}</p>
+                          <p className="text-[9px] text-neutral-500">{lang === 'pt' ? 'Estimativa Longo Prazo' : 'Long-term Estimate'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[13px] font-bold text-emerald-400">
+                            {item.br_prod !== undefined ? `${item.br_prod} MT` : "—"}
+                          </p>
+                          <p className="text-[9px] text-neutral-500">{lang === 'pt' ? 'Safra Brasil' : 'Brazil Crop'}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>
