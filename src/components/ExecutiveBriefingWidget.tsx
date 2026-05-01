@@ -55,6 +55,26 @@ const PRIORITY_COLORS: Record<string, string> = {
   low:    "bg-neutral-50 border-neutral-200 text-neutral-600",
 };
 
+/**
+ * Defensively extract prose from a field that may have been stored as a raw
+ * JSON blob (e.g. `{"executive_summary":"..."}` or `{"summary":"..."}`).
+ * This was caused by a bug in early sync-daily-briefing runs where the full
+ * LLM JSON output was written to the DB instead of just the prose field.
+ * For correctly stored plain-text values this is a no-op.
+ */
+function safeExtractSummary(raw: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trimStart();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed.executive_summary === "string") return parsed.executive_summary;
+      if (parsed && typeof parsed.summary === "string") return parsed.summary;
+    } catch { /* not valid JSON — return as-is */ }
+  }
+  return raw;
+}
+
 export function ExecutiveBriefingWidget({ lang }: { lang: Lang }) {
   const t = translations[lang];
   const tp = t.personaBriefing;
@@ -130,6 +150,8 @@ export function ExecutiveBriefingWidget({ lang }: { lang: Lang }) {
   }
 
   if (!briefing) return null;
+
+  const executiveSummary = safeExtractSummary(briefing.executive_summary);
 
   const dateLabel = new Date(briefing.briefing_date + "T12:00:00").toLocaleDateString(
     lang === "pt" ? "pt-BR" : "en-US",
@@ -229,12 +251,12 @@ export function ExecutiveBriefingWidget({ lang }: { lang: Lang }) {
       {activeTab === "general" && (
         <>
           {/* Executive Summary — always visible */}
-          {briefing.executive_summary && (
+          {executiveSummary && (
             <div className="px-5 py-4">
               <p className="text-[12px] text-neutral-700 leading-relaxed whitespace-pre-line">
                 {expanded
-                  ? briefing.executive_summary
-                  : briefing.executive_summary.slice(0, 300) + (briefing.executive_summary.length > 300 ? "…" : "")}
+                  ? executiveSummary
+                  : executiveSummary.slice(0, 300) + (executiveSummary.length > 300 ? "…" : "")}
               </p>
             </div>
           )}
@@ -436,10 +458,10 @@ export function ExecutiveBriefingWidget({ lang }: { lang: Lang }) {
           {/* Rendered persona content */}
           {!isPersonaLoading && activePersonaData && (
             <div className="space-y-4">
-              {/* Summary prose */}
+              {/* Summary prose — defensively extract from JSON if needed */}
               {activePersonaData.summary && (
                 <p className="text-[12px] text-neutral-700 leading-relaxed whitespace-pre-line">
-                  {activePersonaData.summary}
+                  {safeExtractSummary(activePersonaData.summary)}
                 </p>
               )}
 
