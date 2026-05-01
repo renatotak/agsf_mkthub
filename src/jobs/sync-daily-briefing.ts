@@ -282,8 +282,22 @@ If entity mentions data is provided, name the specific companies affected. Focus
     })
 
     const raw = await summarizeText(systemPrompt, context, 1500)
-    const parsed = JSON.parse(raw)
-    return parsed.executive_summary || raw
+    // The model returns JSON — extract executive_summary prose only.
+    // Never store the raw JSON blob as the summary; fall through to the
+    // algorithmic fallback if the field is missing or the parse fails.
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      // JSON.parse failed — raw is not valid JSON; re-throw so the outer
+      // catch produces the algorithmic fallback.
+      throw new Error(`LLM output was not valid JSON: ${raw.slice(0, 120)}`)
+    }
+    if (parsed.executive_summary && typeof parsed.executive_summary === "string") {
+      return parsed.executive_summary
+    }
+    // Parsed OK but executive_summary missing — algorithmic fallback via re-throw
+    throw new Error("LLM JSON missing executive_summary field")
   } catch {
     // Fallback: algorithmic summary without LLM
     const lines: string[] = []
