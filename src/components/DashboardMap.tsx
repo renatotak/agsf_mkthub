@@ -83,6 +83,37 @@ const UF_COORDS: Record<string, { lat: number; lng: number }> = {
 
 const ALL_UFS = Object.keys(UF_COORDS).sort();
 
+// State bounding boxes: center lat/lng + zoom level for fly-to on UF filter
+const UF_BOUNDS: Record<string, { lat: number; lng: number; zoom: number }> = {
+  AC: { lat: -9.02, lng: -70.81, zoom: 7 },
+  AL: { lat: -9.57, lng: -36.78, zoom: 8 },
+  AM: { lat: -3.47, lng: -65.10, zoom: 6 },
+  AP: { lat: 1.41, lng: -51.77, zoom: 7 },
+  BA: { lat: -12.58, lng: -41.70, zoom: 7 },
+  CE: { lat: -5.20, lng: -39.53, zoom: 7 },
+  DF: { lat: -15.78, lng: -47.93, zoom: 11 },
+  ES: { lat: -19.60, lng: -40.67, zoom: 8 },
+  GO: { lat: -15.83, lng: -49.84, zoom: 7 },
+  MA: { lat: -5.42, lng: -45.44, zoom: 7 },
+  MG: { lat: -18.51, lng: -44.55, zoom: 7 },
+  MS: { lat: -20.77, lng: -54.79, zoom: 7 },
+  MT: { lat: -12.64, lng: -55.42, zoom: 6 },
+  PA: { lat: -3.79, lng: -52.48, zoom: 6 },
+  PB: { lat: -7.28, lng: -36.72, zoom: 8 },
+  PE: { lat: -8.81, lng: -36.95, zoom: 7 },
+  PI: { lat: -7.72, lng: -42.73, zoom: 7 },
+  PR: { lat: -24.89, lng: -51.55, zoom: 7 },
+  RJ: { lat: -22.33, lng: -42.73, zoom: 8 },
+  RN: { lat: -5.81, lng: -36.59, zoom: 8 },
+  RO: { lat: -10.92, lng: -62.09, zoom: 7 },
+  RR: { lat: 2.05, lng: -61.38, zoom: 7 },
+  RS: { lat: -29.69, lng: -53.29, zoom: 7 },
+  SC: { lat: -27.45, lng: -50.95, zoom: 8 },
+  SE: { lat: -10.57, lng: -37.45, zoom: 8 },
+  SP: { lat: -22.26, lng: -48.86, zoom: 7 },
+  TO: { lat: -10.25, lng: -48.32, zoom: 7 },
+};
+
 function resolveCoords(city?: string | null, state?: string | null): { lat: number; lng: number } | null {
   if (city && state) {
     const key = `${city}, ${state}`;
@@ -524,7 +555,9 @@ export function DashboardMap({ lang }: { lang: Lang }) {
     news_attached: filteredMarkers.filter(m => m.type === "news_attached").length,
   };
 
-  // Map center — zoom to selected city, filtered region, or default
+  // Map center — zoom to selected city or default Brazil view.
+  // UF filter zoom is handled imperatively by UfZoomController (inside GMap)
+  // so the map is NOT remounted when the UF chip changes.
   const { mapCenter, mapZoom } = useMemo(() => {
     // If a city is selected, zoom to it regardless of markers
     if (citySearch) {
@@ -533,8 +566,8 @@ export function DashboardMap({ lang }: { lang: Lang }) {
       const coords = CITY_COORDS[citySearch] || resolveCoords(citySearch.split(",")[0]?.trim(), citySearch.split(",")[1]?.trim());
       if (coords) return { mapCenter: coords, mapZoom: 10 };
     }
-    // If filtered markers exist, fit them
-    if (filteredMarkers.length > 0 && filteredMarkers.length <= 20 && (ufFilter || citySearch)) {
+    // If filtered markers exist and a city search is active, fit them
+    if (filteredMarkers.length > 0 && filteredMarkers.length <= 20 && citySearch) {
       const lats = filteredMarkers.map(m => m.lat);
       const lngs = filteredMarkers.map(m => m.lng);
       const center = { lat: (Math.min(...lats) + Math.max(...lats)) / 2, lng: (Math.min(...lngs) + Math.max(...lngs)) / 2 };
@@ -542,9 +575,8 @@ export function DashboardMap({ lang }: { lang: Lang }) {
       const zoom = latSpan < 1 ? 9 : latSpan < 3 ? 7 : latSpan < 8 ? 5 : 4;
       return { mapCenter: center, mapZoom: zoom };
     }
-    if (ufFilter && UF_COORDS[ufFilter]) return { mapCenter: UF_COORDS[ufFilter], mapZoom: 6 };
-    return { mapCenter: { lat: -15.78, lng: -47.93 }, mapZoom: 4 };
-  }, [ufFilter, citySearch, filteredMarkers, allCities]);
+    return { mapCenter: { lat: -15.0, lng: -53.0 }, mapZoom: 4 };
+  }, [citySearch, filteredMarkers, allCities]);
 
   // Build unique city list from all sources for autocomplete
   const availableCities = useMemo(() => {
@@ -687,7 +719,7 @@ export function DashboardMap({ lang }: { lang: Lang }) {
       </div>
 
       {/* ── Map ── */}
-      <div id="dashboard-map-container" className="relative w-full h-[380px] bg-neutral-100">
+      <div id="dashboard-map-container" className="relative w-full h-[560px] bg-neutral-100">
         {MAP_KEY ? (
           <MapErrorBoundary fallback={
             <div className="flex items-center justify-center h-full text-neutral-500 text-sm gap-2">
@@ -790,6 +822,8 @@ export function DashboardMap({ lang }: { lang: Lang }) {
               <BboxCaptureButton lang={lang} bboxDirty={bboxDirty} bboxActive={!!bbox}
                 onApply={(b) => { setBbox(b); setBboxDirty(false); }}
                 onClear={() => { setBbox(null); setBboxDirty(false); }} />
+
+              <UfZoomController ufFilter={ufFilter} />
             </GMap>
           </APIProvider>
           </MapErrorBoundary>
@@ -842,6 +876,29 @@ function LayerToggle({ active, onClick, color, label, count }: {
       <span className={`text-[9px] ${active ? "text-neutral-400" : "text-neutral-300"}`}>({count})</span>
     </button>
   );
+}
+
+// ─── UF Zoom Controller (must be inside GMap) ──────────────────────────────
+// Uses useMap() to imperatively pan + zoom when the UF filter changes.
+// Avoids remounting the entire map (which was happening via the key= prop).
+
+function UfZoomController({ ufFilter }: { ufFilter: string }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+    if (ufFilter && UF_BOUNDS[ufFilter]) {
+      const { lat, lng, zoom } = UF_BOUNDS[ufFilter];
+      map.panTo({ lat, lng });
+      map.setZoom(zoom);
+    } else if (!ufFilter) {
+      // "Todos" selected — fly back to Brazil overview
+      map.panTo({ lat: -15.0, lng: -53.0 });
+      map.setZoom(4);
+    }
+  }, [map, ufFilter]);
+
+  return null;
 }
 
 // ─── Bbox "Search this area" button (must be inside APIProvider) ────────────
