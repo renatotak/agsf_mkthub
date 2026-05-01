@@ -82,7 +82,7 @@ interface BriefingPayload {
   id: string;
   date: string;
   summary: string | null;
-  briefing_theme?: string | null;
+  theme?: string | null;
 }
 
 // ─── Top-level component ──────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ export function Mailing({ lang }: { lang: Lang }) {
 
       <div className="flex items-center gap-2 border-b border-neutral-200">
         {(["drafts", "clients", "log"] as Tab[]).map((tab) => (
-          <button
+          <button type="button"
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
@@ -174,7 +174,7 @@ function DraftsTab({ lang }: { lang: Lang }) {
             <option value="sent">{lang === "pt" ? "Enviado" : "Sent"}</option>
             <option value="failed">{lang === "pt" ? "Falhou" : "Failed"}</option>
           </select>
-          <button
+          <button type="button"
             onClick={refresh}
             className="flex items-center gap-1 text-[12px] text-neutral-600 hover:text-neutral-900 px-2 py-1.5"
           >
@@ -182,7 +182,7 @@ function DraftsTab({ lang }: { lang: Lang }) {
             {lang === "pt" ? "Atualizar" : "Refresh"}
           </button>
         </div>
-        <button
+        <button type="button"
           onClick={() => setCreating(true)}
           className="flex items-center gap-1.5 bg-brand-primary text-white text-[12px] font-medium px-3 py-1.5 rounded-md hover:bg-brand-primary/90"
         >
@@ -194,7 +194,7 @@ function DraftsTab({ lang }: { lang: Lang }) {
       {feedback && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 text-[12px] px-3 py-2 rounded-md flex items-center justify-between">
           <span>{feedback}</span>
-          <button onClick={() => setFeedback(null)}><X size={14} /></button>
+          <button type="button" onClick={() => setFeedback(null)}><X size={14} /></button>
         </div>
       )}
 
@@ -317,7 +317,7 @@ function DraftCard({ draft, lang, onEdit, onSent, onDelete }: {
           </p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
+          <button type="button"
             onClick={onEdit}
             className="p-1.5 text-neutral-500 hover:text-brand-primary hover:bg-neutral-100 rounded"
             title={lang === "pt" ? "Editar" : "Edit"}
@@ -325,7 +325,7 @@ function DraftCard({ draft, lang, onEdit, onSent, onDelete }: {
             <Pencil size={14} />
           </button>
           {draft.status !== "sent" && (
-            <button
+            <button type="button"
               onClick={handleSend}
               disabled={sending}
               className="flex items-center gap-1 bg-brand-primary text-white text-[11px] font-medium px-2.5 py-1 rounded-md hover:bg-brand-primary/90 disabled:opacity-50"
@@ -334,7 +334,7 @@ function DraftCard({ draft, lang, onEdit, onSent, onDelete }: {
               {lang === "pt" ? "Enviar" : "Send"}
             </button>
           )}
-          <button
+          <button type="button"
             onClick={handleDelete}
             className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded"
             title={lang === "pt" ? "Excluir" : "Delete"}
@@ -405,7 +405,7 @@ function DraftEditor({ draft, lang, onClose, onSaved }: {
           <h2 className="text-[15px] font-bold">
             {lang === "pt" ? "Editar Rascunho" : "Edit Draft"} · {PERSONA_LABELS[draft.persona][lang]}
           </h2>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose}><X size={18} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -428,7 +428,7 @@ function DraftEditor({ draft, lang, onClose, onSaved }: {
             </label>
             <div className="flex flex-wrap gap-1.5">
               {CULTURE_OPTIONS.map((c) => (
-                <button
+                <button type="button"
                   key={c}
                   onClick={() => toggleCulture(c)}
                   className={`text-[11px] px-2 py-1 rounded border ${
@@ -467,7 +467,7 @@ function DraftEditor({ draft, lang, onClose, onSaved }: {
         </div>
 
         <div className="flex items-center justify-between gap-2 p-4 border-t border-neutral-200">
-          <button
+          <button type="button"
             onClick={handlePreview}
             className="flex items-center gap-1.5 text-[12px] text-neutral-700 hover:text-neutral-900 px-3 py-1.5"
           >
@@ -475,10 +475,10 @@ function DraftEditor({ draft, lang, onClose, onSaved }: {
             {lang === "pt" ? "Pré-visualizar" : "Preview"}
           </button>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="text-[12px] text-neutral-600 hover:text-neutral-900 px-3 py-1.5">
+            <button type="button" onClick={onClose} className="text-[12px] text-neutral-600 hover:text-neutral-900 px-3 py-1.5">
               {lang === "pt" ? "Cancelar" : "Cancel"}
             </button>
-            <button
+            <button type="button"
               onClick={handleSave}
               disabled={saving}
               className="flex items-center gap-1.5 bg-brand-primary text-white text-[12px] font-medium px-3 py-1.5 rounded-md hover:bg-brand-primary/90 disabled:opacity-50"
@@ -506,24 +506,25 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
     fetch("/api/executive-briefing")
       .then((r) => r.json())
       .then((json) => {
-        if (json && (json.id || json.briefing?.id)) {
-          const b = json.briefing ?? json;
+        const b = json?.briefing ?? json;
+        if (b && b.id) {
           setBriefing({
             id: b.id,
-            date: b.date,
-            summary: b.summary ?? null,
-            briefing_theme: b.briefing_theme ?? null,
+            date: b.briefing_date ?? b.date ?? "",
+            summary: b.executive_summary ?? b.summary ?? null,
+            theme: b.theme ?? null,
           });
         }
       })
-      .catch(() => {});
+      .catch((err) => console.error("[mailing] briefing fetch error:", err));
   }, []);
 
   const toggleCulture = (slug: string) => {
     setCultureFilter((prev) => prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]);
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (e?: React.MouseEvent) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
     if (!briefing) {
       setError(lang === "pt" ? "Nenhum briefing executivo encontrado para hoje" : "No executive briefing found for today");
       return;
@@ -540,11 +541,19 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
           culture_filter: cultureFilter,
         }),
       });
-      const json = await res.json();
-      if (json.success) onCreated();
-      else setError(json.error || "Create error");
+      let json: { success?: boolean; error?: string } | null = null;
+      try { json = await res.json(); } catch { /* non-JSON */ }
+      if (res.ok && json?.success) {
+        onCreated();
+      } else {
+        const msg = json?.error || `HTTP ${res.status} ${res.statusText}`;
+        console.error("[mailing/draft] create failed:", msg, json);
+        setError(msg);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create error");
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[mailing/draft] create threw:", err);
+      setError(msg);
     } finally {
       setCreating(false);
     }
@@ -555,7 +564,7 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
       <div className="bg-white rounded-lg max-w-lg w-full overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-neutral-200">
           <h2 className="text-[15px] font-bold">{lang === "pt" ? "Novo Rascunho" : "New Draft"}</h2>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose}><X size={18} /></button>
         </div>
 
         <div className="p-4 space-y-3">
@@ -565,7 +574,7 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
             </p>
             {briefing ? (
               <p className="text-[12px] text-neutral-800">
-                {briefing.date} · {briefing.briefing_theme || (lang === "pt" ? "Briefing geral" : "General briefing")}
+                {briefing.date} · {briefing.theme || (lang === "pt" ? "Briefing geral" : "General briefing")}
               </p>
             ) : (
               <p className="text-[12px] text-neutral-400">
@@ -580,7 +589,7 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
             </label>
             <div className="grid grid-cols-2 gap-1.5">
               {PERSONAS.map((p) => (
-                <button
+                <button type="button"
                   key={p}
                   onClick={() => setPersona(p)}
                   className={`text-[12px] px-2 py-1.5 rounded border ${
@@ -602,7 +611,7 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
             </label>
             <div className="flex flex-wrap gap-1.5">
               {CULTURE_OPTIONS.map((c) => (
-                <button
+                <button type="button"
                   key={c}
                   onClick={() => toggleCulture(c)}
                   className={`text-[11px] px-2 py-1 rounded border ${
@@ -625,10 +634,10 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
         </div>
 
         <div className="flex items-center justify-end gap-2 p-4 border-t border-neutral-200">
-          <button onClick={onClose} className="text-[12px] text-neutral-600 hover:text-neutral-900 px-3 py-1.5">
+          <button type="button" onClick={onClose} className="text-[12px] text-neutral-600 hover:text-neutral-900 px-3 py-1.5">
             {lang === "pt" ? "Cancelar" : "Cancel"}
           </button>
-          <button
+          <button type="button"
             onClick={handleCreate}
             disabled={creating || !briefing}
             className="flex items-center gap-1.5 bg-brand-primary text-white text-[12px] font-medium px-3 py-1.5 rounded-md hover:bg-brand-primary/90 disabled:opacity-50"
@@ -685,7 +694,7 @@ function ClientsTab({ lang }: { lang: Lang }) {
             {clients.length} {lang === "pt" ? "destinatários" : "recipients"}
           </span>
         </div>
-        <button
+        <button type="button"
           onClick={() => setCreating(true)}
           className="flex items-center gap-1.5 bg-brand-primary text-white text-[12px] font-medium px-3 py-1.5 rounded-md hover:bg-brand-primary/90"
         >
@@ -724,7 +733,7 @@ function ClientsTab({ lang }: { lang: Lang }) {
                   <td className="px-3 py-2 text-[11px] text-neutral-600">{c.cultures.join(" · ") || "—"}</td>
                   <td className="px-3 py-2">{c.active ? <CheckCircle2 size={14} className="text-emerald-600" /> : <X size={14} className="text-neutral-400" />}</td>
                   <td className="px-3 py-2">
-                    <button
+                    <button type="button"
                       onClick={() => setEditing(c)}
                       className="p-1 text-neutral-500 hover:text-brand-primary"
                     >
@@ -768,7 +777,8 @@ function ClientFormModal({ client, lang, onClose, onSaved }: {
     setCultures((prev) => prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e?: React.MouseEvent) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
     if (!fullName.trim() || !email.trim()) {
       setError(lang === "pt" ? "Nome e email são obrigatórios" : "Name and email are required");
       return;
@@ -791,11 +801,19 @@ function ClientFormModal({ client, lang, onClose, onSaved }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = await res.json();
-      if (json.success) onSaved();
-      else setError(json.error || "Save error");
+      let json: { success?: boolean; error?: string } | null = null;
+      try { json = await res.json(); } catch { /* non-JSON response */ }
+      if (res.ok && json?.success) {
+        onSaved();
+      } else {
+        const msg = json?.error || `HTTP ${res.status} ${res.statusText}`;
+        console.error("[mailing/client] save failed:", msg, json);
+        setError(msg);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save error");
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[mailing/client] save threw:", err);
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -819,7 +837,7 @@ function ClientFormModal({ client, lang, onClose, onSaved }: {
               ? (lang === "pt" ? "Editar Destinatário" : "Edit Recipient")
               : (lang === "pt" ? "Novo Destinatário" : "New Recipient")}
           </h2>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose}><X size={18} /></button>
         </div>
 
         <div className="p-4 space-y-3">
@@ -901,17 +919,17 @@ function ClientFormModal({ client, lang, onClose, onSaved }: {
 
         <div className="flex items-center justify-between gap-2 p-4 border-t border-neutral-200">
           {isEdit ? (
-            <button onClick={handleDelete}
+            <button type="button" onClick={handleDelete}
               className="flex items-center gap-1.5 text-red-600 text-[12px] hover:bg-red-50 px-3 py-1.5 rounded">
               <Trash2 size={13} />
               {lang === "pt" ? "Desativar" : "Deactivate"}
             </button>
           ) : <span />}
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="text-[12px] text-neutral-600 hover:text-neutral-900 px-3 py-1.5">
+            <button type="button" onClick={onClose} className="text-[12px] text-neutral-600 hover:text-neutral-900 px-3 py-1.5">
               {lang === "pt" ? "Cancelar" : "Cancel"}
             </button>
-            <button onClick={handleSubmit} disabled={saving}
+            <button type="button" onClick={handleSubmit} disabled={saving}
               className="flex items-center gap-1.5 bg-brand-primary text-white text-[12px] font-medium px-3 py-1.5 rounded-md hover:bg-brand-primary/90 disabled:opacity-50">
               {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
               {lang === "pt" ? "Salvar" : "Save"}
@@ -968,7 +986,7 @@ function LogTab({ lang }: { lang: Lang }) {
             <option value="clicked">{lang === "pt" ? "Clicado" : "Clicked"}</option>
             <option value="failed">{lang === "pt" ? "Falhou" : "Failed"}</option>
           </select>
-          <button onClick={refresh} className="flex items-center gap-1 text-[12px] text-neutral-600 hover:text-neutral-900 px-2 py-1.5">
+          <button type="button" onClick={refresh} className="flex items-center gap-1 text-[12px] text-neutral-600 hover:text-neutral-900 px-2 py-1.5">
             <RefreshCw size={13} />
             {lang === "pt" ? "Atualizar" : "Refresh"}
           </button>
