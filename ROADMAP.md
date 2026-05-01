@@ -144,40 +144,40 @@ Open items — may or may not be pursued depending on future priorities. All are
 
 | # | Task | Type | Notes |
 |---|------|------|-------|
-| P1 | **Map vertical size + UF zoom** — increase map height; add zoom-to-state when user selects a UF filter | Enhancement | `DashboardMap.tsx` + map container sizing in `page.tsx` |
-| P2 | **Briefing Executivo: JSON display bug** — briefing content is rendered as raw JSON instead of formatted prose | Bug | Check `ExecutiveBriefingWidget.tsx` rendering path; ensure `summary` string is parsed before display |
-| P3 | **Briefing → client mailing workflow** — AI draft → mkthub user reviews → clicks Send to clients; mailings differ by persona role and geography; channels: email + App Campo + AgriSafe app | Major feature | Needs: `mailing_log` table, Resend/SendGrid integration, per-client role+UF filter, review UI in ExecutiveBriefingWidget, "enviados" log tab in Notícias Agro |
+| P1 | **Map vertical size + UF zoom** — increase map height; add zoom-to-state when user selects a UF filter | ✅ Done | `DashboardMap.tsx` h-[380px]→h-[560px] + UF_BOUNDS table + UfZoomController (commit `0a2594b`) |
+| P2 | **Briefing Executivo: JSON display bug** — briefing content rendered as raw JSON instead of prose | ✅ Done | `ExecutiveBriefingWidget` `safeExtractSummary` + strict re-throw in `sync-daily-briefing` (commit `31525aa`) |
+| P3 | **Briefing → client mailing workflow** — AI draft → mkthub user reviews → clicks Send to clients; same template, different content; segmented by persona + culture (no geography) | 🚧 In progress | **Schema landed** (mig 083, 5 tables: mailing_clients/_client_cultures/_templates/_drafts/_log, commit `d382aea`). Pending: Resend account setup → API key in Vercel → review UI in ExecutiveBriefingWidget → "enviados" log tab in Notícias Agro |
 
 #### Pulso de Mercado
 
 | # | Task | Type | Notes |
 |---|------|------|-------|
-| M1 | **Timestamps on all data** — Preços Internacionais de Fertilizantes and other series missing "last updated" indicator | Bug | Surface `updated_at`/`reference_date` from `macro_statistics` rows on every chart/card |
-| M2 | **OECD "Relatório Completo" button broken** — link/modal not working | Bug | Investigate `MarketPulse.tsx` OECD section; fix URL or modal open handler |
-| M3 | **Cogo projections** — macro projections still mocked; source from Cogo presentations in `G:\My Drive\Reports\0 - Agribusiness\Cogo` (latest file per culture) | Enhancement | Parse latest Cogo PDF/PPTX per culture → extract projections → upsert to `macro_statistics` with `source='cogo'`; needs Google Drive access |
+| M1 | **Timestamps on all data** — Preços Internacionais de Fertilizantes and other series missing "last updated" indicator | ✅ Done | `formatDateLabel()` helper + new i18n keys; surfaced on Culture/Region/IntlFutures/Insumo/Macro/WB/Highlights (commit `b158b97`) |
+| M2 | **OECD "Relatório Completo" button broken** — link/modal not working | ✅ Done | `<button>` → `<a target=_blank>` to oecd-ilibrary.org canonical (commit `5ccdece`) |
+| M3 | **Cogo projections** — macro projections still mocked; source from Cogo presentations | ✅ Done | 1089 rows seeded into `macro_statistics` via `seed-cogo-safra-projection.ts` (Brasil + 27 UFs × 7 cultures × 3 indicators); new `pivotCogoProjections()` wires into Estimativa Longo Prazo sidebar (commit `5ccdece`) |
 
 #### Inteligência de Insumos
 
 | # | Task | Type | Notes |
 |---|------|------|-------|
-| I1 | **Oráculo "Buscar Alternativa" not working** — error: "Nenhum produto registrado para essa combinação ainda. Execute /api/cron/sync-agrofit-bulk" | Bug | Run `sync-agrofit-bulk` to populate `industry_products`; verify culture+category query in Oracle handler |
-| I2 | **MAPA AGROFIT-style new products page** — page showing newly registered products, similar to `mapa-indicadores.agricultura.gov.br/publico/extensions/AGROFIT/AGROFIT.html` | New feature | New tab in Inteligência de Insumos; filter by registration date; source: AGROFIT API or `industry_products` with `created_at` recency |
-| I3 | **AgroAPI keys not in env** — Embrapa AgroAPI is configured but keys not in `.env.local`; data not flowing | Bug | Verify `AGROAPI_CONSUMER_KEY` + `AGROAPI_CONSUMER_SECRET` in `.env.local` and Vercel env vars; test `/api/agroapi/*` endpoints |
-| I4 | **Tab structure like agrofit.agricultura.gov.br** — reorganize tabs to mirror the official AGROFIT structure without losing existing data/insights | Enhancement | See tab layout at `agrofit.agricultura.gov.br/agrofit_cons/principal_agrofit_cons`; map current tabs (Pacote / Indústria / Mapa / Produto Técnico / Produto Formulado) to new structure |
+| I1 | **Oráculo "Buscar Alternativa" not working** — error: "Nenhum produto registrado para essa combinação ainda. Execute /api/cron/sync-agrofit-bulk" | ✅ Done | 3 root causes: `cana` slug mismatch → `cana-de-acucar`; pest_slug fallback when 0 rows; `headquarters_country` → `manufacturer_country` (commit `af2670f`) + mig 080 extending source_dataset CHECK |
+| I2 | **Oráculo Vendas Campo** — field-sales companion: pick culture+pest, see ranked products (newly registered + AI class + manufacturer + cost tier), generate 1-page PDF for producer | New feature | Reframed from "AGROFIT new products page" — extends `Buscar Alternativa`. Pending: cost data path (qualitative-only first), field-agent identity, output format (PDF/share link/WhatsApp). User confirmed broad scope on 2026-05-01 |
+| I3 | **AgroAPI keys not in env** — Embrapa AgroAPI is configured but keys not in `.env.local`; data not flowing | ✅ Done | `AGROAPI_CONSUMER_KEY` + `AGROAPI_CONSUMER_SECRET` added to `.env.local` and Vercel (2026-05-01) |
+| I4 | **Tab structure like agrofit.agricultura.gov.br** — reorganize tabs to mirror the official AGROFIT structure without losing existing data/insights | Enhancement | Pending. Folds into I2 — same source page (`agrofit.agricultura.gov.br/agrofit_cons/principal_agrofit_cons`). Will design as part of Oráculo Vendas Campo |
 
 #### Radar Competitivo → Agtech e Fintech
 
 | # | Task | Type | Notes |
 |---|------|------|-------|
-| R1 | **Tarken + AGRisk missing** — both are now in the DB; verify they render in `CompetitorRadar.tsx` | Bug / Done | Added to `competitors` table (2026-04-30): tarken.ag (R$6B/mês, Copiloto IA) + agrisk.com.br (1.300 clientes, Série B Rabobank+Itaú) |
-| R2 | **Rename chapter: Radar Competitivo → Agtech e Fintech** — remove terms "concorrentes" and "competidores" from UI; chapter covers the ecosystem, not just direct competition | Enhancement | Update sidebar label in `i18n.ts` + chapter title in `CompetitorRadar.tsx`; review all copy using "concorrente/competidor" |
-| R3 | **Refresh button on Radar page** — trigger `sync-competitors` on demand to pull latest news/signals for all listed companies | New feature | New "Atualizar" button → POST to `/api/cron/sync-competitors`; show last-updated timestamp |
+| R1 | **Tarken + AGRisk missing** — render in `CompetitorRadar.tsx` | ✅ Done | Inserted into `competitors` + `competitor_signals` (2026-04-30): tarken.ag (R$6B/mês, Copiloto IA) + agrisk.com.br (1.300 clientes B2B, Série B Rabobank+Itaú) |
+| R2 | **Rename chapter: Radar Competitivo → Agtech e Fintech** — remove "concorrentes" and "competidores" terminology | ✅ Done | i18n module label + neutral copy throughout `CompetitorRadar.tsx` (commit `7fb611b`) |
+| R3 | **Refresh button on Radar page** — trigger `sync-competitors` on demand | ✅ Done | RefreshCw button + POST handler on `/api/cron/sync-competitors` + feedback banner (commit `7fb611b`) |
 
 #### Obsidian
 
 | # | Task | Type | Notes |
 |---|------|------|-------|
-| O1 | **Obsidian shortcuts cheat-sheet** — add common keyboard shortcuts and markdown syntax reference to `obsidian/cheat-sheet` | Documentation | Cover: headers, bullets, links, tags, hotkeys for new note, quick switcher, graph view, etc. |
+| O1 | **Obsidian shortcuts cheat-sheet** — common keyboard shortcuts + markdown syntax reference | ✅ Done | 4 files in `obsidian/cheat-sheet/` (PT-BR): README index, 01-keyboard-shortcuts (Mac/Win), 02-markdown-syntax (raw + rendered examples), 03-vault-conventions (file naming, frontmatter, AgriSafe vs Grano routing). Uncommitted in obsidian vault — review before committing |
 
 ---
 
