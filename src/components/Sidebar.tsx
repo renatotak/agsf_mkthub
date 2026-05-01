@@ -7,7 +7,7 @@ import {
   BarChart3, Radar, Newspaper, Calendar,
   PenTool, BookOpen, Scale, Store, Factory, Landmark,
   LayoutDashboard, ChevronDown, X, Database, Brain, TestTube, HelpCircle,
-  PanelLeftClose, PanelLeftOpen, CalendarDays,
+  PanelLeftClose, PanelLeftOpen, CalendarDays, Mail,
 } from "lucide-react";
 
 const SIDEBAR_COLLAPSED_KEY = "agsf-sidebar-collapsed";
@@ -18,7 +18,7 @@ export type Module =
   | "dashboard"
   | "dataSources"
   | "market" | "inputs" | "competitors" | "news" | "events"
-  | "contentHub"
+  | "contentHub" | "mailing"
   | "regulatory" | "recuperacao" | "retailers" | "industries" | "financialInstitutions"
   | "meetings"
   | "knowledgeBase"
@@ -62,6 +62,7 @@ const sections: SidebarSection[] = [
     icon: "campaign",
     items: [
       { id: "contentHub", icon: PenTool, labelKey: "contentHub" },
+      { id: "mailing", icon: Mail, labelKey: "mailing" },
     ],
   },
   {
@@ -274,6 +275,7 @@ export function getModuleTitle(module: Module, lang: Lang): string {
     news: "news",
     events: "events",
     contentHub: "contentHub",
+    mailing: "mailing",
     regulatory: "regulatory",
     recuperacao: "recuperacao",
     retailers: "retailers",

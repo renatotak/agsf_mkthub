@@ -9,6 +9,7 @@ import { CompetitorRadar } from "@/components/CompetitorRadar";
 import { AgroNews } from "@/components/AgroNews";
 import { EventTracker } from "@/components/EventTracker";
 import { ContentHub } from "@/components/ContentHub";
+import { Mailing } from "@/components/Mailing";
 import { AgInputIntelligence } from "@/components/AgInputIntelligence";
 import { RegulatoryFramework } from "@/components/RegulatoryFramework";
 import { RecuperacaoJudicial } from "@/components/RecuperacaoJudicial";
@@ -84,6 +85,7 @@ export default function Home() {
           {activeModule === "news"         && <AgroNews lang={lang} />}
           {activeModule === "events"       && <EventTracker lang={lang} />}
           {activeModule === "contentHub"   && <ContentHub lang={lang} />}
+          {activeModule === "mailing"      && <Mailing lang={lang} />}
           {activeModule === "regulatory"   && <RegulatoryFramework lang={lang} />}
           {activeModule === "recuperacao"  && <RecuperacaoJudicial lang={lang} />}
           {activeModule === "retailers"    && <RetailersDirectory lang={lang} />}
