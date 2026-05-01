@@ -146,7 +146,7 @@ Open items — may or may not be pursued depending on future priorities. All are
 |---|------|------|-------|
 | P1 | **Map vertical size + UF zoom** — increase map height; add zoom-to-state when user selects a UF filter | ✅ Done | `DashboardMap.tsx` h-[380px]→h-[560px] + UF_BOUNDS table + UfZoomController (commit `0a2594b`) |
 | P2 | **Briefing Executivo: JSON display bug** — briefing content rendered as raw JSON instead of prose | ✅ Done | `ExecutiveBriefingWidget` `safeExtractSummary` + strict re-throw in `sync-daily-briefing` (commit `31525aa`) |
-| P3 | **Briefing → client mailing workflow** — AI draft → mkthub user reviews → clicks Send to clients; same template, different content; segmented by persona + culture (no geography) | 🚧 In progress | **Schema landed** (mig 083, 5 tables: mailing_clients/_client_cultures/_templates/_drafts/_log, commit `d382aea`). Pending: Resend account setup → API key in Vercel → review UI in ExecutiveBriefingWidget → "enviados" log tab in Notícias Agro |
+| P3 | **Briefing → client mailing workflow** — AI draft → mkthub user reviews → clicks Send to clients; same template, different content; segmented by persona + culture (no geography) | ✅ Code complete | mig 083 schema (5 tables, commit `d382aea`); `src/lib/mailing.ts` + 7 `/api/mailing/*` routes + `Mailing.tsx` 3-tab module (Rascunhos / Destinatários / Enviados) wired into sidebar (commit `c3a7383`). **User-side pending**: add `RESEND_API_KEY` to Vercel env (Sensitive type) → register first recipients → send first test mailing |
 
 #### Pulso de Mercado
 
