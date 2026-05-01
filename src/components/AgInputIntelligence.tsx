@@ -72,7 +72,7 @@ const ORACLE_CULTURES = [
   { slug: "milho", label_pt: "Milho", label_en: "Corn" },
   { slug: "algodao", label_pt: "Algodão", label_en: "Cotton" },
   { slug: "cafe", label_pt: "Café", label_en: "Coffee" },
-  { slug: "cana", label_pt: "Cana", label_en: "Sugar Cane" },
+  { slug: "cana-de-acucar", label_pt: "Cana", label_en: "Sugar Cane" },
   { slug: "trigo", label_pt: "Trigo", label_en: "Wheat" },
   { slug: "feijao", label_pt: "Feijão", label_en: "Beans" },
   { slug: "arroz", label_pt: "Arroz", label_en: "Rice" },
@@ -308,6 +308,7 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
   const [oracleMolecules, setOracleMolecules] = useState<OracleMolecule[]>([]);
   const [oracleError, setOracleError] = useState<string | null>(null);
   const [oracleSearched, setOracleSearched] = useState(false);
+  const [oraclePestDataAvailable, setOraclePestDataAvailable] = useState(true);
   const [expandedMolecule, setExpandedMolecule] = useState<string | null>(null);
   // Phase 30 — Tech Products state
   const [techSearchTerm, setTechSearchTerm] = useState("");
@@ -421,13 +422,16 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
       const json = await res.json();
       if (json.success) {
         setOracleMolecules(json.molecules || []);
+        setOraclePestDataAvailable(json.pest_data_available !== false);
       } else {
         setOracleError(json.error || "Failed to query Oracle");
         setOracleMolecules([]);
+        setOraclePestDataAvailable(true);
       }
     } catch (e: any) {
       setOracleError(e.message || "Network error");
       setOracleMolecules([]);
+      setOraclePestDataAvailable(true);
     } finally {
       setOracleLoading(false);
       setOracleSearched(true);
@@ -804,6 +808,15 @@ export function AgInputIntelligence({ lang }: { lang: Lang }) {
           {oracleError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-[13px] text-red-700">
               <strong>{lang === "pt" ? "Erro:" : "Error:"}</strong> {oracleError}
+            </div>
+          )}
+
+          {oracleSearched && !oracleError && oraclePest && !oraclePestDataAvailable && oracleMolecules.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[12px] text-blue-700 flex items-start gap-2">
+              <Info size={14} className="mt-0.5 shrink-0" />
+              {lang === "pt"
+                ? `Dados por praga não disponíveis ainda para "${oraclePest}" — exibindo todos os produtos registrados para a cultura.`
+                : `Pest-level data not yet available for "${oraclePest}" — showing all products registered for this culture.`}
             </div>
           )}
 

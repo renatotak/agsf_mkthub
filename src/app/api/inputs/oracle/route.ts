@@ -61,7 +61,7 @@ interface OracleRow {
   formulation: string | null
   url_agrofit: string | null
   manufacturer_display: string | null
-  headquarters_country: string | null
+  manufacturer_country: string | null // view exposes manufacturer_country (not headquarters_country)
 }
 
 interface MoleculeBrand {
@@ -111,22 +111,38 @@ export async function GET(request: Request) {
   try {
     const supabase = createAdminClient()
 
-    // The view returns one row per (ingredient × product × use). Filter by
-    // culture_slug, optionally narrow by pest_slug / ingredient_id / category.
-    let query = supabase
-      .from('v_oracle_brand_alternatives')
-      .select('*')
-      .eq('culture_slug', culture)
-      .limit(limit * 5) // generous because we'll group client-side
+    // Helper: build and execute the view query with optional filters.
+    // Returns raw rows. Pest filter is applied only when explicitly requested —
+    // but AGROFIT data currently does not populate pest_slug (all null), so a
+    // pest-filtered query will return 0 rows. We detect this and fall back to
+    // culture-only results, setting pest_data_available=false in the response.
+    const fetchRows = async (applyPest: boolean): Promise<{ rows: OracleRow[]; error: unknown }> => {
+      let q = supabase
+        .from('v_oracle_brand_alternatives')
+        .select('*')
+        .eq('culture_slug', culture)
+        .limit(limit * 5) // generous because we group client-side
 
-    if (pest) query = query.eq('pest_slug', pest)
-    if (ingredientId) query = query.eq('ingredient_id', ingredientId)
-    if (category) query = query.eq('ingredient_category', category)
+      if (applyPest && pest) q = q.eq('pest_slug', pest)
+      if (ingredientId) q = q.eq('ingredient_id', ingredientId)
+      if (category) q = q.eq('ingredient_category', category)
 
-    const { data, error } = await query
+      const { data, error } = await q
+      return { rows: (data || []) as OracleRow[], error }
+    }
+
+    let { rows, error } = await fetchRows(true)
     if (error) throw error
 
-    const rows = (data || []) as OracleRow[]
+    // Pest filter returned nothing — AGROFIT rows have no pest_slug yet.
+    // Fall back to culture-level results so the UI always shows molecules.
+    let pestDataAvailable = true
+    if (pest && rows.length === 0) {
+      pestDataAvailable = false
+      const fallback = await fetchRows(false)
+      if (fallback.error) throw fallback.error
+      rows = fallback.rows
+    }
 
     // Group by ingredient_id; dedupe brands within a group by product_id.
     const groups = new Map<string, MoleculeGroup>()
@@ -155,7 +171,7 @@ export async function GET(request: Request) {
         product_id: r.product_id,
         product_name: r.product_name,
         manufacturer_display: r.manufacturer_display,
-        manufacturer_country: r.headquarters_country,
+        manufacturer_country: r.manufacturer_country, // view column is manufacturer_country
         formulation: r.formulation,
         toxicity_class: r.toxicity_class,
         environmental_class: r.environmental_class,
@@ -179,6 +195,7 @@ export async function GET(request: Request) {
       success: true,
       culture,
       pest: pest || null,
+      pest_data_available: pestDataAvailable,
       ingredient_id: ingredientId || null,
       category: category || null,
       molecules,
