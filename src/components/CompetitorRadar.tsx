@@ -7,7 +7,7 @@ import { Lang, t } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import {
   ExternalLink, AlertCircle, Rocket, Handshake, Users, Newspaper, Loader2, BarChart3,
-  Plus, Pencil, Trash2, X, Save, Globe, Sparkles, FileText,
+  Plus, Pencil, Trash2, X, Save, Globe, Sparkles, FileText, RefreshCw,
 } from "lucide-react";
 import { MockBadge } from "@/components/ui/MockBadge";
 import {
@@ -148,6 +148,8 @@ export function CompetitorRadar({ lang }: { lang: Lang }) {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [editingCompetitor, setEditingCompetitor] = useState<Competitor | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshFeedback, setRefreshFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   const fetchCompetitors = async () => {
     const { data: logData } = await supabase
@@ -179,6 +181,23 @@ export function CompetitorRadar({ lang }: { lang: Lang }) {
   useEffect(() => {
     fetchCompetitors();
   }, []);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshFeedback(null);
+    try {
+      const res = await fetch("/api/cron/sync-competitors", { method: "POST" });
+      if (!res.ok) throw new Error("refresh failed");
+      setRefreshFeedback({ type: "success", msg: tr.competitors.refreshed });
+      await fetchCompetitors();
+    } catch {
+      setRefreshFeedback({ type: "error", msg: tr.competitors.refreshError });
+    } finally {
+      setRefreshing(false);
+      setTimeout(() => setRefreshFeedback(null), 3500);
+    }
+  };
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
@@ -259,6 +278,15 @@ export function CompetitorRadar({ lang }: { lang: Lang }) {
             {tr.competitors.addCompetitor}
           </button>
           <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 font-medium text-sm transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            title={tr.competitors.refresh}
+          >
+            {refreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            {refreshing ? tr.competitors.refreshing : tr.competitors.refresh}
+          </button>
+          <button
             onClick={() => setShowCharts(!showCharts)}
             className={`p-2 rounded-lg text-sm transition-colors ${showCharts ? "bg-brand-primary/10 text-brand-primary" : "text-neutral-400 hover:bg-neutral-100"}`}
           >
@@ -266,6 +294,19 @@ export function CompetitorRadar({ lang }: { lang: Lang }) {
           </button>
         </div>
       </div>
+
+      {/* Refresh feedback */}
+      {refreshFeedback && (
+        <div
+          className={`mb-4 px-4 py-2.5 rounded-lg text-sm font-medium border ${
+            refreshFeedback.type === "success"
+              ? "bg-green-50 text-green-700 border-green-200"
+              : "bg-red-50 text-red-700 border-red-200"
+          }`}
+        >
+          {refreshFeedback.msg}
+        </div>
+      )}
 
       {/* Analytics Section */}
       {showCharts && (
@@ -862,8 +903,8 @@ function CompetitorModal({ lang, competitor, onClose, onSaved }: {
                 />
                 <p className="text-[10px] text-neutral-400 mt-1">
                   {lang === "pt"
-                    ? "Quando preenchido, o concorrente \u00e9 ancorado em legal_entities via entity_uid."
-                    : "When filled, the competitor is anchored to legal_entities via entity_uid."}
+                    ? "Quando preenchido, a empresa \u00e9 ancorada em legal_entities via entity_uid."
+                    : "When filled, the company is anchored to legal_entities via entity_uid."}
                 </p>
               </div>
             </div>

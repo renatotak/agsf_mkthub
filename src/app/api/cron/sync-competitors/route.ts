@@ -9,15 +9,7 @@ import { runSyncCompetitors } from '@/jobs/sync-competitors'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization')
-  if (
-    process.env.NODE_ENV === 'production' &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return new Response('Unauthorized', { status: 401 })
-  }
-
+async function runJob() {
   const result = await runSyncCompetitors(createAdminClient())
   return NextResponse.json(
     {
@@ -29,4 +21,20 @@ export async function GET(request: Request) {
     },
     { status: result.ok ? 200 : 500 },
   )
+}
+
+export async function GET(request: Request) {
+  const authHeader = request.headers.get('authorization')
+  if (
+    process.env.NODE_ENV === 'production' &&
+    authHeader !== `Bearer ${process.env.CRON_SECRET}`
+  ) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+  return runJob()
+}
+
+/** Manual on-demand trigger from the CompetitorRadar UI. No CRON_SECRET required. */
+export async function POST() {
+  return runJob()
 }
