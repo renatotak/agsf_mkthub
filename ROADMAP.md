@@ -136,6 +136,49 @@ Open items — may or may not be pursued depending on future priorities. All are
 | 8 | Notícias Agro | **Update button not working** — clicking the update/refresh button appears to do nothing | Bug | Investigate "Atualizar" handler in `AgroNews.tsx` |
 | 9 | Painel | **Persona-based Executive Briefing tabs** — develop tabs in Briefing Executivo based on personas (CEO, Head Comercial, Head Crédito, etc.); test now, eventually send via mailing to subscribers | New feature | Builds on `daily_themed_briefing` lens (Phase 6c), adds persona dimension |
 
+### 4.4 New backlog (2026-04-30)
+
+> Sourced from `obsidian/local/inbox/2026-04-30 to dos.md` + competitive intelligence doc.
+
+#### Painel
+
+| # | Task | Type | Notes |
+|---|------|------|-------|
+| P1 | **Map vertical size + UF zoom** — increase map height; add zoom-to-state when user selects a UF filter | Enhancement | `DashboardMap.tsx` + map container sizing in `page.tsx` |
+| P2 | **Briefing Executivo: JSON display bug** — briefing content is rendered as raw JSON instead of formatted prose | Bug | Check `ExecutiveBriefingWidget.tsx` rendering path; ensure `summary` string is parsed before display |
+| P3 | **Briefing → client mailing workflow** — AI draft → mkthub user reviews → clicks Send to clients; mailings differ by persona role and geography; channels: email + App Campo + AgriSafe app | Major feature | Needs: `mailing_log` table, Resend/SendGrid integration, per-client role+UF filter, review UI in ExecutiveBriefingWidget, "enviados" log tab in Notícias Agro |
+
+#### Pulso de Mercado
+
+| # | Task | Type | Notes |
+|---|------|------|-------|
+| M1 | **Timestamps on all data** — Preços Internacionais de Fertilizantes and other series missing "last updated" indicator | Bug | Surface `updated_at`/`reference_date` from `macro_statistics` rows on every chart/card |
+| M2 | **OECD "Relatório Completo" button broken** — link/modal not working | Bug | Investigate `MarketPulse.tsx` OECD section; fix URL or modal open handler |
+| M3 | **Cogo projections** — macro projections still mocked; source from Cogo presentations in `G:\My Drive\Reports\0 - Agribusiness\Cogo` (latest file per culture) | Enhancement | Parse latest Cogo PDF/PPTX per culture → extract projections → upsert to `macro_statistics` with `source='cogo'`; needs Google Drive access |
+
+#### Inteligência de Insumos
+
+| # | Task | Type | Notes |
+|---|------|------|-------|
+| I1 | **Oráculo "Buscar Alternativa" not working** — error: "Nenhum produto registrado para essa combinação ainda. Execute /api/cron/sync-agrofit-bulk" | Bug | Run `sync-agrofit-bulk` to populate `industry_products`; verify culture+category query in Oracle handler |
+| I2 | **MAPA AGROFIT-style new products page** — page showing newly registered products, similar to `mapa-indicadores.agricultura.gov.br/publico/extensions/AGROFIT/AGROFIT.html` | New feature | New tab in Inteligência de Insumos; filter by registration date; source: AGROFIT API or `industry_products` with `created_at` recency |
+| I3 | **AgroAPI keys not in env** — Embrapa AgroAPI is configured but keys not in `.env.local`; data not flowing | Bug | Verify `AGROAPI_CONSUMER_KEY` + `AGROAPI_CONSUMER_SECRET` in `.env.local` and Vercel env vars; test `/api/agroapi/*` endpoints |
+| I4 | **Tab structure like agrofit.agricultura.gov.br** — reorganize tabs to mirror the official AGROFIT structure without losing existing data/insights | Enhancement | See tab layout at `agrofit.agricultura.gov.br/agrofit_cons/principal_agrofit_cons`; map current tabs (Pacote / Indústria / Mapa / Produto Técnico / Produto Formulado) to new structure |
+
+#### Radar Competitivo → Agtech e Fintech
+
+| # | Task | Type | Notes |
+|---|------|------|-------|
+| R1 | **Tarken + AGRisk missing** — both are now in the DB; verify they render in `CompetitorRadar.tsx` | Bug / Done | Added to `competitors` table (2026-04-30): tarken.ag (R$6B/mês, Copiloto IA) + agrisk.com.br (1.300 clientes, Série B Rabobank+Itaú) |
+| R2 | **Rename chapter: Radar Competitivo → Agtech e Fintech** — remove terms "concorrentes" and "competidores" from UI; chapter covers the ecosystem, not just direct competition | Enhancement | Update sidebar label in `i18n.ts` + chapter title in `CompetitorRadar.tsx`; review all copy using "concorrente/competidor" |
+| R3 | **Refresh button on Radar page** — trigger `sync-competitors` on demand to pull latest news/signals for all listed companies | New feature | New "Atualizar" button → POST to `/api/cron/sync-competitors`; show last-updated timestamp |
+
+#### Obsidian
+
+| # | Task | Type | Notes |
+|---|------|------|-------|
+| O1 | **Obsidian shortcuts cheat-sheet** — add common keyboard shortcuts and markdown syntax reference to `obsidian/cheat-sheet` | Documentation | Cover: headers, bullets, links, tags, hotkeys for new note, quick switcher, graph view, etc. |
+
 ---
 
 ## 5. Reference
