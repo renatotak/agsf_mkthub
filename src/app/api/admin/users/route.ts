@@ -107,12 +107,13 @@ export async function POST(request: NextRequest) {
   }
 
   await logActivity(admin, {
-    action: "admin_create_user",
+    action: "insert",
     target_table: "user_plans",
     target_id: newUser.user.id,
-    source: "admin-panel",
+    source: "admin-users",
     source_kind: "manual",
-    details: { email: body.email, tier, farm_cap: body.farm_cap ?? defaults.farm_cap },
+    summary: `Admin created noCampo user: ${body.email} (${tier})`,
+    metadata: { email: body.email, tier, farm_cap: body.farm_cap ?? defaults.farm_cap },
   });
 
   return NextResponse.json({
@@ -171,12 +172,13 @@ export async function PATCH(request: NextRequest) {
   }
 
   await logActivity(admin, {
-    action: "admin_update_plan",
+    action: "update",
     target_table: "user_plans",
     target_id: body.user_id,
-    source: "admin-panel",
+    source: "admin-users",
     source_kind: "manual",
-    details: updates,
+    summary: `Admin updated plan for user ${body.user_id}`,
+    metadata: updates,
   });
 
   return NextResponse.json({ success: true, updated: updates });

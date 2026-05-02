@@ -131,12 +131,13 @@ export async function GET(request: NextRequest) {
     const data = await resp.json();
 
     await logActivity(admin, {
-      action: "bureau_lookup",
+      action: "insert",
       target_table: "usage_events",
       target_id: user.id,
-      source: "nocampo-mobile",
+      source: "nocampo-bureau",
       source_kind: "manual",
-      details: { cpf_prefix: cpf.slice(0, 3), type: queryType, tier },
+      summary: `Bureau lookup (${queryType}) via noCampo`,
+      metadata: { cpf_prefix: cpf.slice(0, 3), type: queryType, tier },
     });
 
     return NextResponse.json(data);
