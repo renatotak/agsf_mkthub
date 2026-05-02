@@ -1,41 +1,68 @@
 "use client";
 
 /**
- * Phase 29 — Mailing module.
+ * Phase 29 / 30 — Mailing module.
  *
- * Three tabs:
- *   • Rascunhos / Drafts   — queue of mailing_drafts; edit subject/body, click Send
- *   • Destinatários / Clients — CRUD over mailing_clients + culture multi-select
- *   • Enviados / Log       — read-only mailing_log feed
+ * Four tabs:
+ *   • Rascunhos / Drafts       — queue of mailing_drafts; edit subject/body, click Send
+ *   • Destinatários / Clients  — CRUD over mailing_clients + culture multi-select
+ *   • Personas                 — Phase 30: CRUD over mailing_personas + per-persona AI prompts
+ *   • Enviados / Log           — read-only mailing_log feed
  *
- * All API calls go through /api/mailing/* (built by sister agent). The
- * component is single-file by design so the team can read the whole flow
- * in one place; if it crosses ~1200 LOC we can split out subcomponents.
+ * Phase 30 turned personas from a hardcoded enum into a table-driven set
+ * (mig 084). Adding a new role (Comercial, Vendas Campo, etc.) is now a
+ * UI action; iterating the AI prompt is also a UI action.
+ *
+ * All API calls go through /api/mailing/*. Personas are fetched once at
+ * the top-level Mailing component and passed down via props so dropdowns
+ * never go stale.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Lang, t } from "@/lib/i18n";
 import {
   Mail, Send, Pencil, Trash2, Plus, X, Save, Loader2, RefreshCw, Eye,
-  CheckCircle2, AlertCircle, Clock, FileText, Users,
+  CheckCircle2, AlertCircle, Clock, FileText, Users, UserCog, Lock,
 } from "lucide-react";
 
-type Tab = "drafts" | "clients" | "log";
-type Persona = "ceo" | "intel" | "marketing" | "credit";
+type Tab = "drafts" | "clients" | "personas" | "log";
+// Persona slug — table-driven now (mig 084), so any string is valid.
+type Persona = string;
 
-const PERSONA_LABELS: Record<Persona, { pt: string; en: string }> = {
-  ceo:       { pt: "CEO",                 en: "CEO" },
-  intel:     { pt: "Head Inteligência",   en: "Head of Intelligence" },
-  marketing: { pt: "Marketing",           en: "Marketing" },
-  credit:    { pt: "Crédito",             en: "Credit" },
-};
-
-const PERSONAS: Persona[] = ["ceo", "intel", "marketing", "credit"];
+interface MailingPersona {
+  id: string;
+  slug: string;
+  name_pt: string;
+  name_en: string;
+  description_pt: string | null;
+  description_en: string | null;
+  system_prompt_pt: string | null;
+  system_prompt_en: string | null;
+  content_focus: string[];
+  default_culture_filter: string[];
+  position: number;
+  active: boolean;
+  is_builtin: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 const CULTURE_OPTIONS = [
   "soja", "milho", "cafe", "cana-de-acucar", "algodao", "boi-gordo",
   "trigo", "arroz", "feijao",
 ];
+
+const CONTENT_FOCUS_OPTIONS = [
+  "news", "events", "regulatory", "market_prices", "rj_recovery",
+  "content_opportunities", "agtech_radar", "agro_inputs", "price_anomalies", "briefings",
+];
+
+// Helper: lookup display name for a persona slug from the loaded list.
+function personaLabel(slug: string, personas: MailingPersona[], lang: Lang): string {
+  const p = personas.find((x) => x.slug === slug);
+  if (!p) return slug;
+  return lang === "pt" ? p.name_pt : p.name_en;
+}
 
 interface MailingClient {
   id: string;
@@ -88,8 +115,34 @@ interface BriefingPayload {
 // ─── Top-level component ──────────────────────────────────────────────────────
 
 export function Mailing({ lang }: { lang: Lang }) {
-  const tr = t(lang);
   const [activeTab, setActiveTab] = useState<Tab>("drafts");
+  const [personas, setPersonas] = useState<MailingPersona[]>([]);
+  const [personasLoading, setPersonasLoading] = useState(true);
+
+  const refreshPersonas = useCallback(async () => {
+    setPersonasLoading(true);
+    try {
+      const res = await fetch("/api/mailing/personas");
+      const json = await res.json();
+      if (json.success) setPersonas(json.data ?? []);
+    } catch (err) {
+      console.error("[mailing/personas] fetch:", err);
+    } finally {
+      setPersonasLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refreshPersonas(); }, [refreshPersonas]);
+
+  // Active personas only — used to populate dropdowns in Drafts/Clients tabs.
+  const activePersonas = useMemo(() => personas.filter((p) => p.active), [personas]);
+
+  const tabLabel = (tab: Tab): string => {
+    if (tab === "drafts") return lang === "pt" ? "Rascunhos" : "Drafts";
+    if (tab === "clients") return lang === "pt" ? "Destinatários" : "Recipients";
+    if (tab === "personas") return lang === "pt" ? "Personas" : "Personas";
+    return lang === "pt" ? "Enviados" : "Sent";
+  };
 
   return (
     <div className="space-y-4">
@@ -106,7 +159,7 @@ export function Mailing({ lang }: { lang: Lang }) {
       </div>
 
       <div className="flex items-center gap-2 border-b border-neutral-200">
-        {(["drafts", "clients", "log"] as Tab[]).map((tab) => (
+        {(["drafts", "clients", "personas", "log"] as Tab[]).map((tab) => (
           <button type="button"
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -116,23 +169,24 @@ export function Mailing({ lang }: { lang: Lang }) {
                 : "border-transparent text-neutral-500 hover:text-neutral-700"
             }`}
           >
-            {tab === "drafts" && (lang === "pt" ? "Rascunhos" : "Drafts")}
-            {tab === "clients" && (lang === "pt" ? "Destinatários" : "Recipients")}
-            {tab === "log" && (lang === "pt" ? "Enviados" : "Sent")}
+            {tabLabel(tab)}
           </button>
         ))}
       </div>
 
-      {activeTab === "drafts" && <DraftsTab lang={lang} />}
-      {activeTab === "clients" && <ClientsTab lang={lang} />}
-      {activeTab === "log" && <LogTab lang={lang} />}
+      {activeTab === "drafts" && <DraftsTab lang={lang} personas={activePersonas} />}
+      {activeTab === "clients" && <ClientsTab lang={lang} personas={activePersonas} />}
+      {activeTab === "personas" && (
+        <PersonasTab lang={lang} personas={personas} loading={personasLoading} onRefresh={refreshPersonas} />
+      )}
+      {activeTab === "log" && <LogTab lang={lang} personas={personas} />}
     </div>
   );
 }
 
 // ─── Drafts tab ───────────────────────────────────────────────────────────────
 
-function DraftsTab({ lang }: { lang: Lang }) {
+function DraftsTab({ lang, personas }: { lang: Lang; personas: MailingPersona[] }) {
   const [drafts, setDrafts] = useState<MailingDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -214,6 +268,7 @@ function DraftsTab({ lang }: { lang: Lang }) {
               key={d.id}
               draft={d}
               lang={lang}
+              personas={personas}
               onEdit={() => setEditingDraft(d)}
               onSent={() => { refresh(); setFeedback(lang === "pt" ? "Mailing enviado com sucesso" : "Mailing sent successfully"); }}
               onDelete={() => refresh()}
@@ -226,6 +281,7 @@ function DraftsTab({ lang }: { lang: Lang }) {
         <DraftEditor
           draft={editingDraft}
           lang={lang}
+          personas={personas}
           onClose={() => setEditingDraft(null)}
           onSaved={() => { setEditingDraft(null); refresh(); }}
         />
@@ -234,6 +290,7 @@ function DraftsTab({ lang }: { lang: Lang }) {
       {creating && (
         <DraftCreateModal
           lang={lang}
+          personas={personas}
           onClose={() => setCreating(false)}
           onCreated={() => { setCreating(false); refresh(); }}
         />
@@ -242,11 +299,12 @@ function DraftsTab({ lang }: { lang: Lang }) {
   );
 }
 
-function DraftCard({ draft, lang, onEdit, onSent, onDelete }: {
-  draft: MailingDraft; lang: Lang; onEdit: () => void; onSent: () => void; onDelete: () => void;
+function DraftCard({ draft, lang, personas, onEdit, onSent, onDelete }: {
+  draft: MailingDraft; lang: Lang; personas: MailingPersona[];
+  onEdit: () => void; onSent: () => void; onDelete: () => void;
 }) {
   const [sending, setSending] = useState(false);
-  const personaLabel = PERSONA_LABELS[draft.persona][lang];
+  const personaName = personaLabel(draft.persona, personas, lang);
 
   const statusColor: Record<string, string> = {
     draft:     "bg-neutral-100 text-neutral-600",
@@ -259,8 +317,8 @@ function DraftCard({ draft, lang, onEdit, onSent, onDelete }: {
 
   const handleSend = async () => {
     if (!confirm(lang === "pt"
-      ? `Enviar este rascunho para todos os destinatários ${personaLabel} com as culturas selecionadas?`
-      : `Send this draft to all ${personaLabel} recipients matching the selected cultures?`)) return;
+      ? `Enviar este rascunho para todos os destinatários ${personaName} com as culturas selecionadas?`
+      : `Send this draft to all ${personaName} recipients matching the selected cultures?`)) return;
     setSending(true);
     try {
       const res = await fetch(`/api/mailing/drafts/${draft.id}/send`, { method: "POST" });
@@ -296,7 +354,7 @@ function DraftCard({ draft, lang, onEdit, onSent, onDelete }: {
               {draft.status}
             </span>
             <span className="text-[10px] font-medium text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded">
-              {personaLabel}
+              {personaName}
             </span>
             {draft.culture_filter.length > 0 && (
               <span className="text-[10px] text-neutral-500">
@@ -347,8 +405,9 @@ function DraftCard({ draft, lang, onEdit, onSent, onDelete }: {
   );
 }
 
-function DraftEditor({ draft, lang, onClose, onSaved }: {
-  draft: MailingDraft; lang: Lang; onClose: () => void; onSaved: () => void;
+function DraftEditor({ draft, lang, personas, onClose, onSaved }: {
+  draft: MailingDraft; lang: Lang; personas: MailingPersona[];
+  onClose: () => void; onSaved: () => void;
 }) {
   const [subject, setSubject] = useState(draft.subject_pt);
   const [body, setBody] = useState(draft.body_html_pt);
@@ -403,7 +462,7 @@ function DraftEditor({ draft, lang, onClose, onSaved }: {
       <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-neutral-200">
           <h2 className="text-[15px] font-bold">
-            {lang === "pt" ? "Editar Rascunho" : "Edit Draft"} · {PERSONA_LABELS[draft.persona][lang]}
+            {lang === "pt" ? "Editar Rascunho" : "Edit Draft"} · {personaLabel(draft.persona, personas, lang)}
           </h2>
           <button type="button" onClick={onClose}><X size={18} /></button>
         </div>
@@ -493,11 +552,12 @@ function DraftEditor({ draft, lang, onClose, onSaved }: {
   );
 }
 
-function DraftCreateModal({ lang, onClose, onCreated }: {
-  lang: Lang; onClose: () => void; onCreated: () => void;
+function DraftCreateModal({ lang, personas, onClose, onCreated }: {
+  lang: Lang; personas: MailingPersona[];
+  onClose: () => void; onCreated: () => void;
 }) {
   const [briefing, setBriefing] = useState<BriefingPayload | null>(null);
-  const [persona, setPersona] = useState<Persona>("ceo");
+  const [persona, setPersona] = useState<Persona>(personas[0]?.slug ?? "");
   const [cultureFilter, setCultureFilter] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -588,17 +648,17 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
               {lang === "pt" ? "Persona" : "Persona"}
             </label>
             <div className="grid grid-cols-2 gap-1.5">
-              {PERSONAS.map((p) => (
+              {personas.map((p) => (
                 <button type="button"
-                  key={p}
-                  onClick={() => setPersona(p)}
+                  key={p.slug}
+                  onClick={() => setPersona(p.slug)}
                   className={`text-[12px] px-2 py-1.5 rounded border ${
-                    persona === p
+                    persona === p.slug
                       ? "bg-brand-primary text-white border-brand-primary"
                       : "bg-white text-neutral-700 border-neutral-300 hover:border-neutral-400"
                   }`}
                 >
-                  {PERSONA_LABELS[p][lang]}
+                  {lang === "pt" ? p.name_pt : p.name_en}
                 </button>
               ))}
             </div>
@@ -653,7 +713,7 @@ function DraftCreateModal({ lang, onClose, onCreated }: {
 
 // ─── Clients tab ──────────────────────────────────────────────────────────────
 
-function ClientsTab({ lang }: { lang: Lang }) {
+function ClientsTab({ lang, personas }: { lang: Lang; personas: MailingPersona[] }) {
   const [clients, setClients] = useState<MailingClient[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<MailingClient | null>(null);
@@ -688,7 +748,9 @@ function ClientsTab({ lang }: { lang: Lang }) {
             className="text-[12px] border border-neutral-300 rounded px-2 py-1.5"
           >
             <option value="all">{lang === "pt" ? "Todas as personas" : "All personas"}</option>
-            {PERSONAS.map((p) => <option key={p} value={p}>{PERSONA_LABELS[p][lang]}</option>)}
+            {personas.map((p) => (
+              <option key={p.slug} value={p.slug}>{lang === "pt" ? p.name_pt : p.name_en}</option>
+            ))}
           </select>
           <span className="text-[11px] text-neutral-500">
             {clients.length} {lang === "pt" ? "destinatários" : "recipients"}
@@ -729,7 +791,7 @@ function ClientsTab({ lang }: { lang: Lang }) {
                 <tr key={c.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
                   <td className="px-3 py-2 font-medium text-neutral-900">{c.full_name}</td>
                   <td className="px-3 py-2 text-neutral-700">{c.email}</td>
-                  <td className="px-3 py-2"><span className="text-[10px] bg-neutral-100 px-2 py-0.5 rounded">{PERSONA_LABELS[c.persona][lang]}</span></td>
+                  <td className="px-3 py-2"><span className="text-[10px] bg-neutral-100 px-2 py-0.5 rounded">{personaLabel(c.persona, personas, lang)}</span></td>
                   <td className="px-3 py-2 text-[11px] text-neutral-600">{c.cultures.join(" · ") || "—"}</td>
                   <td className="px-3 py-2">{c.active ? <CheckCircle2 size={14} className="text-emerald-600" /> : <X size={14} className="text-neutral-400" />}</td>
                   <td className="px-3 py-2">
@@ -751,6 +813,7 @@ function ClientsTab({ lang }: { lang: Lang }) {
         <ClientFormModal
           client={editing}
           lang={lang}
+          personas={personas}
           onClose={() => { setEditing(null); setCreating(false); }}
           onSaved={() => { setEditing(null); setCreating(false); refresh(); }}
         />
@@ -759,13 +822,14 @@ function ClientsTab({ lang }: { lang: Lang }) {
   );
 }
 
-function ClientFormModal({ client, lang, onClose, onSaved }: {
-  client: MailingClient | null; lang: Lang; onClose: () => void; onSaved: () => void;
+function ClientFormModal({ client, lang, personas, onClose, onSaved }: {
+  client: MailingClient | null; lang: Lang; personas: MailingPersona[];
+  onClose: () => void; onSaved: () => void;
 }) {
   const isEdit = !!client;
   const [fullName, setFullName] = useState(client?.full_name ?? "");
   const [email, setEmail] = useState(client?.email ?? "");
-  const [persona, setPersona] = useState<Persona>(client?.persona ?? "ceo");
+  const [persona, setPersona] = useState<Persona>(client?.persona ?? personas[0]?.slug ?? "");
   const [cultures, setCultures] = useState<string[]>(client?.cultures ?? []);
   const [active, setActive] = useState(client?.active ?? true);
   const [phone, setPhone] = useState(client?.phone ?? "");
@@ -858,14 +922,14 @@ function ClientFormModal({ client, lang, onClose, onSaved }: {
               {lang === "pt" ? "Persona *" : "Persona *"}
             </label>
             <div className="grid grid-cols-2 gap-1.5">
-              {PERSONAS.map((p) => (
-                <button key={p} onClick={() => setPersona(p)}
+              {personas.map((p) => (
+                <button type="button" key={p.slug} onClick={() => setPersona(p.slug)}
                   className={`text-[12px] px-2 py-1.5 rounded border ${
-                    persona === p
+                    persona === p.slug
                       ? "bg-brand-primary text-white border-brand-primary"
                       : "bg-white text-neutral-700 border-neutral-300 hover:border-neutral-400"
                   }`}>
-                  {PERSONA_LABELS[p][lang]}
+                  {lang === "pt" ? p.name_pt : p.name_en}
                 </button>
               ))}
             </div>
@@ -943,7 +1007,7 @@ function ClientFormModal({ client, lang, onClose, onSaved }: {
 
 // ─── Log tab ──────────────────────────────────────────────────────────────────
 
-function LogTab({ lang }: { lang: Lang }) {
+function LogTab({ lang, personas }: { lang: Lang; personas: MailingPersona[] }) {
   const [rows, setRows] = useState<MailingLogRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -1030,7 +1094,7 @@ function LogTab({ lang }: { lang: Lang }) {
                   </td>
                   <td className="px-3 py-2 text-neutral-700 truncate max-w-[300px]">{r.draft_subject || "—"}</td>
                   <td className="px-3 py-2 text-[11px] text-neutral-600">
-                    {r.draft_persona ? PERSONA_LABELS[r.draft_persona as Persona]?.[lang] ?? r.draft_persona : "—"}
+                    {r.draft_persona ? personaLabel(r.draft_persona, personas, lang) : "—"}
                   </td>
                   <td className="px-3 py-2 text-[11px]">
                     <span className={`uppercase font-medium ${
@@ -1052,6 +1116,453 @@ function LogTab({ lang }: { lang: Lang }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Personas tab (Phase 30) ──────────────────────────────────────────────────
+
+function PersonasTab({ lang, personas, loading, onRefresh }: {
+  lang: Lang; personas: MailingPersona[]; loading: boolean; onRefresh: () => void;
+}) {
+  const [editing, setEditing] = useState<MailingPersona | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[12px] text-neutral-500 leading-relaxed max-w-2xl">
+          {lang === "pt"
+            ? "Cada persona tem um prompt de IA editável que define o tom, foco e estrutura do briefing enviado para destinatários daquele cargo. Refine os prompts ao longo dos próximos dias com base no feedback dos usuários — quanto mais específico o prompt, mais útil o conteúdo."
+            : "Each persona carries an editable AI prompt that defines the tone, focus, and structure of the briefing sent to recipients of that role. Refine the prompts over the coming days based on user feedback — the more specific the prompt, the more useful the content."}
+        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <button type="button"
+            onClick={onRefresh}
+            className="flex items-center gap-1 text-[12px] text-neutral-600 hover:text-neutral-900 px-2 py-1.5"
+          >
+            <RefreshCw size={13} />
+            {lang === "pt" ? "Atualizar" : "Refresh"}
+          </button>
+          <button type="button"
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-1.5 bg-brand-primary text-white text-[12px] font-medium px-3 py-1.5 rounded-md hover:bg-brand-primary/90"
+          >
+            <Plus size={14} />
+            {lang === "pt" ? "Nova Persona" : "New Persona"}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12 text-neutral-400">
+          <Loader2 size={18} className="animate-spin mr-2" />
+        </div>
+      ) : personas.length === 0 ? (
+        <div className="text-center py-12 text-neutral-400 text-[13px]">
+          {lang === "pt" ? "Nenhuma persona cadastrada." : "No personas yet."}
+        </div>
+      ) : (
+        <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
+          {personas.map((p) => (
+            <PersonaCard key={p.id} persona={p} lang={lang} onEdit={() => setEditing(p)} />
+          ))}
+        </div>
+      )}
+
+      {(editing || creating) && (
+        <PersonaFormModal
+          persona={editing}
+          lang={lang}
+          onClose={() => { setEditing(null); setCreating(false); }}
+          onSaved={() => { setEditing(null); setCreating(false); onRefresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PersonaCard({ persona, lang, onEdit }: {
+  persona: MailingPersona; lang: Lang; onEdit: () => void;
+}) {
+  const desc = lang === "pt" ? persona.description_pt : persona.description_en;
+  const promptPreview = ((lang === "pt" ? persona.system_prompt_pt : persona.system_prompt_en) ?? "")
+    .slice(0, 180);
+  return (
+    <div
+      className={`bg-white border rounded-lg p-4 transition-colors ${
+        persona.active ? "border-neutral-200 hover:border-neutral-300" : "border-dashed border-neutral-300 opacity-60"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+            <p className="text-[14px] font-bold text-neutral-900 truncate">
+              {lang === "pt" ? persona.name_pt : persona.name_en}
+            </p>
+            {persona.is_builtin && (
+              <span className="text-[9px] font-medium text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                <Lock size={9} />
+                {lang === "pt" ? "padrão" : "built-in"}
+              </span>
+            )}
+            {!persona.active && (
+              <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                {lang === "pt" ? "inativa" : "inactive"}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] font-mono text-neutral-400">{persona.slug}</p>
+        </div>
+        <button type="button"
+          onClick={onEdit}
+          className="p-1.5 text-neutral-500 hover:text-brand-primary hover:bg-neutral-100 rounded shrink-0"
+          title={lang === "pt" ? "Editar" : "Edit"}
+        >
+          <Pencil size={14} />
+        </button>
+      </div>
+
+      {desc && <p className="text-[11px] text-neutral-600 mb-2 leading-relaxed">{desc}</p>}
+
+      {persona.content_focus.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {persona.content_focus.map((c) => (
+            <span key={c} className="text-[9px] bg-brand-primary/10 text-brand-primary px-1.5 py-0.5 rounded">
+              {c}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {promptPreview && (
+        <div className="mt-2 pt-2 border-t border-neutral-100">
+          <p className="text-[9px] uppercase font-bold text-neutral-400 mb-1">
+            {lang === "pt" ? "Prompt (preview)" : "Prompt (preview)"}
+          </p>
+          <p className="text-[10px] text-neutral-500 leading-relaxed line-clamp-3 font-mono">
+            {promptPreview}{promptPreview.length >= 180 ? "…" : ""}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PersonaFormModal({ persona, lang, onClose, onSaved }: {
+  persona: MailingPersona | null; lang: Lang; onClose: () => void; onSaved: () => void;
+}) {
+  const isEdit = !!persona;
+  const [slug, setSlug] = useState(persona?.slug ?? "");
+  const [namePt, setNamePt] = useState(persona?.name_pt ?? "");
+  const [nameEn, setNameEn] = useState(persona?.name_en ?? "");
+  const [descPt, setDescPt] = useState(persona?.description_pt ?? "");
+  const [descEn, setDescEn] = useState(persona?.description_en ?? "");
+  const [promptPt, setPromptPt] = useState(persona?.system_prompt_pt ?? "");
+  const [promptEn, setPromptEn] = useState(persona?.system_prompt_en ?? "");
+  const [contentFocus, setContentFocus] = useState<string[]>(persona?.content_focus ?? []);
+  const [defaultCultures, setDefaultCultures] = useState<string[]>(persona?.default_culture_filter ?? []);
+  const [position, setPosition] = useState<number>(persona?.position ?? 100);
+  const [active, setActive] = useState(persona?.active ?? true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeLangTab, setActiveLangTab] = useState<"pt" | "en">("pt");
+
+  const toggleFocus = (c: string) =>
+    setContentFocus((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
+  const toggleCulture = (c: string) =>
+    setDefaultCultures((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
+
+  const handleSubmit = async (e?: React.MouseEvent) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (!isEdit && !slug.trim()) {
+      setError(lang === "pt" ? "Slug é obrigatório" : "Slug is required");
+      return;
+    }
+    if (!namePt.trim() || !nameEn.trim()) {
+      setError(lang === "pt" ? "Nomes em PT e EN são obrigatórios" : "Names in PT and EN are required");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const payload: Record<string, unknown> = {
+        name_pt: namePt.trim(),
+        name_en: nameEn.trim(),
+        description_pt: descPt.trim() || null,
+        description_en: descEn.trim() || null,
+        system_prompt_pt: promptPt || null,
+        system_prompt_en: promptEn || null,
+        content_focus: contentFocus,
+        default_culture_filter: defaultCultures,
+        position,
+        active,
+      };
+      if (!isEdit) payload.slug = slug.trim().toLowerCase();
+
+      const url = isEdit
+        ? `/api/mailing/personas?id=${persona!.id}`
+        : "/api/mailing/personas";
+      const res = await fetch(url, {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      let json: { success?: boolean; error?: string } | null = null;
+      try { json = await res.json(); } catch { /* non-JSON */ }
+      if (res.ok && json?.success) {
+        onSaved();
+      } else {
+        const msg = json?.error || `HTTP ${res.status} ${res.statusText}`;
+        console.error("[mailing/persona] save failed:", msg, json);
+        setError(msg);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[mailing/persona] save threw:", err);
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!persona) return;
+    if (!confirm(lang === "pt"
+      ? "Desativar esta persona? Destinatários existentes ficam intactos, mas a persona não aparece mais nos dropdowns."
+      : "Deactivate this persona? Existing recipients are kept, but it stops appearing in dropdowns.")) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/mailing/personas?id=${persona.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) onSaved();
+      else setError(json?.error || `HTTP ${res.status}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-neutral-200">
+          <div className="flex items-center gap-2">
+            <UserCog size={18} className="text-brand-primary" />
+            <h2 className="text-[15px] font-bold">
+              {isEdit
+                ? (lang === "pt" ? "Editar Persona" : "Edit Persona")
+                : (lang === "pt" ? "Nova Persona" : "New Persona")}
+            </h2>
+            {isEdit && persona!.is_builtin && (
+              <span className="text-[10px] font-medium text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                <Lock size={10} />
+                {lang === "pt" ? "padrão" : "built-in"}
+              </span>
+            )}
+          </div>
+          <button type="button" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Slug + position + active */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-[11px] font-medium text-neutral-700 mb-1 block">
+                Slug *
+                <span className="text-neutral-400 font-normal"> · {isEdit ? (lang === "pt" ? "imutável" : "immutable") : "ascii_snake_case"}</span>
+              </label>
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                disabled={isEdit}
+                placeholder="ex: marketing"
+                className="w-full border border-neutral-300 rounded px-2 py-1.5 text-[12px] font-mono disabled:bg-neutral-50 disabled:text-neutral-500"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-neutral-700 mb-1 block">
+                {lang === "pt" ? "Posição (ordem)" : "Position (order)"}
+              </label>
+              <input
+                type="number"
+                value={position}
+                onChange={(e) => setPosition(parseInt(e.target.value) || 0)}
+                className="w-full border border-neutral-300 rounded px-2 py-1.5 text-[12px]"
+              />
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-[12px] text-neutral-700 cursor-pointer">
+                <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+                {lang === "pt" ? "Ativa" : "Active"}
+              </label>
+            </div>
+          </div>
+
+          {/* Names */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium text-neutral-700 mb-1 block">
+                {lang === "pt" ? "Nome (PT) *" : "Name (PT) *"}
+              </label>
+              <input
+                type="text"
+                value={namePt}
+                onChange={(e) => setNamePt(e.target.value)}
+                className="w-full border border-neutral-300 rounded px-2 py-1.5 text-[13px]"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-neutral-700 mb-1 block">
+                {lang === "pt" ? "Nome (EN) *" : "Name (EN) *"}
+              </label>
+              <input
+                type="text"
+                value={nameEn}
+                onChange={(e) => setNameEn(e.target.value)}
+                className="w-full border border-neutral-300 rounded px-2 py-1.5 text-[13px]"
+              />
+            </div>
+          </div>
+
+          {/* Descriptions */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium text-neutral-700 mb-1 block">
+                {lang === "pt" ? "Descrição (PT)" : "Description (PT)"}
+              </label>
+              <textarea
+                value={descPt}
+                onChange={(e) => setDescPt(e.target.value)}
+                rows={2}
+                className="w-full border border-neutral-300 rounded px-2 py-1.5 text-[12px]"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-neutral-700 mb-1 block">
+                {lang === "pt" ? "Descrição (EN)" : "Description (EN)"}
+              </label>
+              <textarea
+                value={descEn}
+                onChange={(e) => setDescEn(e.target.value)}
+                rows={2}
+                className="w-full border border-neutral-300 rounded px-2 py-1.5 text-[12px]"
+              />
+            </div>
+          </div>
+
+          {/* AI Prompt — large editor with PT/EN toggle */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-medium text-neutral-700 block">
+                {lang === "pt" ? "Prompt de IA (system prompt)" : "AI Prompt (system prompt)"}
+                <span className="text-neutral-400 font-normal"> · {lang === "pt" ? "usado pelo cron de briefing" : "used by the briefing cron"}</span>
+              </label>
+              <div className="flex items-center gap-1">
+                <button type="button"
+                  onClick={() => setActiveLangTab("pt")}
+                  className={`text-[10px] px-2 py-0.5 rounded ${
+                    activeLangTab === "pt" ? "bg-brand-primary text-white" : "bg-neutral-100 text-neutral-600"
+                  }`}
+                >PT</button>
+                <button type="button"
+                  onClick={() => setActiveLangTab("en")}
+                  className={`text-[10px] px-2 py-0.5 rounded ${
+                    activeLangTab === "en" ? "bg-brand-primary text-white" : "bg-neutral-100 text-neutral-600"
+                  }`}
+                >EN</button>
+              </div>
+            </div>
+            {activeLangTab === "pt" ? (
+              <textarea
+                value={promptPt}
+                onChange={(e) => setPromptPt(e.target.value)}
+                rows={12}
+                placeholder={lang === "pt"
+                  ? "Você está escrevendo um briefing para [persona]. Foco principal: ..."
+                  : "You are writing a briefing for [persona]. Main focus: ..."}
+                className="w-full border border-neutral-300 rounded px-2 py-1.5 text-[12px] font-mono leading-relaxed"
+              />
+            ) : (
+              <textarea
+                value={promptEn}
+                onChange={(e) => setPromptEn(e.target.value)}
+                rows={12}
+                placeholder="You are writing a briefing for [persona]. Main focus: ..."
+                className="w-full border border-neutral-300 rounded px-2 py-1.5 text-[12px] font-mono leading-relaxed"
+              />
+            )}
+          </div>
+
+          {/* Content focus */}
+          <div>
+            <label className="text-[11px] font-medium text-neutral-700 mb-1 block">
+              {lang === "pt" ? "Foco de conteúdo" : "Content focus"}
+              <span className="text-neutral-400 font-normal"> · {lang === "pt" ? "categorias que esta persona prioriza" : "categories this persona prioritises"}</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {CONTENT_FOCUS_OPTIONS.map((c) => (
+                <button type="button" key={c} onClick={() => toggleFocus(c)}
+                  className={`text-[11px] px-2 py-1 rounded border ${
+                    contentFocus.includes(c)
+                      ? "bg-brand-primary text-white border-brand-primary"
+                      : "bg-white text-neutral-600 border-neutral-300 hover:border-neutral-400"
+                  }`}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Default culture filter */}
+          <div>
+            <label className="text-[11px] font-medium text-neutral-700 mb-1 block">
+              {lang === "pt" ? "Filtro padrão de culturas" : "Default culture filter"}
+              <span className="text-neutral-400 font-normal"> · {lang === "pt" ? "sugestão para novos destinatários" : "suggestion for new recipients"}</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {CULTURE_OPTIONS.map((c) => (
+                <button type="button" key={c} onClick={() => toggleCulture(c)}
+                  className={`text-[11px] px-2 py-1 rounded border ${
+                    defaultCultures.includes(c)
+                      ? "bg-brand-primary text-white border-brand-primary"
+                      : "bg-white text-neutral-600 border-neutral-300 hover:border-neutral-400"
+                  }`}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-800 text-[12px] px-3 py-2 rounded">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 p-4 border-t border-neutral-200">
+          {isEdit && persona!.active ? (
+            <button type="button" onClick={handleDelete}
+              className="flex items-center gap-1.5 text-red-600 text-[12px] hover:bg-red-50 px-3 py-1.5 rounded">
+              <Trash2 size={13} />
+              {lang === "pt" ? "Desativar" : "Deactivate"}
+            </button>
+          ) : <span />}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClose} className="text-[12px] text-neutral-600 hover:text-neutral-900 px-3 py-1.5">
+              {lang === "pt" ? "Cancelar" : "Cancel"}
+            </button>
+            <button type="button" onClick={handleSubmit} disabled={saving}
+              className="flex items-center gap-1.5 bg-brand-primary text-white text-[12px] font-medium px-3 py-1.5 rounded-md hover:bg-brand-primary/90 disabled:opacity-50">
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+              {lang === "pt" ? "Salvar" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
